@@ -3,6 +3,8 @@
 import { loopar, DOC_STATUS, coerceDocStatus } from "loopar";
 import CoreController from './core-controller.js';
 import { printPayload } from '../document/print-format.js';
+import { renameEntity } from '../document/entity-rename.js';
+import { readRuntimeMode } from '../server/runtime-mode.js';
 
 const HISTORY_TABLE = 'Document History';
 const COMMENT_TABLE = 'Comment';
@@ -117,6 +119,30 @@ export default class BaseController extends CoreController {
       linkTitles: await document.linkTitles(),
       print: await printPayload(this.document, { requested: this.query?.format }),
     });
+  }
+
+  /**
+   * Rename an entity/page/form… (a record of Entity or of a builder type):
+   * files, this tenant's database and references, recorded for the other
+   * tenants (see core/document/entity-rename.js). `dry_run` returns the plan.
+   * Development only: in production the files come from the deploy.
+   */
+  async actionRename() {
+    const isMeta = this.document === 'Entity' || !!loopar.getType(this.document);
+    if (!isMeta) loopar.throw(`${this.document} records can't be renamed this way.`);
+    if (readRuntimeMode() === 'production') {
+      loopar.throw("Renaming changes the app's files: rename in development and deploy.");
+    }
+
+    const { name, new_name, dry_run } = this.data || {};
+    const ref = loopar.getRef(name);
+    if (!ref || (ref.__ENTITY__ || 'Entity') !== this.document) {
+      loopar.throw({ code: 404, message: `${this.document} "${name}" not found.` });
+    }
+
+    // No `message` key: the client would collapse the payload to it.
+    const rename = await renameEntity(name, new_name, { dryRun: !!Number(dry_run) || dry_run === true });
+    return { rename };
   }
 
   async actionDelete() {

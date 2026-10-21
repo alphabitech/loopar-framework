@@ -1,7 +1,7 @@
 import { Toolbar } from "./toolbar";
 import loopar from "loopar";
 import { Button } from "@cn/components/ui/button";
-import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, PrinterIcon, ArrowLeftIcon, PencilIcon, FileTextIcon } from "lucide-react";
+import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, PrinterIcon, ArrowLeftIcon, PencilIcon, FileTextIcon, TextCursorInputIcon } from "lucide-react";
 import {Link} from "@link";
 import { useDocument, useViewOptions } from "@loopar/document";
 import { canOn } from "@context/auth-context";
@@ -45,6 +45,55 @@ const GoToAction = ({ to, name }) => (
     Go to {loopar.utils.Capitalize(name)}
   </Link>
 );
+
+/**
+ * Rename a meta record (an entity, page, form…): asks the new name, shows what
+ * the rename touches (dry run) and applies it. Server: BaseController.actionRename.
+ */
+const RenameAction = ({ Document }) => {
+  const { Entity = {}, name } = Document;
+
+  const describe = (plan) => [
+    `Folder: ${plan.folder[0]} → ${plan.folder[1]}`,
+    `Files renamed: ${plan.files.length}`,
+    plan.ownsTable ? `Table "${plan.from}" → "${plan.to}" (data kept)` : null,
+    plan.jsonFiles.length ? `References updated in ${plan.jsonFiles.length} JSON file(s)` : null,
+    "References in this database (history, menus, permissions…) are updated; other tenants get it on the app update.",
+    plan.codeUsages.length ? `\nNOT changed — review these code usages:\n${plan.codeUsages.join("\n")}` : null,
+  ].filter(Boolean).join("\n");
+
+  const run = () => loopar.prompt({
+    title: `Rename ${Entity.name}`,
+    label: `New name for "${name}"`,
+    placeholder: name,
+    validate: (value) => {
+      if (!value || !value.trim()) loopar.throw("The new name is required");
+      return true;
+    },
+    ok: async (newName) => {
+      const { rename: plan } = await loopar.call(Entity.name, "rename", { body: { name, new_name: newName.trim(), dry_run: 1 } });
+      loopar.confirm({
+        title: `Rename "${plan.from}" → "${plan.to}"?`,
+        content: <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs">{describe(plan)}</pre>,
+      }, async () => {
+        const { rename: done } = await loopar.call(Entity.name, "rename", { body: { name, new_name: plan.to } });
+        loopar.navigate(`/desk/${Entity.name}/update?name=${encodeURIComponent(done.to)}`);
+      });
+    },
+  });
+
+  return (
+    <Button variant="ghost" className="w-full justify-start" onClick={run}>
+      <TextCursorInputIcon className="pr-1" />
+      Rename
+    </Button>
+  );
+};
+
+/** Rename applies to saved meta records (entities, pages, forms…) the user may edit. */
+const canRename = (Document, canUpdate) =>
+  !!(Document.Entity?.is_builder && !Document.isNew && Document.name && canUpdate
+    && ["update", "view"].includes(Document.meta?.action));
 
 /** "Edit" on a read-only view, for users who may edit the record. */
 function editTarget(Document) {
@@ -192,7 +241,15 @@ export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...prop
         </h1>
         <span className="flex shrink-0 empty:hidden"><SaveState Document={Document} /></span>
       </div>
-      <Toolbar defaults={defaults} actions={Object.entries(actions)} toggle={<PrintToggle Document={Document} />} primary={primary} />
+      <Toolbar
+        defaults={defaults}
+        actions={[
+          ...Object.entries(actions),
+          ...(canRename(Document, canUpdate) ? [["__rename", <RenameAction key="__rename" Document={Document} />]] : []),
+        ]}
+        toggle={<PrintToggle Document={Document} />}
+        primary={primary}
+      />
     </div>
   );
 }

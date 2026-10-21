@@ -2,6 +2,7 @@ import path from "pathe";
 import fs from "fs";
 import { loopar, fileManage } from "loopar";
 import BaseDocument from "../../../../../../core/document/base-document.js";
+import { readRenameRecords, applyRenameToDatabase } from "../../../../../../core/document/entity-rename.js";
 
 function entryAppOwner(ent, entryKey) {
   if (ent.__app__ != null) return ent.__app__;
@@ -364,6 +365,20 @@ export default class Installer extends BaseDocument {
         const app = await loopar.getDocument("App", this.app_name);
         await app.buildInstaller();
         appData = await fileManage.getConfigFile('installer', moduleRoute);
+      }
+    }
+
+    // Renames recorded by this app (apps/<app>/renames.json): the files were
+    // renamed once in the repo, but each tenant's database still has the old
+    // names. Replay them before installing documents. Idempotent.
+    for (const rename of readRenameRecords(loopar.makePath('apps', this.app_name))) {
+      try {
+        const report = await applyRenameToDatabase(rename);
+        if (report.meta || report.table) {
+          console.log([`Renamed ${rename.type}: "${rename.from}" → "${rename.to}"`, report]);
+        }
+      } catch (e) {
+        console.error(`[installer] rename ${rename.from} → ${rename.to} failed:`, e.message);
       }
     }
 
