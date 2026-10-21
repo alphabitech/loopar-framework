@@ -34,7 +34,8 @@ pnpm-lock.yaml
 # 🧪 TESTING
 # -----------------------------------
 coverage/
-test/
+# test/ holds the framework's test suite (yarn test); only the manual scripts stay local.
+test/test-webhook.js
 
 # -----------------------------------
 # 🎨 BUILD OUTPUT

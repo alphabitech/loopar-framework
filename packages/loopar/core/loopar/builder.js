@@ -95,6 +95,16 @@ export class Builder {
       };
   
       const key = this.utils.toEntityKey(doc.name);
+      const clash = refs[key];
+      if (clash && clash.__APP_KEY__ !== appKey) {
+        // Entity names are unique per tenant. Two apps shipping the same name
+        // would shadow each other here (the later one's files get rendered):
+        // make it loud. The installer refuses to install the second one.
+        console.error(
+          `[refs] name collision: "${doc.name}" (${doc.__ENTITY__ || 'Entity'} in app "${doc.__APP__}") ` +
+          `shadows "${clash.__NAME__}" (${clash.__ENTITY__} in app "${clash.__APP__}"). Rename one of them.`
+        );
+      }
       refs[key] = ref;
   
       if (!refsByApp[appKey]) refsByApp[appKey] = {};

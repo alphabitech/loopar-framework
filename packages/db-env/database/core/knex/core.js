@@ -505,6 +505,31 @@ export default class Core {
     }
   }
 
+  /**
+   * Meta tables (Entity and every builder table) are unique by `name`.
+   * Restores UNIQUE(name) where an experimental UNIQUE(module, name) replaced
+   * it (dev tenants only). Idempotent.
+   */
+  async ensureNameUniqueKey(literalName) {
+    if (!(await this.qx().schema.hasTable(literalName))) return;
+
+    const missing = (e) => /no such index|doesn't exist|does not exist|check that (column|it) exists|can't drop/i.test(e?.message || "");
+    const present = (e) => /already exists|duplicate key name|duplicate/i.test(e?.message || "");
+
+    try {
+      await this.qx().schema.alterTable(literalName, (t) => t.dropUnique(["module", "name"]));
+      console.log([`[name-identity] ${literalName}: UNIQUE(module, name) dropped`]);
+    } catch (e) {
+      if (!missing(e)) throw e;
+    }
+
+    try {
+      await this.qx().schema.alterTable(literalName, (t) => t.unique(["name"]));
+    } catch (e) {
+      if (!present(e)) throw e;
+    }
+  }
+
   #auditColumnsNeedAlter(existingByName) {
     for (const [name, family] of Object.entries(AUDIT_COLUMN_FAMILY)) {
       const existing = existingByName.get(name);

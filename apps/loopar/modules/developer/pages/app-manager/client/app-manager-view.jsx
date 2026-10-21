@@ -5,8 +5,8 @@ import loopar from "loopar";
 import { useState } from "react";
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter} from '@card';
+import { cn } from "@cn/lib/utils";
 
-import {Badge} from "@cn/components/ui/badge";
 import { titleize } from "inflection";
 import {Link} from "@link"
 import {Button} from "@cn/components/ui/button";
@@ -26,6 +26,7 @@ import {
   RotateCcwIcon,
   InfinityIcon,
   CloudUploadIcon,
+  TriangleAlertIcon,
 } from 'lucide-react';
 
 const fieldClass = "w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground";
@@ -93,14 +94,85 @@ function compareVersion(a, b) {
   return 0;
 }
 
+const TONES = {
+  neutral: 'bg-muted/60 text-muted-foreground ring-border',
+  green: 'bg-emerald-500/10 text-emerald-500 ring-emerald-500/25',
+  amber: 'bg-amber-500/10 text-amber-500 ring-amber-500/25',
+  yellow: 'bg-yellow-500/10 text-yellow-500 ring-yellow-500/25',
+  orange: 'bg-orange-500/10 text-orange-500 ring-orange-500/25',
+  blue: 'bg-blue-500/10 text-blue-400 ring-blue-500/25',
+  violet: 'bg-violet-500/10 text-violet-400 ring-violet-500/25',
+};
+
+function Pill({ tone = 'neutral', dot = false, className = '', children }) {
+  return (
+    <span className={cn(
+      'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+      TONES[tone], className
+    )}>
+      {dot && <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+      {children}
+    </span>
+  );
+}
+
+/** Square ghost icon button used on the card's right-hand toolbar. */
+function IconAction({ icon: Icon, title, onClick, danger = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={cn(
+        'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors',
+        danger ? 'hover:bg-red-500/10 hover:text-red-500' : 'hover:bg-accent hover:text-foreground'
+      )}
+    >
+      <Icon className="h-4 w-4" />
+    </button>
+  );
+}
+
+/** One segment of the git button group; tinted when it has pending work. */
+function GitSegment({ icon: Icon, label, title, onClick, active, tone = 'blue' }) {
+  const activeCls = {
+    blue: 'bg-blue-500/10 text-blue-400',
+    amber: 'bg-amber-500/10 text-amber-500',
+    yellow: 'bg-yellow-500/10 text-yellow-500',
+    violet: 'bg-violet-500/10 text-violet-400',
+  }[tone];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={cn(
+        'inline-flex h-8 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors hover:bg-accent hover:text-foreground',
+        active ? activeCls : 'text-muted-foreground'
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      <span className="hidden @[21rem]:inline">{label}</span>
+    </button>
+  );
+}
+
+/** "https://github.com/owner/repo.git" → "owner/repo" */
+function shortRemote(url) {
+  if (!url) return '';
+  const m = url.match(/[:/]([^/:]+\/[^/]+?)(?:\.git)?\/?$/);
+  return m ? m[1] : url;
+}
+
 function AppCard({app, action}) {
   const color = loopar.bgColor(app.name);
   const isFramework = app.is_framework ?? (app.name === 'loopar');
+  const isInstalled = !!(app.installed || isFramework);
+  const mismatch = !!app.folder_mismatch;
   const needsUpdate = app.installed && app.installed_version !== app.version;
-  const versionDir = needsUpdate
-    ? compareVersion(app.version, app.installed_version)
-    : 0;
-  const isRollback = versionDir < 0;
+  const isRollback = needsUpdate && compareVersion(app.version, app.installed_version) < 0;
   const hasGitDir = app.has_git || isFramework;
   const hasRemote = !!app.remote_url;
 
@@ -110,264 +182,190 @@ function AppCard({app, action}) {
   const behind = status?.behind || 0;
   const branch = status?.branch || '';
   const isDirty = dirtyCount > 0;
+  const tracksUpstream = hasRemote && status?.upstream !== false;
 
+  // A mismatched folder can't be resolved by any app operation, so it gets no git/lifecycle actions.
   const repoMode =
+    mismatch ? 'blocked' :
     isFramework || (hasGitDir && hasRemote) ? 'full' :
     hasGitDir ? 'local' :
     'none';
 
   const stateBadge = (() => {
-    if (!app.installed && !isFramework) {
-      return { label: 'Not installed', cls: 'border-zinc-600/50 bg-zinc-600/20 text-zinc-400' };
-    }
+    if (mismatch) return { label: 'Folder mismatch', tone: 'amber' };
     if (needsUpdate) {
       return isRollback
-        ? { label: 'Rollback available', cls: 'border-yellow-500/50 bg-yellow-500/15 text-yellow-400' }
-        : { label: 'Update available', cls: 'border-orange-600/50 bg-orange-600/20 text-orange-400' };
+        ? { label: 'Rollback available', tone: 'yellow' }
+        : { label: 'Update available', tone: 'orange' };
     }
-    if (isDirty) {
-      return { label: `Uncommitted (${dirtyCount})`, cls: 'border-amber-500/50 bg-amber-500/15 text-amber-400' };
-    }
-    if (behind > 0) {
-      return { label: `Behind by ${behind}`, cls: 'border-yellow-500/50 bg-yellow-500/15 text-yellow-400' };
-    }
-    if (ahead > 0) {
-      return { label: `Unpushed (${ahead})`, cls: 'border-blue-500/50 bg-blue-500/15 text-blue-400' };
-    }
-    if (app.installed || isFramework) {
-      return { label: 'Up to date', cls: 'border-green-600/50 bg-green-600/20 text-green-500' };
-    }
+    if (isDirty) return { label: `${dirtyCount} uncommitted`, tone: 'amber' };
+    if (behind > 0) return { label: `${behind} behind`, tone: 'yellow' };
+    if (ahead > 0) return { label: `${ahead} unpushed`, tone: 'blue' };
+    if (isInstalled) return { label: 'Up to date', tone: 'green' };
     return null;
   })();
 
+  const remoteLabel = isFramework ? 'monorepo root' : (shortRemote(app.remote_url) || 'local only');
+  const remoteHref = !isFramework && /^https?:\/\//.test(app.remote_url || '') ? app.remote_url.replace(/\.git$/, '') : null;
+
+  const discard = () => action(app.name, 'discard', repoMode === 'full' ? true : { wasInstalled: app.installed });
+
   return (
-    <Card className=" min-w-[320px]">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div
-              className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg"
-              style={{ backgroundColor: color }}
-            >
-              {app.icon ? (
-                <DynamicIcon icon={app.icon} className="h-7 w-7 text-white" />
-              ) : (
-                <span className="text-xl font-bold text-white">
-                  {loopar.utils.avatar(app.name)}
-                </span>
+    <Card className="@container group flex h-full min-w-0 flex-col transition-colors hover:border-foreground/20">
+      <CardHeader className="space-y-0 p-4 pb-3">
+        <div className="flex items-start gap-3">
+          <div
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl shadow-sm ring-1 ring-inset ring-white/10"
+            style={{ backgroundColor: color }}
+          >
+            {app.icon ? (
+              <DynamicIcon icon={app.icon} className="h-6 w-6 text-white" />
+            ) : (
+              <span className="text-lg font-semibold text-white">
+                {loopar.utils.avatar(app.name)}
+              </span>
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <CardTitle className="truncate text-base font-semibold leading-tight">{app.name}</CardTitle>
+              {isFramework && (
+                <span title="Framework" className="flex-shrink-0 text-violet-400"><InfinityIcon className="h-4 w-4" /></span>
               )}
             </div>
-            <div className="min-w-0">
-              <CardTitle className="truncate text-lg leading-tight">{app.name}</CardTitle>
-              <CardDescription className="truncate text-xs">
-                {app.autor || 'No author'}
-              </CardDescription>
-            </div>
+            <CardDescription className="mt-1 flex items-center gap-1.5 truncate text-xs">
+              <span className="font-mono">v{app.version || '—'}</span>
+              {needsUpdate && (
+                <span className="font-mono text-orange-500" title="Installed version in the database">
+                  (db {app.installed_version})
+                </span>
+              )}
+              <span className="text-border">•</span>
+              {isInstalled
+                ? <span className="inline-flex items-center gap-1 text-emerald-500"><CheckCircle2Icon className="h-3 w-3" />Installed</span>
+                : <span>Not installed</span>}
+              {app.autor && <><span className="text-border">•</span><span className="truncate">{app.autor}</span></>}
+            </CardDescription>
           </div>
-          <div className="flex flex-shrink-0 flex-col items-end gap-1">
-            {isFramework && (
-              <Badge variant="outline" className="gap-1 border-purple-500/60 text-purple-400">
-                <InfinityIcon className="h-3 w-3" /> Framework
-              </Badge>
-            )}
-            {stateBadge && (
-              <Badge className={`border ${stateBadge.cls}`}>
-                {stateBadge.label}
-              </Badge>
-            )}
-          </div>
+
+          {stateBadge && <Pill tone={stateBadge.tone} dot className="flex-shrink-0">{stateBadge.label}</Pill>}
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-2 pb-3">
-        <div className="space-y-1 rounded border border-border/50 bg-background/40 px-3 py-2 text-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Physical</span>
-            <span className="font-mono">{app.version || '—'}</span>
-          </div>
-          {(app.installed || isFramework) && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Installed</span>
-              <span className={`font-mono ${needsUpdate ? 'text-orange-400' : ''}`}>
-                {app.installed_version || '—'}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {app.folder_mismatch && (
-          <div className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-            Folder <code>apps/{app.folder}</code> doesn't match App name <code>{app.name}</code>.
-            Rename it to <code>apps/{app.name}</code> to install or manage it.
+      <CardContent className="flex-1 space-y-2 px-4 pb-3 pt-0">
+        {mismatch && (
+          <div className="flex gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-500 ring-1 ring-inset ring-amber-500/20">
+            <TriangleAlertIcon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+            <p className="min-w-0 break-words">
+              Folder <code className="font-mono">apps/{app.folder}</code> must be renamed
+              to <code className="font-mono">apps/{app.name}</code> to manage this app.
+            </p>
           </div>
         )}
 
-        {hasGitDir && (
-          <div className="space-y-1 rounded border border-border/50 bg-background/40 px-3 py-2 text-xs">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <GitBranchIcon className="h-3 w-3 flex-shrink-0" />
-              <span className="truncate">
-                {isFramework ? 'monorepo root' : (app.remote_url || 'local-only (no remote)')}
+        {hasGitDir && !mismatch && (
+          <div className="flex min-w-0 items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            {branch && (
+              <span className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-foreground/80">
+                <GitBranchIcon className="h-3 w-3" />{branch}
               </span>
-            </div>
+            )}
+            {remoteHref ? (
+              <a href={remoteHref} target="_blank" rel="noreferrer" className="min-w-0 truncate hover:text-foreground hover:underline" title={app.remote_url}>
+                {remoteLabel}
+              </a>
+            ) : (
+              <span className="min-w-0 truncate">{remoteLabel}</span>
+            )}
             {status && (
-              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                {branch && <span className="font-mono">{branch}</span>}
-                <span className={isDirty ? 'text-amber-400' : 'text-green-500'}>
-                  {isDirty ? `${dirtyCount} dirty` : 'clean'}
-                </span>
-                {hasRemote && status.upstream === false && (
-                  <span className="text-amber-400">not pushed</span>
-                )}
-                {hasRemote && status.upstream !== false && (
+              <span className="ml-auto flex flex-shrink-0 items-center gap-2 font-mono text-[11px]">
+                {hasRemote && status.upstream === false && <span className="text-amber-500">no upstream</span>}
+                {tracksUpstream && (
                   <>
-                    <span className={ahead > 0 ? 'text-blue-400' : ''}>↑{ahead}</span>
-                    <span className={behind > 0 ? 'text-yellow-400' : ''}>↓{behind}</span>
+                    <span className={ahead > 0 ? 'text-blue-400' : ''} title="Commits ahead">↑{ahead}</span>
+                    <span className={behind > 0 ? 'text-yellow-500' : ''} title="Commits behind">↓{behind}</span>
                   </>
                 )}
-              </div>
+                {!isDirty && <span className="text-emerald-500">clean</span>}
+              </span>
             )}
           </div>
         )}
       </CardContent>
 
-      <CardFooter className="flex-col items-stretch gap-2 pt-0">
-        <div className="flex items-center justify-between gap-1">
-          <div className="flex items-center gap-1">
-            {!app.installed && !isFramework && (
-              <Link
-                onClick={() => action(app.name, 'install')}
-                variant="primeblue"
-              >
-                <FolderDownIcon className="mr-1 h-4 w-4" /> Install
-              </Link>
-            )}
-            {(app.installed || isFramework) && needsUpdate && (
-              <Link
-                onClick={() => action(app.name, 'reinstall')}
-                className={isRollback
-                  ? 'bg-yellow-600 text-white hover:bg-yellow-600/80'
-                  : 'bg-orange-500 text-white hover:bg-orange-500/80'}
-                title={isRollback
-                  ? `Rollback DB to ${app.version} (currently ${app.installed_version})`
-                  : `Update DB to ${app.version} (currently ${app.installed_version})`}
-              >
-                {isRollback
-                  ? <><RotateCcwIcon className="mr-1 h-4 w-4" /> Rollback</>
-                  : <><RefreshCcwDotIcon className="mr-1 h-4 w-4" /> Update</>}
-              </Link>
-            )}
-            {(app.installed || isFramework) && !needsUpdate && (
-              <span className="inline-flex items-center gap-1 px-3 py-2 text-xs text-green-500">
-                <CheckCircle2Icon className="h-4 w-4" /> Installed
-              </span>
-            )}
+      <CardFooter className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {!isInstalled && !mismatch && (
+            <Button size="sm" variant="primeblue" className="h-8" onClick={() => action(app.name, 'install')}>
+              <FolderDownIcon className="mr-1.5 h-4 w-4" /> Install
+            </Button>
+          )}
+          {needsUpdate && !mismatch && (
+            <Button
+              size="sm"
+              className={cn('h-8 text-white', isRollback ? 'bg-yellow-600 hover:bg-yellow-600/80' : 'bg-orange-500 hover:bg-orange-500/80')}
+              onClick={() => action(app.name, 'reinstall')}
+              title={isRollback
+                ? `Rollback DB to ${app.version} (currently ${app.installed_version})`
+                : `Update DB to ${app.version} (currently ${app.installed_version})`}
+            >
+              {isRollback
+                ? <><RotateCcwIcon className="mr-1.5 h-4 w-4" /> Rollback</>
+                : <><RefreshCcwDotIcon className="mr-1.5 h-4 w-4" /> Update</>}
+            </Button>
+          )}
 
-            {app.installed && (
-              <Link
-                onClick={() => !isFramework && action(app.name, 'uninstall')}
-                variant="destructive"
-                title={isFramework ? "Framework can't be uninstalled" : 'Uninstall'}
-                className={isFramework ? 'pointer-events-none cursor-not-allowed opacity-30' : ''}
-              >
-                <Trash2Icon className="h-4 w-4" />
-              </Link>
-            )}
-          </div>
-          {app.installed && (
-          <Link
-            variant="outline"
-            className="bg-secondary text-white hover:bg-secondary/80"
-            to={`/desk/App/update?name=${app.name}`}
-            title="Edit"
-          >
-            <PencilIcon className="h-4 w-4" />
-          </Link>
+          {repoMode === 'full' && (
+            <div className="inline-flex divide-x divide-border overflow-hidden rounded-md ring-1 ring-inset ring-border">
+              <GitSegment icon={ArrowDownToLineIcon} label="Pull" tone="yellow" active={behind > 0}
+                title={isFramework ? 'Pull framework from remote' : 'Pull from remote'}
+                onClick={() => action(app.name, 'pull')} />
+              <GitSegment icon={GitCommitHorizontalIcon} label="Commit" tone="amber" active={isDirty}
+                title={isFramework ? 'Commit framework changes' : 'Commit local changes'}
+                onClick={() => action(app.name, 'commit')} />
+              <GitSegment icon={ArrowUpFromLineIcon} label="Push" tone="blue" active={ahead > 0}
+                title={isFramework ? 'Push framework to remote' : 'Push to remote'}
+                onClick={() => action(app.name, 'push')} />
+            </div>
+          )}
+
+          {repoMode === 'local' && (
+            <div className="inline-flex divide-x divide-border overflow-hidden rounded-md ring-1 ring-inset ring-border">
+              <GitSegment icon={GitCommitHorizontalIcon} label="Commit" tone="amber" active={isDirty}
+                title="Commit local changes" onClick={() => action(app.name, 'commit')} />
+              <GitSegment icon={CloudUploadIcon} label="Publish" tone="violet" active
+                title="Connect to a remote and push existing history" onClick={() => action(app.name, 'publish')} />
+            </div>
+          )}
+
+          {repoMode === 'none' && (
+            <Button size="sm" variant="ghost" className="h-8 text-violet-400 hover:bg-violet-500/10 hover:text-violet-300"
+              title="Initialize git, link to a remote, and push the initial commit"
+              onClick={() => action(app.name, 'publish')}>
+              <CloudUploadIcon className="mr-1.5 h-4 w-4" /> Publish
+            </Button>
           )}
         </div>
 
-        {repoMode === 'full' && (
-          <div className="flex items-center justify-between gap-1 border-t border-border/40 pt-2">
-            <div className="flex items-center gap-1">
-              <Link
-                onClick={() => action(app.name, 'pull')}
-                className="bg-blue-600 text-white hover:bg-blue-600/80"
-                title={isFramework ? 'Pull framework from remote' : 'Pull from remote'}
-              >
-                <ArrowDownToLineIcon className="h-4 w-4" />
-                {behind > 0 && <span className="ml-1 text-xs font-bold">{behind}</span>}
-              </Link>
-              <Link
-                onClick={() => action(app.name, 'commit')}
-                className="bg-emerald-700 text-white hover:bg-emerald-700/80"
-                title={isFramework ? 'Commit framework changes' : 'Commit local changes'}
-              >
-                <GitCommitHorizontalIcon className="h-4 w-4" />
-                {dirtyCount > 0 && <span className="ml-1 text-xs font-bold">{dirtyCount}</span>}
-              </Link>
-              <Link
-                onClick={() => action(app.name, 'push')}
-                className="bg-blue-600 text-white hover:bg-blue-600/80"
-                title={isFramework ? 'Push framework to remote' : 'Push to remote'}
-              >
-                <ArrowUpFromLineIcon className="h-4 w-4" />
-                {ahead > 0 && <span className="ml-1 text-xs font-bold">{ahead}</span>}
-              </Link>
-            </div>
-
+        <div className="ml-auto flex items-center gap-0.5">
+          {(repoMode === 'full' || repoMode === 'local') && (
+            <IconAction icon={RotateCcwIcon} danger title="Discard ALL local changes (destructive)" onClick={discard} />
+          )}
+          {app.installed && (
             <Link
-              onClick={() => action(app.name, 'discard', true)}
               variant="ghost"
-              className="text-zinc-500 hover:bg-red-950/40 hover:text-red-400"
-              title="Discard ALL local changes (destructive)"
+              to={`/desk/App/update?name=${app.name}`}
+              title="Edit"
+              className="h-8 w-8 justify-center p-0 text-muted-foreground hover:text-foreground"
             >
-              <RotateCcwIcon className="h-4 w-4" />
+              <PencilIcon className="h-4 w-4" />
             </Link>
-          </div>
-        )}
-
-        {repoMode === 'local' && (
-          <div className="flex items-center justify-between gap-1 border-t border-border/40 pt-2">
-            <div className="flex items-center gap-1">
-              <Link
-                onClick={() => action(app.name, 'commit')}
-                className="bg-emerald-700 text-white hover:bg-emerald-700/80"
-                title="Commit local changes"
-              >
-                <GitCommitHorizontalIcon className="h-4 w-4" />
-                {dirtyCount > 0 && <span className="ml-1 text-xs font-bold">{dirtyCount}</span>}
-              </Link>
-              <Link
-                onClick={() => action(app.name, 'publish')}
-                className="bg-violet-600 text-white hover:bg-violet-600/80"
-                title="Connect to a remote and push existing history"
-              >
-                <CloudUploadIcon className="mr-1 h-4 w-4" /> Publish to remote
-              </Link>
-            </div>
-
-            <Link
-              onClick={() => action(app.name, 'discard', { wasInstalled: app.installed })}
-              variant="ghost"
-              className="text-zinc-500 hover:bg-red-950/40 hover:text-red-400"
-              title="Discard ALL local changes (destructive)"
-            >
-              <RotateCcwIcon className="h-4 w-4" />
-            </Link>
-          </div>
-        )}
-
-        {repoMode === 'none' && (
-          <div className="flex items-center gap-1 border-t border-border/40 pt-2">
-            <Link
-              onClick={() => action(app.name, 'publish')}
-              className="bg-violet-600 text-white hover:bg-violet-600/80"
-              title="Initialize git, link to a remote, and push the initial commit"
-            >
-              <CloudUploadIcon className="mr-1 h-4 w-4" /> Publish to remote
-            </Link>
-          </div>
-        )}
+          )}
+          {app.installed && !isFramework && (
+            <IconAction icon={Trash2Icon} danger title="Uninstall" onClick={() => action(app.name, 'uninstall')} />
+          )}
+        </div>
       </CardFooter>
     </Card>
   )

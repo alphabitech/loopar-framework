@@ -7,7 +7,6 @@ import { loopar, getOrCreateTenantInstance, getTenantInstance } from "../loopar.
 import Router from "./router/router.js";
 import path from "pathe";
 import compression from 'compression';
-import { createServer as createViteServer } from 'vite';
 import tenantContextMiddleware from "./tenant-context.js"
 import { zstdMiddleware } from './zstd-compression.js';
 import { requestContext } from './router/request-context.js';
@@ -50,6 +49,9 @@ export class Server extends Router {
         priority: ['zst', 'br', 'gz'],
       }));
     } else {
+      // Loaded only in dev: production never touches Vite, and code that
+      // imports `loopar` without serving (tests, CLI scripts) doesn't need it.
+      const { createServer: createViteServer } = await import('vite');
       this.vite = await createViteServer({
         server: {
           middlewareMode: true,
@@ -157,16 +159,23 @@ export class Server extends Router {
     }
 
     // Tenant-aware static assets: handlers built from the active tenant's roots
-    // (resolved per request via the `loopar` proxy) and cached per tenant.
+    // (resolved per request via the `loopar` proxy). The roots include one
+    // folder per installed app, so the cache key carries the installed-app set:
+    // installing/uninstalling an app yields a new key instead of serving a
+    // stale chain until the next restart.
     const assetChains = new Map();
     server.use("/assets/public", (req, res, next) => {
       const tenantId = loopar.requestTenantId;
       if (!tenantId) return next();
 
-      let chain = assetChains.get(tenantId);
+      const apps = loopar.__installed__ ? Object.keys(loopar.installedApps || {}).sort().join(",") : "";
+      const key = `${tenantId}|${apps}`;
+
+      let chain = assetChains.get(key);
       if (!chain) {
+        for (const k of assetChains.keys()) if (k.startsWith(`${tenantId}|`)) assetChains.delete(k);
         chain = loopar.getAssetRoots("public").map((root) => express.static(root));
-        assetChains.set(tenantId, chain);
+        assetChains.set(key, chain);
       }
 
       let i = 0;

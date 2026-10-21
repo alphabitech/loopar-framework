@@ -1,4 +1,5 @@
 import fs from 'fs';
+import crypto from 'crypto';
 import path from 'pathe';
 import { loopar } from '../../loopar.js';
 import { RouterUtils } from './router-utils.js';
@@ -335,12 +336,29 @@ export class Middleware {
       const original = err;
       err = getHttpError(err);
 
+      // Production: an unexpected 5xx (SQL, driver, TypeError…) must not leak
+      // its raw message to the browser — it can carry table structure, SQL and
+      // record data. The client gets a generic message plus a reference; the
+      // full detail stays in the core log under that same reference.
+      // Errors raised on purpose via loopar.throw() are marked `expose`.
+      let ref = null;
+      if (Number(err.status) >= 500 && process.env.NODE_ENV === 'production' && !original?.expose) {
+        ref = crypto.randomBytes(4).toString('hex');
+        err = {
+          ...err,
+          title: 'Unexpected error',
+          message: `Something went wrong while processing your request. Reference: ${ref}`,
+        };
+        delete err.frame;
+        delete err.stack;
+      }
+
       // Always leave a trace in the core log: the browser only gets the
       // normalised payload, and a 5xx with no server-side line is
       // undebuggable. 4xx are expected traffic — one line, no stack.
       if (Number(err.status) >= 500) {
         console.error(
-          `[${err.status}] ${req.method} ${req.originalUrl || req.url} — ${err.message}`,
+          `[${err.status}]${ref ? ` [ref ${ref}]` : ''} ${req.method} ${req.originalUrl || req.url} — ${original?.message ?? err.message}`,
           original instanceof Error ? `\n${original.stack}` : (err.stack ? `\n${err.stack}` : ''),
         );
       } else if (process.env.NODE_ENV !== 'production') {

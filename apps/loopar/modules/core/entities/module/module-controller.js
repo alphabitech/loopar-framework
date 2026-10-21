@@ -41,7 +41,9 @@ export default class ModuleController extends BaseController {
     if (queryData.module) await loopar.getDocument("Module", queryData.module);
 
     loopar.session.set(eType, queryData);
-    loopar.session.set(`${type}page`, this.data.page || 1);
+    // Same key getList() reads (loopar.getPage: workspace + entity): a raw
+    // `${type}page` key was never read back, so every page came back as 1.
+    loopar.setPage(type, this.data.page || 1);
 
     const list = await loopar.getList(type, { q: queryData, rowsOnly: this.preloaded === 'true'});
 

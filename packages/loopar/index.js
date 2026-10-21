@@ -30,7 +30,7 @@ import { listPrintFormats, getPrintFormat, getLetterhead } from "./core/document
 import SystemController from "./apps/core/modules/system/controllers/system/system-controller.js";
 import CoreInstaller from "./apps/core/modules/system/forms/installer/installer.js";
 import * as Helpers from "./core/global/helper.js";
-import { getRequest, getResponse } from "./core/server/router/request-context.js";
+import { getRequest, getResponse, requestContext } from "./core/server/router/request-context.js";
 import {
   elementsNames,
   elementsNameByType,
@@ -140,5 +140,8 @@ export {
   addAuditColumns,
   addPrimaryKey,
   getRequest,
+  // Run code as a tenant outside an HTTP request (tests, scripts):
+  //   requestContext.run({ tenant: { name } }, fn)
+  requestContext,
   getResponse
 };

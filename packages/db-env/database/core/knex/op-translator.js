@@ -75,8 +75,9 @@ function applyFieldClause(qb, field, value) {
 function applyOperator(qb, field, desc, operand) {
   switch (desc) {
     // Comparison
-    case 'eq': qb.where(field, '=', operand); return;
-    case 'ne': qb.where(field, '!=', operand); return;
+    // `= NULL` / `!= NULL` match nothing in SQL: null means IS [NOT] NULL.
+    case 'eq': operand === null ? qb.whereNull(field) : qb.where(field, '=', operand); return;
+    case 'ne': operand === null ? qb.whereNotNull(field) : qb.where(field, '!=', operand); return;
     case 'gt': qb.where(field, '>', operand); return;
     case 'gte': qb.where(field, '>=', operand); return;
     case 'lt': qb.where(field, '<', operand); return;

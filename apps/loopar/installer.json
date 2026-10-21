@@ -1,7 +1,7 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.1.7"
+    "version": "7.2.1"
   },
   "documents": {
     "Entity:Module": {
@@ -30,7 +30,7 @@
       "has_website": 0,
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.1.7",
+      "version": "7.2.1",
       "autor": "Administrator",
       "icon": "Infinity",
       "gap": "",

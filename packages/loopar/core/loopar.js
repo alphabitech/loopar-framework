@@ -427,6 +427,9 @@ export class Loopar extends Document {
     // force hard reload to discard client state (csrf, user,
     // cached permissions) and do a clean bootstrap.
     err.hardRedirect = redirect ? true : false;
+    // Thrown on purpose with a message meant for the user: safe to show even
+    // in production (unexpected exceptions get a generic message there).
+    err.expose = true;
 
     this.#installingApp = null;
     throw err;

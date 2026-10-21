@@ -6,9 +6,9 @@
   "dependencies": {
     "better-sqlite3": "13.0.3",
     "knex": "3.3.0",
-    "mysql2": "3.24.4",
-    "oracledb": "6.10.0",
-    "pg": "8.23.0",
-    "tedious": "19.2.1"
+    "mysql2": "3.24.6",
+    "oracledb": "26.0.0",
+    "pg": "8.23.1",
+    "tedious": "20.3.8"
   }
 }

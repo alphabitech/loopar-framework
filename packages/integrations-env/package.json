@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
-    "altcha": "3.2.3",
-    "altcha-lib": "2.5.0",
+    "altcha": "3.4.1",
+    "altcha-lib": "2.6.0",
     "arctic": "^3.7.0",
     "mailchecker": "6.0.21",
-    "nodemailer": "10.0.10",
-    "openai": "7.20.0",
-    "stripe": "19.0.0"
+    "nodemailer": "10.1.7",
+    "openai": "7.39.0",
+    "stripe": "23.0.0"
   }
 }

@@ -363,6 +363,9 @@ const urlInstance = (route) => {
   return hash(`${route.pathname}`.toLowerCase());
 }
 
+/** Option names callers pass in the trailing options object of `args()` signatures. */
+const ARGS_OPTION_KEYS = new Set(["ifNotFound", "includeDeleted", "isSingle", "all", "options"]);
+
 const args = (schema, args) => {
   const isPlainObject = (v) =>
     v != null && typeof v === "object" && !Array.isArray(v);
@@ -375,7 +378,16 @@ const args = (schema, args) => {
     return { ...args[0] };
   }
   
-  if (args.length === 2 && isPlainObject(args[1])) {
+  // (first, { options }) — only when the object really is options: every key
+  // a schema name or a known option. Otherwise it's the second positional
+  // argument; e.g. getDoc("User", { email }) is a filter, not options (it
+  // used to be read as options, so the filter was dropped and the FIRST row
+  // came back).
+  if (
+    args.length === 2 &&
+    isPlainObject(args[1]) &&
+    Object.keys(args[1]).every((k) => schema.includes(k) || ARGS_OPTION_KEYS.has(k))
+  ) {
     return { [schema[0]]: args[0], ...args[1] };
   }
 

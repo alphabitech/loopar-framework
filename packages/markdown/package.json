@@ -2,17 +2,27 @@
   "name": "markdown",
   "version": "1.0.0",
   "type": "module",
-  "exports": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./remark-mdx-html": "./src/remark-mdx-html.js"
+  },
   "dependencies": {
-    "@codemirror/autocomplete": "6.20.2",
-    "@codemirror/commands": "6.10.3",
+    "@codemirror/autocomplete": "6.20.3",
+    "@codemirror/commands": "6.11.1",
     "@codemirror/lang-json": "6.0.2",
-    "@codemirror/language": "6.12.3",
-    "@codemirror/state": "6.6.0",
-    "@codemirror/view": "6.43.12",
-    "@mdxeditor/editor": "4.2.5",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.14",
+    "@mdxeditor/editor": "4.3.3",
     "@uiw/react-markdown-preview": "5.2.1",
+    "mdast-util-mdx-jsx": "3.2.0",
+    "micromark-extension-mdx-jsx": "3.0.2",
+    "micromark-extension-mdx-md": "2.0.0",
+    "micromark-factory-space": "2.0.1",
+    "micromark-util-character": "2.1.1",
     "prism-react-renderer": "2.4.1",
-    "quill": "2.0.3"
+    "property-information": "7.1.0",
+    "quill": "2.0.3",
+    "unist-util-visit-parents": "6.0.2"
   }
 }

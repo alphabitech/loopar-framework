@@ -1,7 +1,6 @@
 import path from 'pathe';
 import fs from 'fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { build } from 'vite';
 
 // Resolve against this file, not process.cwd(): the core may be started from
 // a different working directory (pm2, CLI subcommands, tests).
@@ -13,10 +12,15 @@ const distFile  = path.resolve(distDir, "markdown-render.js");
 const needsBuild = () => {
   if (process.env.NODE_ENV === 'production') return !fs.existsSync(distFile);
   if (!fs.existsSync(distFile)) return true;
-  return fs.statSync(srcFile).mtimeMs > fs.statSync(distFile).mtimeMs;
+  const srcDir = path.dirname(srcFile);
+  const newest = Math.max(...fs.readdirSync(srcDir).map(f => fs.statSync(path.join(srcDir, f)).mtimeMs));
+  return newest > fs.statSync(distFile).mtimeMs;
 };
 
 if (needsBuild()) {
+  // Vite only when the SSR bundle must be (re)built: loading `loopar` with a
+  // fresh bundle (production, tests, CLI) never pulls the bundler in.
+  const { build } = await import('vite');
   await build({
     root: selfRoute,
     ssr: {

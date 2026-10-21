@@ -331,6 +331,13 @@ export default class Installer extends BaseDocument {
     return await loopar.db.getValue('Module', 'app_name', module, {ifNotFound: null});
   }
 
+  /** True when `module` belongs to an app other than the one being installed. */
+  async #ownedByOtherApp(module) {
+    if (!module) return false;
+    const app = await this.getAppFromModule(module).catch(() => null);
+    return !!app && !loopar.utils.compare(app, this.app_name);
+  }
+
   async installData(reinstall = false) {
     const moduleRoute = loopar.makePath('apps', this.app_name);
     let appData = await fileManage.getConfigFile('installer', moduleRoute);
@@ -384,10 +391,19 @@ export default class Installer extends BaseDocument {
         if(entityData){
           let doc = await loopar.getDocument(constructor, name, entityData, { ifNotFound: null });
           const wasFound = !!doc;
+          // A row left behind by another app that no longer ships this name
+          // (renamed/removed, or an old name-only overwrite) is taken over:
+          // always written, so it moves to this app. The preflight already
+          // refused names another installed app still ships.
+          // The stored module (not doc's: entityData overrides it with ours).
+          const storedModule = wasFound
+            ? await loopar.db.getValue(constructor, 'module', name, { ifNotFound: null }).catch(() => null)
+            : null;
+          const reclaimed = wasFound && await this.#ownedByOtherApp(storedModule);
           if (!doc) doc = await loopar.newDocument(constructor, entityData);
 
-          console.log([wasFound ? "Updating......." : "Installing.......", constructor, name]);
-          (!wasFound || reinstall) && await doc.save({ validate: false, reload: false });
+          console.log([reclaimed ? "Reclaiming......." : wasFound ? "Updating......." : "Installing.......", constructor, name]);
+          (!wasFound || reinstall || reclaimed) && await doc.save({ validate: false, reload: false });
         }else{
           console.log([`No data found for ${constructor}:${name}, skipping...`]);
         }
@@ -431,6 +447,42 @@ export default class Installer extends BaseDocument {
       const [constructor, name] = e.split(':');
       if (!await loopar.db.count(constructor, name)) missing.push({ owner, e });
     }
+
+    // Preflight: entity names are unique per tenant. An entity this app ships
+    // must not take a name another installed app still ships — installing it
+    // would overwrite that app's record (and on update it silently did).
+    const taken = [];
+    for (const e of Object.keys(appData.documents)) {
+      const ent = appData.documents[e];
+      if (!ent || typeof ent !== 'object' || !entryRoot(ent, e)) continue;
+
+      const owner = entryAppOwner(ent, e);
+      if (owner && owner !== this.app_name) continue;
+
+      const [constructor, name] = e.split(':');
+      let module = null;
+      try {
+        module = await loopar.db.getValue(constructor, 'module', name, { ifNotFound: null });
+      } catch {
+        continue; // meta table without `module` (or not created yet)
+      }
+
+      const ownerApp = module && await this.getAppFromModule(module).catch(() => null);
+      if (!ownerApp || loopar.utils.compare(ownerApp, this.app_name)) continue;
+
+      const stillShipped = loopar.getEntities(ownerApp)
+        .some(ref => loopar.utils.toEntityKey(ref.name) === loopar.utils.toEntityKey(name));
+      if (stillShipped) taken.push(`${e} (owned by "${ownerApp}")`);
+    }
+    if (taken.length) {
+      loopar.throw({
+        status: 409, code: 'NAME_TAKEN', title: 'Install',
+        message:
+          `App "${this.app_name}" ships documents whose names already belong to another app: ` +
+          `${taken.join(', ')}. Entity names are unique per tenant: rename them in "${this.app_name}".`,
+      });
+    }
+
     if (missing.length) {
       const owners = [...new Set(missing.map(m => m.owner))].join(', ');
       loopar.throw({

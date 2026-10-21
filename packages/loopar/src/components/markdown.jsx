@@ -41,6 +41,23 @@ import { Preview } from './markdown/preview.jsx';
 import { useDesigner } from "@context/designer-context";
 import { cn } from "@cn/lib/utils";
 
+const directiveLabel = (node) =>
+  (node.children || [])
+    .map((child) => child.value ?? directiveLabel(child))
+    .join('');
+
+const LiteralTextDirectiveDescriptor = {
+  name: 'literal-text-directive',
+  type: 'textDirective',
+  testNode: (node) => node.type === 'textDirective',
+  attributes: [],
+  hasChildren: false,
+  Editor: ({ mdastNode }) => {
+    const label = directiveLabel(mdastNode);
+    return <span>:{mdastNode.name}{label ? `[${label}]` : ''}</span>;
+  },
+};
+
 const codeBlockLanguages = {
   js: 'JavaScript',
   jsx: 'JavaScript (React)',
@@ -269,7 +286,7 @@ export default function MDXEditorWithTabs(props) {
               frontmatterPlugin(),
               
               directivesPlugin({
-                directiveDescriptors: [AdmonitionDirectiveDescriptor],
+                directiveDescriptors: [AdmonitionDirectiveDescriptor, LiteralTextDirectiveDescriptor],
               }),
               
               markdownShortcutPlugin(),

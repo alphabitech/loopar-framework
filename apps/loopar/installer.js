@@ -104,6 +104,7 @@ export default class Installer extends CoreInstaller {
     if(reinstall) {
       const result = await super.install(true);
       await this.#migrateAppTypeToHasWebsite();
+      await this.#restoreNameIdentity();
       return result;
     }
     await this.validate(reinstall);
@@ -135,6 +136,23 @@ export default class Installer extends CoreInstaller {
    * an orphan after alterSchema, so it can still be read here. Idempotent;
    * delete this method once every tenant has been updated past 7.1.6.
    */
+  /**
+   * One-time migration (7.2.1): an experimental build made meta rows unique by
+   * (module, name). Entity names are unique per tenant again: restore
+   * UNIQUE(name) on Entity and every builder table. Idempotent (no-op where
+   * UNIQUE(name) never left); delete once dev tenants are past 7.2.1.
+   */
+  async #restoreNameIdentity() {
+    const tables = new Set(["Entity", ...Object.keys(loopar.getTypes() || {})]);
+    for (const table of tables) {
+      try {
+        await loopar.db.ensureNameUniqueKey(table);
+      } catch (e) {
+        console.error(`[Installer] UNIQUE(name) for "${table}" failed:`, e.message);
+      }
+    }
+  }
+
   async #migrateAppTypeToHasWebsite() {
     const columns = await loopar.db.getTableDescription("App");
     if (!columns.some(c => c.name.toLowerCase() === "type")) return;

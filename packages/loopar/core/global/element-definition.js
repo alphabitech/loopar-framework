@@ -533,20 +533,34 @@ class DataInterface {
     }
   }
 
-  isIn() {
-    var regex = /^[0-9]+$/;
+  // Column formats (COLUMN_FORMAT): int / long_int whole numbers, float /
+  // decimal / double any decimal number. Signed: stock adjustments, discounts.
+  // (`isIn` was a typo for `isInt`, so int fields were never checked, and
+  // isFloat accepted only digits: "1.5" failed on a float field.)
+  isInt() {
     return {
-      valid: regex.test(this.value),
+      valid: /^-?\d+$/.test(String(this.value).trim()),
+      message: 'Please enter a whole number'
+    }
+  }
+
+  isLong_int() {
+    return this.isInt();
+  }
+
+  isFloat() {
+    return {
+      valid: /^-?\d+(?:\.\d+)?$/.test(String(this.value).trim()),
       message: 'Please enter a valid number'
     }
   }
 
-  isFloat() {
-    var regex = /^[0-9]+$/;
-    return {
-      valid: regex.test(this.value),
-      message: 'Please enter a valid number'
-    }
+  isDecimal() {
+    return this.isFloat();
+  }
+
+  isDouble() {
+    return this.isFloat();
   }
 
   isAlpha() {

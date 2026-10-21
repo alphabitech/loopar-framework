@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Pagination } from "@pagination";
 import loopar from "loopar";
 import { Link } from "@link";
@@ -51,13 +52,13 @@ export function GridView(props) {
         {hasSelectAll !== false && <DropdownListGridActions deleteOnServer={true}/>}
         {hasSearchForm !== false && <TableSearch onChange={search} />}
       </div>
-      <div className="border">
-        <div className="flex flex-wrap gap-3 border p-2">
+      <div>
+        <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(100%,22rem),1fr))]">
           {rows.length ? rows.map((row) => {
             const action = defaultAction(row);
             const color = loopar.bgColor(row.name);
             return gridTemplate ? (
-              gridTemplate(row, action)
+              <Fragment key={row.name}>{gridTemplate(row, action)}</Fragment>
             ) : (
               <div key={row.name}>
                 <Card className="w-full min-w-[300px]">
@@ -116,7 +117,7 @@ export function GridView(props) {
               </div>
             );
           }) : (
-            <div className="flex w-full items-center justify-center p-4">
+            <div className="col-span-full flex w-full items-center justify-center p-4">
               <EmptyTable />
             </div>
           )}
