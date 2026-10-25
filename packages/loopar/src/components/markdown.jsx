@@ -38,6 +38,7 @@ import '@mdxeditor/editor/style.css';
 import './markdown/mdx-theme.css';
 import { useCallback, useState, useEffect } from 'react';
 import { Preview } from './markdown/preview.jsx';
+import { rawHtmlPlugin } from './markdown/raw-html-plugin.jsx';
 import { useDesigner } from "@context/designer-context";
 import { cn } from "@cn/lib/utils";
 
@@ -284,6 +285,8 @@ export default function MDXEditorWithTabs(props) {
               }),
               
               frontmatterPlugin(),
+
+              rawHtmlPlugin(),
               
               directivesPlugin({
                 directiveDescriptors: [AdmonitionDirectiveDescriptor, LiteralTextDirectiveDescriptor],

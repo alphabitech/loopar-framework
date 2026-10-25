@@ -111,7 +111,7 @@ test("document:* and *:action wildcards apply", async () => {
 
 test("action and document names are matched case- and space-insensitively", async () => {
   await t.run(async () => {
-    const u = await user("casing", (n) => grant("User", n, "Module Group", "View"));
-    assert.equal(PermissionManager.scope("modulegroup", "view", u), "all");
+    const u = await user("casing", (n) => grant("User", n, "User Role", "View"));
+    assert.equal(PermissionManager.scope("userrole", "view", u), "all");
   });
 });

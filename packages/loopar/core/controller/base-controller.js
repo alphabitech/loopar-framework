@@ -5,6 +5,7 @@ import CoreController from './core-controller.js';
 import { printPayload } from '../document/print-format.js';
 import { renameEntity } from '../document/entity-rename.js';
 import { readRuntimeMode } from '../server/runtime-mode.js';
+import { applyTransition, workflowFor } from '../document/workflow.js';
 
 const HISTORY_TABLE = 'Document History';
 const COMMENT_TABLE = 'Comment';
@@ -24,6 +25,8 @@ export default class BaseController extends CoreController {
   static enabledActions = []
 
   async actionList() {
+    if (this.query?.board !== undefined) return await this.#boardColumn();
+
     const data = Object.entries({ ...loopar.getQ(this.document)}).reduce((acc, [key, value]) => {
       if (value && (value.toString()).length > 0 && value !== 0) {
         acc[key] = `${value}`;
@@ -69,6 +72,36 @@ export default class BaseController extends CoreController {
     }
   }
 
+  /**
+   * Kanban column (data endpoint): `{Entity}/list?board=<state>&page=N`.
+   * Same permission, search and owner scope as the list.
+   */
+  async #boardColumn() {
+    const workflow = await workflowFor(this.document);
+    if (!workflow) loopar.throw(`${this.document} has no active workflow.`);
+    const q = { ...loopar.getQ(this.document) };
+    const document = await loopar.newDocument(this.document);
+    return await document.getBoardColumn({
+      field: workflow.field,
+      state: String(this.query.board),
+      q: Object.keys(q).length ? q : null,
+      page: parseInt(this.query.page, 10) || 1,
+    });
+  }
+
+  /**
+   * Workflow transition: `{Entity}/transition?name=X` with `{ action, values }`.
+   * Needs the `transition` grant on the entity; the workflow narrows it per
+   * transition (allowed roles) and `values` may only fill required fields.
+   */
+  async actionTransition() {
+    const data = this.data || {};
+    const values = typeof data.values === 'string' ? loopar.utils.JSONparse(data.values, {}) : (data.values || {});
+    const document = await loopar.getDocument(this.document, this.query.name);
+    // Data endpoint: no `message` key, so the client keeps the payload.
+    return await applyTransition(document, data.action, values);
+  }
+
   async actionUpdate(document) {
     document ??= await loopar.getDocument(this.document, this.query.name, this.hasData() ? this.data : null);
 
@@ -82,12 +115,23 @@ export default class BaseController extends CoreController {
       );
     } else {
       if(this.preloaded == true) {
+        // The client reuses the cached meta of the first record it opened
+        // with this URL. Meta that depends on the record travels with the
+        // data: the workflow (state + available transitions) and, for
+        // records whose fields lock per record (contact forms), the structure.
+        const recordMeta = (await workflowFor(this.document)) || typeof document.lockedFields === 'function'
+          ? await document.__meta__()
+          : null;
         return {
           instance: this.getInstance(),
-          data: await document.values()
+          data: await document.values(),
+          linkTitles: await document.linkTitles(),
+          ...(recordMeta?.workflow ? { workflow: recordMeta.workflow } : {}),
+          ...(recordMeta && typeof document.lockedFields === 'function' ? { Entity: recordMeta.Entity } : {}),
         }
       }
-      return await this.render({ ...await document.__meta__(), ...this.response || {} });
+      // linkTitles: selects show the linked record's title (not its code) before opening.
+      return await this.render({ ...await document.__meta__(), linkTitles: await document.linkTitles(), ...this.response || {} });
     }
   }
 

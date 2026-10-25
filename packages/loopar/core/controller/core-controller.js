@@ -20,7 +20,9 @@ export default class CoreController extends AuthController {
 
   #actionMethod(action) {
     const name = loopar.utils.Capitalize(action);
-    return this[`publicAction${name}`] ? `publicAction${name}` : `action${name}`;
+    return this[`publicAction${name}`] && !this.isRevokedPublicAction(action)
+      ? `publicAction${name}`
+      : `action${name}`;
   }
 
   async sendAction(action) {
@@ -188,7 +190,7 @@ export default class CoreController extends AuthController {
     if (this.entry) return this.entry;
     if (this.client) return this.client;
     if (this.action === "print") return "print";
-    if (["Page", "View"].includes(Document.Entity?.type)) return "view";
+    if (["Page", "View", "Desk Page"].includes(Document.Entity?.type)) return "view";
 
     const action = this.action;
     if (['create', 'update'].includes(action)) return "form";
@@ -204,7 +206,7 @@ export default class CoreController extends AuthController {
   clientImporter(Document) {
     if (!Document) return null;
     const suffix = this.client || (this.action === "print" ? "print"
-      : ["Page", "View"].includes(Document.Entity?.type) ? "view"
+      : ["Page", "View", "Desk Page"].includes(Document.Entity?.type) ? "view"
       : ['create', 'update'].includes(this.action) ? "form"
       : ['list', 'index'].includes(this.action) ? "list" : "view");
 

@@ -1,0 +1,19 @@
+{
+  "name": "Naming Series",
+  "module": "core",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 1,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "search_fields": "name",
+  "title_fields": "name",
+  "resources": [],
+  "doc_structure": "[{\"node\":\"ns_name_row\",\"element\":\"row\",\"data\":{\"name\":\"name_and_status_container\",\"layout\":\"[50,50]\"},\"elements\":[{\"node\":\"ns_col1\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"ns_name\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Series\",\"required\":1,\"type\":\"VARCHAR\",\"in_list_view\":1,\"set_only_time\":1,\"unique\":1,\"searchable\":1,\"description\":\"Text around the counter (#), e.g. CLI-# or INV-2026-#.\"}}]},{\"node\":\"ns_col2\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"ns_current\",\"element\":\"input\",\"data\":{\"name\":\"current\",\"label\":\"Current\",\"format\":\"int\",\"in_list_view\":1,\"description\":\"Last number issued. The next record gets this plus one.\"}}]}]}]",
+  "__ENTITY__": "Entity"
+}

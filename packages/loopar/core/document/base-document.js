@@ -332,17 +332,64 @@ export default class BaseDocument extends CoreDocument {
     const titles = {};
     for (const [entity, names] of Object.entries(wanted)) {
       const linked = await loopar.newDocument(entity);
-      const fields = linked.getFieldSelectLabels().filter(f => f !== "name");
-      if (!fields.length) continue;
-
-      const rows = await loopar.db.getAll(entity, ["name", ...fields], { name: { [Op.in]: [...names] } });
-      titles[entity] = Object.fromEntries(rows.map(row => [
-        row.name,
-        fields.map(f => row[f]).filter(v => v !== null && v !== undefined && v !== "").join(" - ") || row.name,
-      ]));
+      const found = await linked.titlesFor(names);
+      if (found) titles[entity] = found;
     }
 
     return titles;
+  }
+
+  /** Whether a record named `name` exists (select link validation). */
+  async linkExists(name) {
+    return await loopar.db.count(this.__ENTITY__.name, { name }) > 0;
+  }
+
+  /**
+   * `{ [name]: "Title" }` for some records of this entity (see linkTitles), or
+   * null when the entity has no title_fields. Virtual entities without a
+   * table override it.
+   */
+  async titlesFor(names) {
+    const fields = this.getFieldSelectLabels().filter(f => f !== "name");
+    if (!fields.length) return null;
+
+    const rows = await loopar.db.getAll(this.__ENTITY__.name, ["name", ...fields], { name: { [Op.in]: [...names] } });
+    return Object.fromEntries(rows.map(row => [
+      row.name,
+      fields.map(f => row[f]).filter(v => v !== null && v !== undefined && v !== "").join(" - ") || row.name,
+    ]));
+  }
+
+  /**
+   * One Kanban column: the records in workflow state `state`, newest first,
+   * with the same search (`q`) and owner scope as the list. `pageSize` rows
+   * per page; `total` is the column count.
+   */
+  async getBoardColumn({ field, state, q = null, page = 1, pageSize = 20 } = {}) {
+    const name = this.__ENTITY__.name;
+    const search = q ? { ...q } : null;
+    if (search) delete search[field];
+
+    const scoped = await requestOwnerFilter(name);
+    const condition = combineSConditions(this.buildCondition(search), { [field]: state }, scoped);
+    const where = loopar.db.buildWhereCb(condition);
+    const ownerColumn = await this.#ownerColumn();
+    const auditable = ownerColumn.length > 0 || this.__ENTITY__.__REF__?.is_audited === 1;
+
+    const base = () => {
+      let qb = loopar.db.qx()(name);
+      if (where) qb = qb.where(where);
+      if (auditable) qb = qb.whereNull("__deleted_at__");
+      return qb;
+    };
+
+    const fields = [...new Set(["id", "name", field, ...this.getFieldListNames(), ...ownerColumn])];
+    const [rows, countRow] = await Promise.all([
+      base().select(fields).orderBy("id", "desc").limit(pageSize).offset((Math.max(1, page) - 1) * pageSize),
+      base().count({ count: "id" }).first(),
+    ]);
+
+    return { state, rows, total: Number(countRow?.count || 0), page, pageSize };
   }
 
   async records(condition = []) {

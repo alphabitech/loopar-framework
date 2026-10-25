@@ -4,7 +4,10 @@
 import {PageController, loopar} from 'loopar';
 
 export default class ProfileController extends PageController {
-  static freeActions = ["view", "setInfo", "changePassword"]
+  // `update` is a free action (any logged user, no role grant needed) —
+  // NOT a public one: public actions skip CSRF, and saving a profile is a
+  // state change of the logged user.
+  static freeActions = ["view", "update", "setInfo", "changePassword"]
   constructor(props){
     super(props);
 
@@ -30,10 +33,6 @@ export default class ProfileController extends PageController {
     await profile.updateInfo(this.body)
 
     return this.success("Completed")
-  }
-
-  async publicActionUpdate(){
-    return await super.actionUpdate(...arguments)
   }
 
   async actionChangePassword(){

@@ -1,4 +1,5 @@
 import { createRouter } from "@@tools/router/router";
+import { readNavTrace } from "@@tools/router/nav-trace";
 import * as dateUtils from "@global/date-utils";
 import * as Helpers from "@global/helper";
 import scriptManager from "@@tools/script-manager";
@@ -209,6 +210,17 @@ class Loopar {
 
   refresh() {
     this.emit('refresh');
+  }
+
+  /**
+   * Debug: last navigations / redirects / document swaps with their call
+   * site. Run `loopar.navTrace()` in the console right after an unexpected
+   * redirect (before reloading) and share the table.
+   */
+  navTrace() {
+    const trace = readNavTrace();
+    console.table(trace.map(({ stack, ...row }) => row));
+    return trace;
   }
 
   freeze(freeze = true) {

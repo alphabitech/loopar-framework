@@ -1,0 +1,20 @@
+{
+  "name": "Workflow",
+  "module": "core",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 1,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 1,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "search_fields": "name,document",
+  "title_fields": "document",
+  "naming_series": "",
+  "resources": [],
+  "doc_structure": "[{\"node\":\"wf_44\",\"element\":\"row\",\"data\":{\"name\":\"name_and_status_container\"},\"elements\":[{\"node\":\"wf_43\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Name\",\"type\":\"VARCHAR\",\"required\":1,\"unique\":1,\"set_only_time\":1,\"in_list_view\":1,\"searchable\":1,\"hidden\":1}}]},{\"node\":\"wf_53\",\"element\":\"row\",\"data\":{\"layout\":\"[30,25,25,20]\"},\"elements\":[{\"node\":\"wf_49\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wf_45\",\"element\":\"input\",\"data\":{\"name\":\"document\",\"label\":\"Entity\",\"required\":1,\"in_list_view\":1,\"searchable\":1,\"description\":\"Entity this workflow applies to (one workflow per entity).\"}}]},{\"node\":\"wf_50\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wf_46\",\"element\":\"input\",\"data\":{\"name\":\"state_field\",\"label\":\"State field\",\"required\":1,\"in_list_view\":1,\"description\":\"Select field of the entity that holds the state.\"}}]},{\"node\":\"wf_51\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wf_47\",\"element\":\"select\",\"data\":{\"name\":\"app\",\"label\":\"App\",\"options\":\"App\",\"in_list_view\":1}}]},{\"node\":\"wf_52\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wf_48\",\"element\":\"switch\",\"data\":{\"name\":\"active\",\"label\":\"Active\",\"default\":1,\"in_list_view\":1}}]}]},{\"node\":\"wf_55\",\"element\":\"card\",\"data\":{\"label\":\"States\"},\"elements\":[{\"node\":\"wf_54\",\"element\":\"form_table\",\"data\":{\"name\":\"states\",\"label\":\"States\",\"options\":\"Workflow State\"}}]},{\"node\":\"wf_57\",\"element\":\"card\",\"data\":{\"label\":\"Transitions\"},\"elements\":[{\"node\":\"wf_56\",\"element\":\"form_table\",\"data\":{\"name\":\"transitions\",\"label\":\"Transitions\",\"options\":\"Workflow Transition\"}}]}]",
+  "__ENTITY__": "Entity"
+}

@@ -17,7 +17,7 @@ test("a fresh install marks the tenant installed with the loopar app", async () 
 
 test("core entities are registered and their tables exist", async () => {
   await t.run(async () => {
-    for (const entity of ["Entity", "Module", "Module Group", "App", "User", "Role", "User Role", "Permission"]) {
+    for (const entity of ["Entity", "Module", "App", "User", "Role", "User Role", "Permission"]) {
       assert.ok(loopar.getRef(entity), `ref for ${entity}`);
       assert.ok(await loopar.db.count("Entity", { name: entity }) === 1, `Entity record for ${entity}`);
     }

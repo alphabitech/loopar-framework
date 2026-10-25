@@ -97,7 +97,6 @@ export default class App extends BaseDocument {
       const newModule = await loopar.newDocument('Module', {
         name: this.name,
         description: this.name,
-        module_group: 'modules',
         app_name: this.name,
         icon: this.icon,
         in_sidebar: 1,

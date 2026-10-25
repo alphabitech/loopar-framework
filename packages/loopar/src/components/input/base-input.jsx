@@ -50,8 +50,12 @@ const BaseInput = (props) => {
   const { designerMode } = useDesigner();
   // Read-only record (server `actionView` sets Document.readOnly; a view's
   // `readOnly` option overrides it): fields show their value, nothing is editable.
+  // A field flagged `readonly` (metadata, or set by the server for one record)
+  // reads the same way inside an editable form.
   const { readOnly: readOnlyOption } = useViewOptions();
-  const readMode = !designerMode && (readOnlyOption ?? ownerDocument?.readOnly) === true;
+  // Computed fields (`formula`) are read-only too: their value comes from the formula.
+  const fieldReadOnly = [1, "1", true, "true"].includes(propData?.readonly) || !!String(propData?.formula ?? "").trim();
+  const readMode = !designerMode && ((readOnlyOption ?? ownerDocument?.readOnly) === true || fieldReadOnly);
   
   const getInitialData = useCallback(() => {
     if (element) {
@@ -238,7 +242,7 @@ const BaseInput = (props) => {
                 data={state.data}
                 value={field.value}
                 el={props}
-                withoutLabel={withoutLabel === true}
+                withoutLabel={withoutLabel === true || props.dontHaveLabel === true}
               />
             );
           }
@@ -306,7 +310,14 @@ BaseInput.metaFields = () => {
         readonly: { element: SWITCH },
         in_list_view: { element: SWITCH },
         print_hide: { element: SWITCH },
-        searchable: { element: SWITCH }
+        searchable: { element: SWITCH },
+        internal: {
+          element: SWITCH,
+          data: {
+            label: "Internal",
+            description: "Contact form entities only: staff-only field, never shown on the public form or accepted from it."
+          }
+        }
       },
     },
   ]];

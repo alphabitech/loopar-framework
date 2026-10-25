@@ -79,6 +79,12 @@ Input.metaFields = () => {
             data: {format: "int"}
           },
           not_validate_type: { element: SWITCH },
+          formula: {
+            element: TEXTAREA,
+            data: {
+              description: "Computed field (read-only), recalculated as you type and on save. E.g. abs(qty) * unit_cost · round(subtotal * 0.15, 2) · if(type = 'Return', -qty, qty) · sum(lines.total) / count(lines) for a child table.",
+            },
+          },
         }
       }
     ]

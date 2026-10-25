@@ -65,6 +65,7 @@ export default function AppForm() {
   return (
     <FormLayout
       slots={SLOTS}
+      actionsInMenu
       actions={{
         incrementPatch: incrementVersion('Patch'),
         incrementMinor: incrementVersion('Minor'),

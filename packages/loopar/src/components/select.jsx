@@ -9,6 +9,7 @@ import { PlusIcon } from "@radix-ui/react-icons";
 import { useWorkspace } from "@workspace/workspace-provider";
 import { EntryModal } from "@app/entry-modal";
 import { makeUrl } from "./link.jsx";
+import { useDocument } from "@loopar/document";
 
 export default function MetaSelect(props) {
   const [rows, setRows] = useState([]);
@@ -25,6 +26,10 @@ export default function MetaSelect(props) {
   const currentQueryRef = useRef("");
   
   const { renderInput, data } = BaseInput(props);
+  // Titles of the linked records the server sent with the document
+  // ({ [Entity]: { [name]: title } }): the closed select shows "ATL RCC", not "SITE-0002".
+  const { Document: ownerDocument } = useDocument();
+  const linkTitles = ownerDocument?.linkTitles;
 
   const isLocal = useMemo(() => {
     const options = data.options;
@@ -102,12 +107,13 @@ export default function MetaSelect(props) {
     if (!fieldRef.current) return;
     
     const val = fieldRef.current.value || "";
+    const title = typeof data.options === "string" ? linkTitles?.[data.options.trim()]?.[val] : null;
     const initialRows = loopar.utils.isJSON(val) 
       ? [JSON.parse(val)] 
-      : [{ value: val, label: val }];
+      : [{ value: val, label: title || val }];
     
     setRows(getPrepareOptions(initialRows));
-  }, [getPrepareOptions]);
+  }, [getPrepareOptions, linkTitles]);
 
   const getModel = useCallback(() => {
     return model.current?.value;

@@ -5,6 +5,9 @@ import { fileManage } from '../file-manage.js';
 import { parseDocStructure, stripEphemeralDocStructure, injectCookieIndexes } from './tools.js';
 import { FRAMEWORK_OWNED_COLUMN_NAMES } from '../global/audit.js';
 import { isHashedSecret } from '../global/secrets.js';
+import { nextSeriesName } from './naming-series.js';
+import { guardWorkflowState, workflowFor, describeWorkflow } from './workflow.js';
+import { computeFormulas, tableRows } from '../global/formula.js';
 
 export default class CoreDocument {
   #fields = {};
@@ -230,7 +233,13 @@ export default class CoreDocument {
     return (!this.name || this.name === "undefined") || this.name.length === 0;
   }
 
+  /** A new record whose name comes from the entity's naming series. */
+  get #usesNamingSeries() {
+    return this.__IS_NEW__ && !this.__ENTITY__.is_single && !!this.__ENTITY__.naming_series && this.nameIsNull();
+  }
+
   setUniqueName() {
+    if (this.#usesNamingSeries) return;
     if (this.nameIsNull() && (this.__IS_NEW__ || this.__ENTITY__.is_single) && this.getName?.hidden === 1) {
       this.name = loopar.utils.randomString(12);
     }
@@ -298,8 +307,19 @@ export default class CoreDocument {
     }
 
     this.setUniqueName();
+    // Workflow entities: the state only changes through a transition.
+    await guardWorkflowState(this);
+    // Computed fields: beforeSave sees them already computed, and they are
+    // computed again after it, so whatever it changed is reflected and a
+    // client-sent value never reaches the database.
+    await this.#applyFormulas();
     this.beforeSave && await this.beforeSave();
-    if (validate) await this.validate();
+    await this.#applyFormulas();
+    // The series number is reserved only after validation passes, so a
+    // rejected save doesn't burn a number.
+    const seriesPending = this.#usesNamingSeries;
+    if (validate) await this.validate({ skipName: seriesPending });
+    if (seriesPending) this.name = await nextSeriesName(this.__ENTITY__.name, this.__ENTITY__.naming_series);
     await this.#hashSecrets();
 
     if (this.__IS_NEW__ || this.__ENTITY__.is_single) {
@@ -584,9 +604,9 @@ export default class CoreDocument {
 
   }
 
-  async validate() {
+  async validate({ skipName = false } = {}) {
     const errors = Object.values(this.#fields)
-      .filter(field => field.name !== ID).map(e => e.validate())
+      .filter(field => field.name !== ID && !(skipName && field.name === "name")).map(e => e.validate())
       .filter(e => !e.valid).map(e => e.message);
 
     const selectTypes = await this.validateLinkDocuments();
@@ -618,12 +638,13 @@ export default class CoreDocument {
           if (options[0] === "") {
             errors.push(errForNotValidDocument);
           } else {
-            if (await loopar.db.hasEntity(null,options[0]) === 0) {
+            const linkedRef = loopar.getRef(options[0], false);
+            if (!linkedRef) {
               errors.push(errForNotValidDocument);
             } else {
-              const link = await loopar.db.hasEntity(field.options, value);
-
-              if (link === 0) {
+              // Asked to the linked model: a virtual entity has no table to count.
+              const linked = await loopar.newDocument(options[0]);
+              if (!await linked.linkExists(value)) {
                 errors.push(`The value ${value} for ${field.name} does not exist in ${field.options} Entity`);
               }
             }
@@ -665,15 +686,17 @@ export default class CoreDocument {
 
   async __meta__(withData = true) {
     const entity = this.__ENTITY__;
-    const __DATA__ = await this.values();
-      
-    if (!this.__IS_NEW__) {
+    const __DATA__ = this.__IS_NEW__ ? {} : await this.values();
+
+    {
       const updateValue = async (structure) => {
         return Promise.all(structure.map(async (el) => {
           const data = el.data;
           const val = __DATA__[data.name];
       
-          if (el.element === SELECT) {
+          // value_descriptive needs saved data; child-table meta does not —
+          // a new record still has to render its form_table columns.
+          if (!this.__IS_NEW__ && el.element === SELECT) {
             const options = (data.options || "").split("\n");
     
             if (options.length > 1) {
@@ -689,7 +712,7 @@ export default class CoreDocument {
           }
           if(el.element === FORM_TABLE) {
             const ref = loopar.getRef(data.options);
-            el.__META__ = {
+            if (ref) el.__META__ = {
               Entity: {
                 doc_structure: await loopar.db.getValue(ref.__ENTITY__, "doc_structure", ref.__NAME__),
               }
@@ -715,6 +738,16 @@ export default class CoreDocument {
 
     // History flags come from the registry ref so forms can auto-mount the timeline.
     const __REF__ = loopar.getRef(__ENTITY__.name) || {};
+    const workflow = __ENTITY__.is_single ? null : await workflowFor(__ENTITY__.name);
+    if (workflow) {
+      // The state changes through transitions only: show its field read-only.
+      const pin = (nodes = []) => nodes.map(el => ({
+        ...el,
+        ...(el.data?.name === workflow.field ? { data: { ...el.data, readonly: 1 } } : {}),
+        ...(el.elements ? { elements: pin(el.elements) } : {}),
+      }));
+      __ENTITY__.doc_structure = JSON.stringify(pin(loopar.utils.JSONparse(__ENTITY__.doc_structure, [])));
+    }
 
     return {
       name: this.__DOCUMENT_NAME__,
@@ -723,6 +756,7 @@ export default class CoreDocument {
         id: __ENTITY__.id,
         name: __ENTITY__.name,
         module: __ENTITY__.module,
+        title_fields: __ENTITY__.title_fields,
         doc_structure: __ENTITY__.doc_structure,
         ...(this.is_builder ? {is_builder: true} : {}),
         is_single: __ENTITY__.is_single,
@@ -731,6 +765,7 @@ export default class CoreDocument {
         require_login_to_comment: loopar.utils.trueToBinary(__REF__.require_login_to_comment)
       },
       ...(withData || 1==1 ? { data: await this.rawValues() } : {}),
+      ...(workflow ? { workflow: await describeWorkflow(this, workflow) } : {}),
       spacing: this.__SPACING__
     }
   }
@@ -804,6 +839,46 @@ export default class CoreDocument {
     return Object.values(this.#fields).reduce(async (acc, cur) => {
       return { ...await acc, [cur.name]: await value(cur) }
     }, {});
+  }
+
+  /**
+   * Recomputes the formula fields (`data.formula`). Child rows sent with the
+   * request are recomputed with their entity's formulas first, so parent
+   * aggregates (`sum(lines.line_total)`) read the final row values; tables
+   * not sent read their stored rows.
+   */
+  async #applyFormulas() {
+    const ref = this.__ENTITY__.__REF__ || loopar.getRef(this.__ENTITY__.name) || {};
+    const formulas = ref.__FORMULAS__ || {};
+    const tables = {};
+
+    for (const name of ref.__FORM_TABLE_FIELDS__ || []) {
+      const field = this.#fields[name];
+      if (!field) continue;
+
+      const sent = field.value;
+      const hasRows = Array.isArray(sent) || (typeof sent === "string" && sent.trim().startsWith("["));
+      let rows = hasRows ? tableRows(sent) : null;
+
+      const rowFormulas = loopar.getRef(field.options)?.__FORMULAS__ || {};
+      if (rows && Object.keys(rowFormulas).length) {
+        rows = rows.map(row => ({ ...row, ...computeFormulas(rowFormulas, row) }));
+        field.value = rows;
+      }
+
+      tables[name] = rows ?? (this.__IS_NEW__ ? [] : await this.getChildRawValues(field.options));
+    }
+
+    if (!Object.keys(formulas).length) return;
+
+    const scope = { ...tables };
+    for (const field of Object.values(this.#fields)) {
+      if (field.element !== FORM_TABLE) scope[field.name] = field.value;
+    }
+
+    for (const [name, value] of Object.entries(computeFormulas(formulas, scope))) {
+      if (this.#fields[name]) this.#fields[name].value = value;
+    }
   }
 
   async getChildValues(field) {

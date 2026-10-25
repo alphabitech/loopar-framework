@@ -2,6 +2,13 @@
 
 import { loopar, fileManage, BaseController } from "loopar";
 
+/** Session key with the review ids this visitor already voted on. */
+const VOTED_KEY = 'review_votes';
+const clampInt = (v, def, min, max) => {
+  const n = parseInt(v);
+  return Number.isFinite(n) ? Math.min(Math.max(n, min), max) : def;
+};
+
 export default class ApiController extends BaseController {
   async publicActionList() {
 
@@ -15,8 +22,8 @@ export default class ApiController extends BaseController {
       filter,
       fields:   ["name", "author_name", "city", "rating", "comment", "creation", "helpful", "not_helpful"],
       orderBy:  "creation desc",
-      limit:    parseInt(limit),
-      offset:   parseInt(offset),
+      limit:    clampInt(limit, 6, 1, 50),
+      offset:   clampInt(offset, 0, 0, 1_000_000),
     });
  
     return reviews
@@ -53,12 +60,23 @@ export default class ApiController extends BaseController {
     if (!review_id)                              return this.error("review_id is required.");
     if (!["helpful", "not_helpful"].includes(vote)) return this.error("Invalid vote type.");
  
-    const review = await loopar.db.getDoc("Review", { name: review_id, approved: 1 }, 
-      ["name", vote, "not_helpful"]);
- 
+    // getDoc() filters by `name` only (the `approved` condition was silently
+    // dropped → unapproved reviews could be voted): query with both.
+    const review = await loopar.db.query("Review")
+      .where({ name: String(review_id), approved: 1 })
+      .first("name");
+
     if (!review) return this.error("Review not found.");
-    await loopar.db.setValue("Review", vote, review[vote] + 1, review_id);
- 
+
+    // One vote per review per visitor session (no anonymous vote stuffing).
+    const voted = loopar.session.get(VOTED_KEY) || [];
+    if (voted.includes(review.name)) return this.error("You already voted on this review.");
+
+    // Atomic increment (read-then-write lost concurrent votes). `vote` is
+    // whitelisted above, so it is safe as a column name.
+    await loopar.db.query("Review").where({ name: review.name }).increment(vote, 1);
+    loopar.session.set(VOTED_KEY, [...voted, review.name].slice(-500));
+
     return this.success("Vote registered.");
   }
 }

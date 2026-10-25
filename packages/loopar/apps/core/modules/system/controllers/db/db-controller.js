@@ -7,14 +7,6 @@ export default class DbController extends BaseController {
   async actionView() {
   }
 
-  async privateActionSidebar() {
-    return { sidebarData: await DeskController.sidebarData() };
-  }
-
-  static async sidebarData() {
-    return loopar.modulesGroup;
-  }
-
   async actionGetList(){
     const { document } = this.query;
     const { options } = this.body || {};

@@ -119,6 +119,11 @@ export function DialogContextProvider() {
 
 export default function BaseWorkspace(props) {
   const workspace = useWorkspace();
+  // The listener is registered once: read the latest refresh through a ref.
+  // Calling the first render's `workspace.refresh` refetched the initial
+  // pathname, which lacks the query (`update` without `?name=`) → a new doc.
+  const refreshRef = useRef(workspace.refresh);
+  refreshRef.current = workspace.refresh;
 
   useEffect(() => {
     // Accepts an optional payload. loopar.reload() invokes it with
@@ -126,7 +131,7 @@ export default function BaseWorkspace(props) {
     // before the refetch (preloaded=false => complete meta).
     // loopar.refresh() invokes it without payload (soft refetch, maintains cache).
     const handleRefresh = (opts) => {
-      workspace.refresh(opts);
+      refreshRef.current(opts);
     };
 
     Emitter.on('refresh', handleRefresh);

@@ -1,0 +1,10 @@
+{
+  "name": "Desk Page Builder",
+  "build": "Desk Page",
+  "module": "developer",
+  "include_in_installer": 1,
+  "enabled_history": 0,
+  "enable_comments": 0,
+  "doc_structure": "[{\"node\":\"dpb_row_1\",\"element\":\"row\",\"data\":{},\"elements\":[{\"node\":\"dpb_col_1a\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"dpb_name\",\"element\":\"input\",\"data\":{\"label\":\"Name\",\"name\":\"name\",\"required\":1,\"type\":\"VARCHAR\",\"in_list_view\":1,\"set_only_time\":1,\"unique\":1,\"searchable\":1}}]},{\"node\":\"dpb_col_1b\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"dpb_module\",\"element\":\"select\",\"data\":{\"label\":\"Module\",\"name\":\"module\",\"options\":\"Module\",\"required\":1,\"in_list_view\":1,\"searchable\":1}}]}]},{\"node\":\"dpb_row_2\",\"element\":\"row\",\"data\":{},\"elements\":[{\"node\":\"dpb_col_2a\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"dpb_icon\",\"element\":\"icon_input\",\"data\":{\"label\":\"Icon\",\"name\":\"icon\"}}]},{\"node\":\"dpb_col_2b\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"dpb_home\",\"element\":\"switch\",\"data\":{\"label\":\"App home\",\"name\":\"is_home\",\"in_list_view\":1,\"description\":\"The page the app opens from the desk sidebar. One per app.\"}}]}]},{\"node\":\"dpb_designer\",\"element\":\"designer\",\"data\":{\"label\":\"Desk Page Designer\",\"name\":\"doc_structure\"}}]",
+  "__ENTITY__": "Builder"
+}

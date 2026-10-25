@@ -91,7 +91,24 @@ export class Middleware {
 
         if (requiredPath) {
           if (currentUrlLower !== requiredPath.toLowerCase()) {
-            return sendRedirect(requiredPath);
+            if (RouterUtils.isAjaxRequest(req)) {
+              // An AJAX call comes from an app that was already running, so
+              // "needs connect/install/update" is almost always TRANSIENT
+              // (tenant re-init, an in-process loopar.build() during an app
+              // install/reinstall, a busy DB). Redirecting sent the user to
+              // the system page — "spent" a moment later — and from there to
+              // /desk. Answer a retryable 503 instead: the SPA retries the
+              // navigation; a real page load (GET) still gets the redirect.
+              console.warn(`[system] ${req.method} ${req.originalUrl} → 503 (state requires ${requiredPath})`);
+              return this.renderAjax(res, {
+                status: 503,
+                code: 503,
+                title: 'Service Unavailable',
+                message: 'The system is starting or updating. Please try again in a moment.',
+                retryable: true,
+              });
+            }
+            return this.redirect(req, res, requiredPath);
           }
         } else {
           const spentPages = [status.connectPath, status.installPath, status.updatePath]
@@ -281,7 +298,21 @@ export class Middleware {
     const filename = decodeURIComponent(m[3]);
     if (!filename || filename.includes('/')) return null;
 
+    // Private files are never served anonymously (locally they aren't served
+    // at all). Without a session, answer the same 404 as a missing file
+    // instead of redirecting to the remote delivery URL.
+    if (visibility === 'private' && !this.#hasSession()) return null;
+
     return await this.#resolveFromMirror(filename, visibility, isThumb);
+  }
+
+  /** True when the request carries a valid login session (tenant context). */
+  #hasSession() {
+    try {
+      return !!loopar.auth?.user?.();
+    } catch {
+      return false;
+    }
   }
 
   /**

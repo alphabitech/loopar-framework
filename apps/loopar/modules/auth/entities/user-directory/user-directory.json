@@ -1,0 +1,19 @@
+{
+  "name": "User Directory",
+  "module": "auth",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 1,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "doc_structure": "[{\"node\": \"udir_name\", \"element\": \"input\", \"data\": {\"name\": \"name\", \"label\": \"User\", \"in_list_view\": 1, \"searchable\": 1, \"readonly\": 1}}, {\"node\": \"udir_full\", \"element\": \"input\", \"data\": {\"name\": \"full_name\", \"label\": \"Full name\", \"in_list_view\": 1, \"searchable\": 1, \"readonly\": 1}}]",
+  "search_fields": "name,full_name",
+  "title_fields": "full_name",
+  "resources": [],
+  "__ENTITY__": "Entity"
+}

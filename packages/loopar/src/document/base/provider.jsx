@@ -53,7 +53,10 @@ export function Layout({ children, ...options }) {
   return <Kind {...options}>{children}</Kind>;
 }
 
-/** What an entry renders when the app ships no view file. */
-export function DefaultView() {
-  return <Layout />;
+/**
+ * What an entry renders when the app ships no view file. `children` come from
+ * whoever mounts the entity (e.g. the contact_form element's Send button).
+ */
+export function DefaultView({ children }) {
+  return <Layout>{children}</Layout>;
 }

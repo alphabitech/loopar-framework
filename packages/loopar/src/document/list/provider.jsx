@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo } from "react";
 import { usePersist } from "@services/persist-state";
 import { TableProvider, useTable } from "@@table/TableContext";
+import { listViews, nextListView } from "./views";
 
 /** List middleware: table state (rows, selection, search, pagination) + persisted List/Grid view type. */
 const ListContext = createContext(null);
@@ -12,12 +13,16 @@ export function ListProvider({ ctrl, children }) {
     Document.Entity.default_list_view || "List"
   );
 
+  // Kanban only exists for entities with an active workflow.
+  const views = listViews(Document);
+  const current = views.includes(viewType) ? viewType : "List";
+
   const value = useMemo(() => ({
     ctrl,
-    viewType,
+    viewType: current,
     setViewType,
-    viewTypeToggle: () => setViewType(viewType === "List" ? "Grid" : "List"),
-  }), [ctrl, viewType, setViewType]);
+    viewTypeToggle: () => setViewType(nextListView(Document, current)),
+  }), [ctrl, current, setViewType, Document]);
 
   return (
     <ListContext.Provider value={value}>

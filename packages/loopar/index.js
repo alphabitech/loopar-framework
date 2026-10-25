@@ -18,6 +18,8 @@ import { documentManage } from "./core/document/document-manage.js";
 import { fileManage } from "./core/file-manage.js";
 import fileManager from "./core/global/file-manager.js";
 import ContactFormBase from "./core/document/contact-form-base.js";
+import { namingSeriesError } from "./core/document/naming-series.js";
+import { invalidateWorkflows, workflowFor, applyTransition, backfillInitialState } from "./core/document/workflow.js";
 import BaseContactFormController from "./core/controller/base-contact-form-controller.js";
 import BaseController from "./core/controller/base-controller.js";
 import SingleController from "./core/controller/single-controller.js";
@@ -26,6 +28,8 @@ import ViewController from "./core/controller/view-controller.js";
 import ReportController from "./core/controller/report-controller.js";
 import FormController from "./core/controller/form-controller.js";
 import PrintFormatController from "./core/controller/print-format-controller.js";
+import DeskPageController from "./core/controller/desk-page-controller.js";
+import { listDeskPages, deskHomes } from "./core/document/desk-page.js";
 import { listPrintFormats, getPrintFormat, getLetterhead } from "./core/document/print-format.js";
 import SystemController from "./apps/core/modules/system/controllers/system/system-controller.js";
 import CoreInstaller from "./apps/core/modules/system/forms/installer/installer.js";
@@ -85,6 +89,11 @@ export {
   BaseDocument,
   BaseStorage,
   ContactFormBase,
+  namingSeriesError,
+  invalidateWorkflows,
+  workflowFor,
+  applyTransition,
+  backfillInitialState,
   BaseContactFormController,
   StorageDriver,
   LocalDriver,
@@ -97,6 +106,9 @@ export {
   ReportController,
   FormController,
   PrintFormatController,
+  DeskPageController,
+  listDeskPages,
+  deskHomes,
   listPrintFormats,
   getPrintFormat,
   getLetterhead,

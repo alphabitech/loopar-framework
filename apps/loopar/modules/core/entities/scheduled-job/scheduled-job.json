@@ -1,0 +1,20 @@
+{
+  "name": "Scheduled Job",
+  "module": "core",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "search_fields": "name,label,app",
+  "title_fields": "label",
+  "naming_series": "",
+  "resources": [],
+  "doc_structure": "[{\"node\":\"sj_namec\",\"element\":\"row\",\"data\":{\"name\":\"name_and_status_container\"},\"elements\":[{\"node\":\"sj_name\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Key\",\"type\":\"VARCHAR\",\"required\":1,\"unique\":1,\"set_only_time\":1,\"in_list_view\":1,\"searchable\":1,\"readonly\":1}}]},{\"node\":\"sj_r1\",\"element\":\"row\",\"data\":{\"layout\":\"[40,20,20,20]\"},\"elements\":[{\"node\":\"sj_c1\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"sj_label\",\"element\":\"input\",\"data\":{\"name\":\"label\",\"label\":\"Job\",\"in_list_view\":1,\"searchable\":1,\"readonly\":1}}]},{\"node\":\"sj_c2\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"sj_app\",\"element\":\"input\",\"data\":{\"name\":\"app\",\"label\":\"App\",\"in_list_view\":1,\"readonly\":1}}]},{\"node\":\"sj_c3\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"sj_job\",\"element\":\"input\",\"data\":{\"name\":\"job\",\"label\":\"Name\",\"readonly\":1}}]},{\"node\":\"sj_c4\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"sj_enabled\",\"element\":\"switch\",\"data\":{\"name\":\"enabled\",\"label\":\"Enabled\",\"default\":1,\"in_list_view\":1,\"description\":\"Off = the scheduler skips it (Run now still works).\"}}]}]},{\"node\":\"sj_r2\",\"element\":\"row\",\"data\":{\"layout\":\"[34,33,33]\"},\"elements\":[{\"node\":\"sj_c5\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"sj_schedule\",\"element\":\"input\",\"data\":{\"name\":\"schedule\",\"label\":\"Schedule\",\"readonly\":1,\"in_list_view\":1,\"description\":\"Declared by the app in apps/<app>/jobs.js (server time).\"}}]},{\"node\":\"sj_c6\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"sj_next\",\"element\":\"date_time\",\"data\":{\"name\":\"next_run_at\",\"label\":\"Next run\",\"in_list_view\":1}}]},{\"node\":\"sj_c7\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"sj_last\",\"element\":\"date_time\",\"data\":{\"name\":\"last_run_at\",\"label\":\"Last run\",\"readonly\":1,\"in_list_view\":1}}]}]},{\"node\":\"sj_card\",\"element\":\"card\",\"data\":{\"label\":\"Last result\"},\"elements\":[{\"node\":\"sj_r3\",\"element\":\"row\",\"data\":{\"layout\":\"[50,50]\"},\"elements\":[{\"node\":\"sj_c8\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"sj_status\",\"element\":\"select\",\"data\":{\"name\":\"last_status\",\"label\":\"Status\",\"options\":\"Success\\nFailed\\nRunning\",\"readonly\":1,\"in_list_view\":1}}]},{\"node\":\"sj_c9\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"sj_dur\",\"element\":\"input\",\"data\":{\"name\":\"last_duration_ms\",\"label\":\"Duration (ms)\",\"format\":\"int\",\"readonly\":1}}]}]},{\"node\":\"sj_result\",\"element\":\"textarea\",\"data\":{\"name\":\"last_result\",\"label\":\"Result\",\"readonly\":1}}]}]",
+  "__ENTITY__": "Entity"
+}

@@ -13,6 +13,7 @@ import React, {
   useCallback,
 } from "react";
 import { dataInterface } from "@global/element-definition";
+import { useFormulas } from "@@tools/use-formulas";
 import { loopar } from "loopar";
 import * as z from "zod";
 
@@ -220,6 +221,8 @@ export const FormProvider = ({
   useEffect(() => {
     onChange?.(watchedValues);
   }, [watchedValues, onChange]);
+
+  useFormulas(form, STRUCTURE, watchedValues);
 
   /**
    * Assigning `docRef.Form` is an intentional synchronous side-effect during render.

@@ -29,7 +29,7 @@ import { migratePlaintextSecrets } from './global/secrets-migration.js';
 
 export class Loopar extends Document {
   #installingApp = false;
-  modulesGroup = []
+  deskMenu = []
   pathRoot = process.cwd();
   markdownRenderer = markdownRenderer;
   renderMarkdownSSR
@@ -561,6 +561,8 @@ export function registerTenantInstance(tenantId, instance) {
 
 /** Initialized instance for a tenant, or null (does not create). */
 export function getTenantInstance(tenantId) {
+  // Still initializing → not usable yet (see getOrCreateTenantInstance).
+  if (initInFlight.has(tenantId)) return null;
   return instances.get(tenantId) || null;
 }
 
@@ -586,6 +588,11 @@ export async function startCore() {
     })
     .catch((err) => console.warn(`⚠️  Caddy bootstrap skipped: ${err.message}`));
 
+  // Scheduled jobs of the apps (apps/<app>/jobs.js), per connected tenant.
+  import("./global/scheduler.js")
+    .then(({ scheduler }) => scheduler.start())
+    .catch((err) => console.warn(`⚠️  Scheduler not started: ${err.message}`));
+
   return coreInstance;
 }
 
@@ -595,10 +602,17 @@ export async function startCore() {
  * double-init. This is how a tenant "connects" to the running core.
  */
 export async function getOrCreateTenantInstance(tenantId, { appsBasePath } = {}) {
+  // In-flight FIRST. `init()` registers the instance in `instances` on its
+  // very first line — long before initialize() finishes — so looking at
+  // `instances` first handed every concurrent request a HALF-initialized
+  // tenant: DB flags still undefined → the system middleware read "needs
+  // connect" → redirect to /loopar/system/connect → (by then ready, a
+  // "spent" page) → /desk. That is the random "landing on Desk as if after
+  // a login" seen after every core restart (nodemon) or tenant re-init.
+  if (initInFlight.has(tenantId)) return initInFlight.get(tenantId);
+
   const existing = instances.get(tenantId);
   if (existing) return existing;
-
-  if (initInFlight.has(tenantId)) return initInFlight.get(tenantId);
 
   const p = (async () => {
     const inst = new Loopar();

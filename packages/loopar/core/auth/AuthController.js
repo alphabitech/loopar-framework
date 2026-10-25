@@ -34,9 +34,30 @@ export default class AuthController {
   #isPublicAction(workspace){
     if(workspace == "web" && !this.#isRpc) return true;
     const method = this[`publicAction${loopar.utils.Capitalize(this.action)}`];
-    if(method && typeof method == "function") return true;
+    if(method && typeof method == "function" && !this.isRevokedPublicAction(this.action)) return true;
 
     return false;
+  }
+
+  // ---- Revocable public actions ---------------------------------------------
+  // "Public" means "a publicAction<X> method exists" — and methods are
+  // inherited, so a subclass exposes every public action of its parents.
+  // A controller can withdraw some of them (statically or depending on
+  // state): a revoked action is neither public (auth + CSRF apply) nor
+  // dispatched to publicAction<X>; it resolves to action<X> if the class
+  // defines one, otherwise it is a plain 404 like any missing action.
+
+  /** Static, inherited list: `static revokedPublicActions = ['connect']`. */
+  static revokedPublicActions = [];
+
+  /** Override for state-dependent revocation (call super and extend). */
+  revokedPublicActions() {
+    return this.constructor.revokedPublicActions || [];
+  }
+
+  isRevokedPublicAction(action) {
+    const a = String(action ?? '').toLowerCase();
+    return this.revokedPublicActions().some((r) => String(r).toLowerCase() === a);
   }
 
   #document = null;

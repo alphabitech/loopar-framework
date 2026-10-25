@@ -7,6 +7,8 @@ import * as simpleIcons from 'simple-icons';
 
 import { fileManage } from "../file-manage.js";
 import { elementsDict, elementsDefinition } from "../global/element-definition.js";
+import { formulaFields } from "../global/formula.js";
+import { deskHomes } from "../document/desk-page.js";
 import { isAuditableEntity, AUDIT_COLUMN_NAMES } from "../global/audit.js";
 import {PermissionManager} from "../auth/PermissionManager.js"
 import { existsSync, readdirSync, readFileSync } from "fs";
@@ -91,7 +93,9 @@ export class Builder {
         __MODULE__: doc.__MODULE__,
         __TYPE__: doc.type,
         __FIELDS__: getEntityFields(fields, { auditable }),
-        __FORM_TABLE_FIELDS__: getFormTableFields(fields)
+        __FORM_TABLE_FIELDS__: getFormTableFields(fields),
+        // Computed fields: { fieldName: formula }, recomputed on every save.
+        __FORMULAS__: formulaFields(fields)
       };
   
       const key = this.utils.toEntityKey(doc.name);
@@ -270,43 +274,53 @@ export class Builder {
       await this.loadConfig(data);
     }
 
-    const writeModules = async (data) => {
+    /**
+     * Desk menu: one entry per installed App, each with its home (the Desk
+     * Page marked `is_home`, if any), its sidebar modules and the entities
+     * inside them. The core app (loopar) goes last — it is the system area,
+     * business apps lead the rail.
+     */
+    const writeDeskMenu = async (data) => {
       this.db.pagination = null;
-      const groupList = await this.db.getList('Module Group', ['name', 'description'], {in_sidebar: 1 });
+      const byId = (a, b) => (a.id || 0) - (b.id || 0);
 
-      for (const g of groupList) {
-        const modulesGroup = { name: g.name, description: g.description, modules: [] };
+      const apps = (await this.db.getAll('App', ['id', 'name', 'description', 'icon'])).sort(byId);
+      const modules = (await this.db.getAll(
+        'Module',
+        ['id', 'name', 'icon', 'description', 'app_name'],
+        { in_sidebar: 1 }
+      )).sort(byId);
+      const entities = (await this.db.getAll('Entity', ['id', 'name', 'is_single', 'module'])).sort(byId);
 
-        const moduleList = await this.db.getAll(
-          'Module',
-          ['name', 'icon', 'description', 'module_group'],
-          {module_group: g.name, in_sidebar: 1}
-        );
-
-        for (const m of moduleList) {
-          const module = { link: m.name, icon: m.icon, description: m.description, routes: [] };
-
-          const routeList = await this.db.getList("Entity", ['name', 'is_single'], {module: m.name});
-
-          module.routes = routeList.map(route => {
-            return { link: route.is_single ? 'update' : route.name, description: route.name }
-          });
-
-          modulesGroup.modules.push(module);
-        }
-
-        data.modulesGroup.push(modulesGroup);
+      const routesByModule = {};
+      for (const e of entities) {
+        (routesByModule[e.module] ??= []).push({ link: e.is_single ? 'update' : e.name, description: e.name });
       }
 
-      data.initializedModules = true;
-      this.modulesGroup = data.modulesGroup;
+      const homes = deskHomes();
+      const menu = [];
+      for (const app of apps) {
+        const appModules = modules
+          .filter(m => this.utils.compare(m.app_name, app.name))
+          .map(m => ({ link: m.name, icon: m.icon, description: m.description, routes: routesByModule[m.name] || [] }));
+
+        if (appModules.length) {
+          menu.push({ name: app.name, description: app.description || app.name, icon: app.icon, home: homes[app.name] || null, modules: appModules });
+        }
+      }
+
+      const core = menu.findIndex(a => a.name === 'loopar');
+      if (core > -1) menu.push(...menu.splice(core, 1));
+
+      data.deskMenu = menu;
+      this.deskMenu = menu;
 
       await writeFile(data);
     }
 
     const data = {
       DBInitialized: this.DBInitialized,
-      modulesGroup: []
+      deskMenu: []
     };
 
     this.DBServerInitialized = await this.db.testServer();
@@ -359,7 +373,7 @@ export class Builder {
         }
       }
 
-      await writeModules(data);
+      await writeDeskMenu(data);
 
       await PermissionManager.boot();
 

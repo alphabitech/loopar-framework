@@ -1,0 +1,20 @@
+{
+  "name": "Workflow Transition",
+  "module": "core",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 1,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "search_fields": "action",
+  "title_fields": "action",
+  "naming_series": "",
+  "resources": [],
+  "doc_structure": "[{\"node\":\"wft_17\",\"element\":\"input\",\"data\":{\"name\":\"parent_id\",\"label\":\"Parent ID\",\"type\":\"INTEGER\",\"hidden\":1}},{\"node\":\"wft_18\",\"element\":\"input\",\"data\":{\"name\":\"parent_document\",\"label\":\"Parent Entity\",\"type\":\"VARCHAR\",\"hidden\":1}},{\"node\":\"wft_19\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Name\",\"type\":\"VARCHAR\",\"required\":1,\"unique\":1,\"set_only_time\":1,\"hidden\":1}},{\"node\":\"wft_28\",\"element\":\"row\",\"data\":{\"layout\":\"[22,26,18,34]\"},\"elements\":[{\"node\":\"wft_24\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wft_20\",\"element\":\"input\",\"data\":{\"name\":\"action\",\"label\":\"Action\",\"required\":1,\"in_list_view\":1,\"description\":\"Button label.\"}}]},{\"node\":\"wft_25\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wft_21\",\"element\":\"input\",\"data\":{\"name\":\"from_state\",\"label\":\"From\",\"required\":1,\"in_list_view\":1,\"description\":\"Comma-separated states, or * for any non-final state.\"}}]},{\"node\":\"wft_26\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wft_22\",\"element\":\"input\",\"data\":{\"name\":\"to_state\",\"label\":\"To\",\"required\":1,\"in_list_view\":1}}]},{\"node\":\"wft_27\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wft_23\",\"element\":\"input\",\"data\":{\"name\":\"allowed_roles\",\"label\":\"Roles\",\"in_list_view\":1,\"description\":\"Comma-separated. Empty = anyone who can update.\"}}]}]},{\"node\":\"wft_35\",\"element\":\"row\",\"data\":{\"layout\":\"[34,33,33]\"},\"elements\":[{\"node\":\"wft_32\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wft_29\",\"element\":\"input\",\"data\":{\"name\":\"required_fields\",\"label\":\"Required fields\",\"in_list_view\":1,\"description\":\"Comma-separated fields asked before applying.\"}}]},{\"node\":\"wft_33\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wft_30\",\"element\":\"input\",\"data\":{\"name\":\"method\",\"label\":\"Method\",\"description\":\"Model method run by the transition; must be listed in the model's static workflowMethods.\"}}]},{\"node\":\"wft_34\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wft_31\",\"element\":\"input\",\"data\":{\"name\":\"confirm\",\"label\":\"Confirm message\"}}]}]},{\"node\":\"wft_42\",\"element\":\"row\",\"data\":{\"layout\":\"[25,25,25,25]\"},\"elements\":[{\"node\":\"wft_39\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wft_36\",\"element\":\"select\",\"data\":{\"name\":\"notify\",\"label\":\"Notify\",\"options\":\"None\\nSubmitter\\nRoles\",\"default\":\"None\"}}]},{\"node\":\"wft_40\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wft_37\",\"element\":\"select\",\"data\":{\"name\":\"style\",\"label\":\"Button\",\"options\":\"default\\nprimary\\ndestructive\",\"default\":\"default\"}}]},{\"node\":\"wft_41\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wft_38\",\"element\":\"switch\",\"data\":{\"name\":\"allow_submitter\",\"label\":\"Submitter can run\",\"description\":\"Portal phase: the submitter can run it from their link.\"}}]},{\"node\":\"wft_44\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wft_43\",\"element\":\"switch\",\"data\":{\"name\":\"system_only\",\"label\":\"System only\",\"description\":\"Hidden from users: applied by model code (a signature, a scheduled job).\"}}]}]}]",
+  "__ENTITY__": "Entity"
+}

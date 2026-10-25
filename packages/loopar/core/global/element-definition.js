@@ -255,6 +255,9 @@ export const ELEMENT_GROUPS = Object.freeze({
   // Print-format building blocks. `contextOnly`: offered only by a document
   // context that lists the group (Print Format Builder) — never on pages.
   print:      { label: "Print",      writable: false, contextOnly: true },
+  // Desk page building blocks (shortcuts, KPIs, lists): offered only by the
+  // Desk Page Builder context — they read desk data, never on web pages.
+  desk:       { label: "Desk",       writable: false, contextOnly: true },
 });
 
 export const elementsDefinition = {
@@ -361,6 +364,14 @@ export const elementsDefinition = {
     { element: "doc_section", icon: "LayoutPanelTop" },
     { element: "doc_body", icon: "LayoutList", droppable: false },
     { element: "page_break", icon: "SeparatorHorizontal", droppable: false },
+  ],
+  // Read through the Desk Page's controller (core/document/desk-page.js),
+  // filtered by the viewer's permissions.
+  desk: [
+    { element: "shortcut", icon: "SquareArrowOutUpRight", droppable: false },
+    { element: "number_card", icon: "Hash", droppable: false },
+    { element: "quick_list", icon: "ListOrdered", droppable: false },
+    { element: "module_cards", icon: "LayoutGrid", droppable: false },
   ]
 }
 
@@ -701,6 +712,12 @@ const DOCUMENT_CONTEXTS = Object.freeze({
     extra: [],
     aiGroups: ["layout", "content", "print"],
     paletteGroups: ["layout", "content", "media", "print"],
+  },
+  desk: {
+    documentTypes: ["Desk Page Builder"],
+    extra: [],
+    aiGroups: ["layout", "content", "desk"],
+    paletteGroups: ["layout", "content", "media", "desk"],
   },
 });
 

@@ -1,5 +1,6 @@
 import HTTP from '@@tools/router/http';
 import { getWorkspaceName } from '@global/router-utils';
+import { navTrace } from './nav-trace.js';
 
 export default class Router extends HTTP {
   /**
@@ -98,6 +99,7 @@ export default class Router extends HTTP {
    */
   navigate(to, options = {}) {
     const target = this.#resolveUrl(to);
+    navTrace('navigate', { to: target, ...(target !== to ? { requested: to } : {}), router: !!this.#navigate });
 
     if (this.#navigate) {
       this.#navigate(target, options);

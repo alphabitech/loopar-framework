@@ -10,25 +10,29 @@ const MenuEntries = ({ entries, className = "" }) => entries.map(([key, node]) =
   </div>
 ));
 
-export function Toolbar({ defaults = [], actions = [], toggle = null, primary = null, className = "" }) {
+/**
+ * Header toolbar. `inline` entries sit in the row on sm+ and move into the "⋯"
+ * menu on phones; `menu` entries always live in the menu.
+ */
+export function Toolbar({ inline = [], menu = [], toggle = null, primary = null, className = "" }) {
   const [open, setOpen] = useState(false);
-  const hasActions = actions.length > 0;
-  const hasDefaults = defaults.length > 0;
+  const hasMenu = menu.length > 0;
+  const hasInline = inline.length > 0;
 
   return (
     <div className={cn("lp-toolbar flex shrink-0 flex-row items-center gap-[6px]", className)}>
-      {defaults.map(([key, node]) => (
+      {inline.map(([key, node]) => (
         <div key={key} className="lp-toolbar-item flex shrink-0 items-center empty:hidden max-sm:hidden">
           {node}
         </div>
       ))}
 
-      {(hasActions || hasDefaults) && (
+      {(hasMenu || hasInline) && (
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="secondary"
-              className={cn("shrink-0 px-2", !hasActions && "sm:hidden")}
+              className={cn("shrink-0 px-2", !hasMenu && "sm:hidden")}
               aria-label="More actions"
               title="More actions"
             >
@@ -41,9 +45,9 @@ export function Toolbar({ defaults = [], actions = [], toggle = null, primary = 
             onClick={(e) => { if (e.target.closest?.("button, a")) setOpen(false); }}
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <MenuEntries entries={actions} />
-            {hasActions && hasDefaults && <div role="separator" className="my-1 h-px bg-border sm:hidden" />}
-            <MenuEntries entries={defaults} className="sm:hidden" />
+            <MenuEntries entries={inline} className="sm:hidden" />
+            {hasMenu && hasInline && <div role="separator" className="my-1 h-px bg-border sm:hidden" />}
+            <MenuEntries entries={menu} />
           </PopoverContent>
         </Popover>
       )}

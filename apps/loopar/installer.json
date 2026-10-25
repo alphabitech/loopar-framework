@@ -1,25 +1,16 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.2.1"
+    "version": "7.3.1"
   },
   "documents": {
     "Entity:Module": {
       "__root__": "/apps/loopar/modules/core/entities/module"
     },
-    "Entity:Module Group": {
-      "__root__": "/apps/loopar/modules/core/entities/module-group"
-    },
-    "Module Group:administration": {
-      "name": "administration",
-      "description": "Administration",
-      "in_sidebar": 1
-    },
     "Module:core": {
       "name": "core",
       "description": "Core",
       "app_name": "loopar",
-      "module_group": "administration",
       "icon": "Settings",
       "in_sidebar": 1
     },
@@ -30,7 +21,7 @@
       "has_website": 0,
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.2.1",
+      "version": "7.3.1",
       "autor": "Administrator",
       "icon": "Infinity",
       "gap": "",
@@ -57,7 +48,6 @@
       "name": "analytics",
       "description": "Analytics",
       "app_name": "loopar",
-      "module_group": "administration",
       "icon": "ChartNetwork",
       "in_sidebar": 1
     },
@@ -70,16 +60,6 @@
     "Entity:Entity": {
       "__root__": "/apps/loopar/modules/core/entities/entity"
     },
-    "Module Group:developer": {
-      "name": "developer",
-      "description": "Developer",
-      "in_sidebar": 1
-    },
-    "Module Group:modules": {
-      "name": "modules",
-      "description": "Modules",
-      "in_sidebar": 1
-    },
     "Entity:Builder": {
       "__root__": "/apps/loopar/modules/core/entities/builder"
     },
@@ -87,7 +67,6 @@
       "name": "developer",
       "description": "Developer",
       "app_name": "loopar",
-      "module_group": "developer",
       "icon": "LucideCode",
       "in_sidebar": 1
     },
@@ -104,7 +83,6 @@
       "name": "auth",
       "description": "Auth",
       "app_name": "loopar",
-      "module_group": "administration",
       "icon": "LucideCode",
       "in_sidebar": 1
     },
@@ -127,7 +105,6 @@
       "name": "Web",
       "description": "Web",
       "app_name": "loopar",
-      "module_group": "modules",
       "icon": "Globe",
       "in_sidebar": 1
     },
@@ -150,7 +127,6 @@
       "name": "mail",
       "description": "Mail",
       "app_name": "loopar",
-      "module_group": "administration",
       "icon": "Mail",
       "in_sidebar": 1
     },
@@ -182,6 +158,9 @@
     "Page Builder:Page Viewer": {
       "__root__": "/apps/loopar/modules/web/pages/page-viewer"
     },
+    "Page Builder:Document Signing": {
+      "__root__": "/apps/loopar/modules/web/pages/document-signing"
+    },
     "Builder:View Builder": {
       "__root__": "/apps/loopar/modules/developer/builders/view-builder"
     },
@@ -194,6 +173,9 @@
     "Builder:Print Format Builder": {
       "__root__": "/apps/loopar/modules/developer/builders/print-format-builder"
     },
+    "Builder:Desk Page Builder": {
+      "__root__": "/apps/loopar/modules/developer/builders/desk-page-builder"
+    },
     "Entity:Document History": {
       "__root__": "/apps/loopar/modules/core/entities/document-history"
     },
@@ -204,7 +186,6 @@
       "name": "Integrations",
       "description": "Integrations",
       "app_name": "loopar",
-      "module_group": "administration",
       "icon": "ComponentIcon",
       "in_sidebar": 1
     },
@@ -214,8 +195,29 @@
     "Entity:Connected Document": {
       "__root__": "/apps/loopar/modules/core/entities/connected-document"
     },
+    "Entity:Naming Series": {
+      "__root__": "/apps/loopar/modules/core/entities/naming-series"
+    },
+    "Entity:Workflow State": {
+      "__root__": "/apps/loopar/modules/core/entities/workflow-state"
+    },
+    "Entity:Workflow Transition": {
+      "__root__": "/apps/loopar/modules/core/entities/workflow-transition"
+    },
+    "Entity:Workflow": {
+      "__root__": "/apps/loopar/modules/core/entities/workflow"
+    },
+    "Entity:Scheduled Job": {
+      "__root__": "/apps/loopar/modules/core/entities/scheduled-job"
+    },
+    "Entity:Signature Request": {
+      "__root__": "/apps/loopar/modules/core/entities/signature-request"
+    },
     "Entity:User": {
       "__root__": "/apps/loopar/modules/auth/entities/user"
+    },
+    "Entity:User Directory": {
+      "__root__": "/apps/loopar/modules/auth/entities/user-directory"
     },
     "Entity:Document Single Values": {
       "__root__": "/apps/loopar/modules/core/entities/document-single-values"
@@ -350,29 +352,13 @@
       "name": "loopar",
       "description": "loopar",
       "app_name": "loopar",
-      "module_group": "modules",
       "icon": "Infinity",
       "in_sidebar": 0
-    },
-    "Module:integrations": {
-      "name": "integrations",
-      "description": "integrations",
-      "app_name": "loopar",
-      "module_group": "modules",
-      "in_sidebar": 1
-    },
-    "Module:web": {
-      "name": "web",
-      "description": "web",
-      "app_name": "loopar",
-      "module_group": "modules",
-      "in_sidebar": 1
     }
   },
   "postInstaller": {
     "Entity:App": "link",
     "Entity:Entity": "link",
-    "Entity:Module Group": "link",
     "Entity:Builder": "link",
     "Entity:Menu Item": "link",
     "App:loopar": "link",

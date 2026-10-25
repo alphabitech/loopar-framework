@@ -27,6 +27,13 @@ export function buildFormData(values = {}) {
       continue;
     }
 
+    // Date pickers hold Date objects: JSON.stringify would wrap the ISO
+    // string in quotes ('"2026-10-23T…Z"'), which the server can't parse.
+    if (value instanceof Date) {
+      formData.append(key, isNaN(value.getTime()) ? "" : value.toISOString());
+      continue;
+    }
+
     if (value !== null && typeof value === "object") {
       formData.append(key, JSON.stringify(value));
       continue;

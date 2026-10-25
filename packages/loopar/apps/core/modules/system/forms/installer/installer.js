@@ -205,7 +205,6 @@ export default class Installer extends BaseDocument {
 
     const unInstallDocument = async (e, ent) => {
       const [constructor, name] = e.split(':');
-      if (constructor === "Module Group") return;
       // A partial install can leave docs whose entity (table) was never created.
       if (!await loopar.db.hasEntity("Entity", constructor) && !await loopar.db.hasEntity("Builder", constructor)) {
         console.log([`[installer] ${constructor} not installed in this tenant, skipping ${e}`]);

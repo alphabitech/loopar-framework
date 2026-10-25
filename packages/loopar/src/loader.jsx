@@ -1,4 +1,5 @@
 import { Entry, entries } from "./document/Entry";
+import { DefaultView } from "./document/base/provider";
 import { WorkspaceLoader } from "@loopar/workspace-loader";
 import { MetaComponentsLoader } from "@loopar/components-loader";
 import { useEffect, lazy, useState } from "react";
@@ -116,9 +117,11 @@ export async function AppSourceLoader(Document) {
 
   if (!kind) return { default: View, config };
 
-  const Mount = (props) => (
+  // Children of the mount (e.g. the contact_form element's honeypot, captcha
+  // and Send button) go to the view, which renders them inside its layout.
+  const Mount = ({ children, ...props }) => (
     <Entry kind={kind} {...config} {...props}>
-      {View ? <View /> : null}
+      {View ? <View>{children}</View> : children != null ? <DefaultView>{children}</DefaultView> : null}
     </Entry>
   );
   Mount.displayName = View ? `Entry(${kind}:${View.displayName || View.name || "View"})` : `Entry(${kind})`;

@@ -3,7 +3,8 @@ import BaseInput from "@base-input"
 import {MetaComponent} from "@meta-component";
 import { isEqual } from "es-toolkit/predicate";
 
-import { useFieldArray } from 'react-hook-form';
+import { useFieldArray, useWatch } from 'react-hook-form';
+import { useRowFormulas } from "@@tools/use-formulas";
 import { useFormContext } from "@form-provider";
 import {useRef, useMemo, useCallback, useEffect, memo, useState } from "react";
 
@@ -247,11 +248,19 @@ const FormTable = (props) => {
 }
 
 const FormTableControl = ({Document, docRef}) => {
-  const { control, register } = useFormContext();
+  const form = useFormContext();
+  const { control, register } = form;
   const { fields, move, remove, append } = useFieldArray({
     control,
     name: 'rows'
   });
+
+  const rowStructure = useMemo(
+    () => loopar.utils.JSONparse(Document?.Entity?.doc_structure, []),
+    [Document]
+  );
+  const watchedRows = useWatch({ control, name: 'rows' });
+  useRowFormulas(form, rowStructure, watchedRows);
 
   return (
     <TableProvider

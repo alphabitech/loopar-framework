@@ -1,4 +1,4 @@
-import { BaseDocument, fileManage, loopar, Helpers, pruneDocStructure, TYPES } from "loopar";
+import { BaseDocument, fileManage, loopar, Helpers, pruneDocStructure, TYPES, namingSeriesError } from "loopar";
 import { pluralize } from "inflection";
 
 export default class Entity extends BaseDocument {
@@ -25,7 +25,7 @@ export default class Entity extends BaseDocument {
   }
 
   entityIsSingle() {
-    return (["Page", "Form", "Report", "View", "Controller", "Print Format"].includes(this.getEntityType()) || this.is_single) ? 1 : 0;
+    return (["Page", "Form", "Report", "View", "Controller", "Print Format", "Desk Page"].includes(this.getEntityType()) || this.is_single) ? 1 : 0;
   }
 
   validateEntityName() {
@@ -57,6 +57,13 @@ export default class Entity extends BaseDocument {
         loopar.throw('Each word in Entity name must start with uppercase letter.');
       }
     }
+  }
+
+  validateNamingSeries() {
+    if (!this.naming_series) return;
+    if (this.entityIsSingle()) loopar.throw("A single entity has no records to number: remove its naming series.");
+    const error = namingSeriesError(this.naming_series);
+    error && loopar.throw(error);
   }
 
   validateUniqueEntityName() {
@@ -92,6 +99,7 @@ export default class Entity extends BaseDocument {
     if (validate) {
       this.validateFields();
       this.validateEntityName();
+      this.validateNamingSeries();
       await this.validateAppName();
       this.validateUniqueEntityName();
 
@@ -544,7 +552,9 @@ export default class Entity extends BaseDocument {
       ? "BaseContactFormController"
       : type === "Print Format"
         ? "PrintFormatController"
-        : (["Single", "View", "Page", "Form", "Report"].includes(type) ? type : "Base") + "Controller";
+        : type === "Desk Page"
+          ? "DeskPageController"
+          : (["Single", "View", "Page", "Form", "Report"].includes(type) ? type : "Base") + "Controller";
 
     await fileManage.makeClass(documentPath, `${this.name}Controller`, {
       IMPORTS: {

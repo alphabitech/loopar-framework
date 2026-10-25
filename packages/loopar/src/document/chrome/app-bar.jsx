@@ -1,13 +1,14 @@
 import { Toolbar } from "./toolbar";
 import loopar from "loopar";
 import { Button } from "@cn/components/ui/button";
-import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, PrinterIcon, ArrowLeftIcon, PencilIcon, FileTextIcon, TextCursorInputIcon } from "lucide-react";
+import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, KanbanIcon, PrinterIcon, ArrowLeftIcon, PencilIcon, FileTextIcon, TextCursorInputIcon } from "lucide-react";
 import {Link} from "@link";
 import { useDocument, useViewOptions } from "@loopar/document";
 import { canOn } from "@context/auth-context";
 import { useContext } from "react";
 import { useFormState } from "react-hook-form";
 import { BaseFormContext } from "@form-provider";
+import { nextListView } from "../list/views";
 
 /** Save. Filled (`default`) in the header — the one primary action; callers may pass another variant. */
 export const SaveButton = ({ variant = "default" }) => {
@@ -35,7 +36,7 @@ function goToTarget(Document) {
   const { Entity = {}, data = {} } = Document;
   if (Document.isNew || !data.name) return null;
   if (["Entity", "Builder"].includes(Entity.name)) return `/desk/${data.name}/${data.is_single ? "update" : "list"}`;
-  if (["Page Builder", "View Builder", "Print Format Builder"].includes(Entity.name)) return `/desk/${data.name}/view`;
+  if (["Page Builder", "View Builder", "Print Format Builder", "Desk Page Builder"].includes(Entity.name)) return `/desk/${data.name}/view`;
   return null;
 }
 
@@ -170,17 +171,24 @@ function backTarget(Document, contextName) {
 }
 
 function headerTexts(Document, contextName) {
-  const { Entity = {}, meta = {}, data = {} } = Document;
+  const { Entity = {}, data = {} } = Document;
 
   // (meta.title is always set by the server — the entity/document title — so it doesn't mark a module page.)
-  if (contextName === "module" || meta.module_group) return { title: meta.module_group || Entity.name, subtitle: null };
+  if (contextName === "module") return { title: Entity.name, subtitle: null };
   if (contextName === "list" || Entity.is_single || Document.isNew) return { title: Entity.name, subtitle: null };
   const name = Document.name || data.name;
   return { title: Entity.name, subtitle: name && name !== Entity.name ? name : null };
 }
 
+/** Toggle button: shows the view it switches to. */
+const VIEW_BUTTON = {
+  List: { icon: <MenuIcon />, label: "List view" },
+  Grid: { icon: <GridIcon />, label: "Grid view" },
+  Kanban: { icon: <KanbanIcon />, label: "Board view" },
+};
+
 export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...props}) {
-  const { actions = {}, primaryAction, onlyGrid, onlyList, canUpdate } = useViewOptions();
+  const { actions = {}, actionsInMenu, primaryAction, onlyGrid, onlyList, canUpdate } = useViewOptions();
   const { inModal } = useDocument();
   const { meta, Entity } = Document;
 
@@ -194,13 +202,15 @@ export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...prop
 
   const edit = editTarget(Document);
 
+  const viewActions = Object.entries(actions).filter(([, node]) => node);
+
   const defaults = [
     ...(goTo ? [["__goto", <GoToAction key="__goto" to={goTo} name={Document.data?.name} />]] : []),
     ...(isList && onlyGrid !== true && onlyList !== true ? [[
       "__viewtype",
       <Button key="__viewtype" className="px-2" variant="secondary" onClick={viewTypeToggle} title="Toggle view">
-        {viewType === "List" ? <GridIcon /> : <MenuIcon />}
-        <span className="lp-menu-label pl-1">{viewType === "List" ? "Grid view" : "List view"}</span>
+        {VIEW_BUTTON[nextListView(Document, viewType)].icon}
+        <span className="lp-menu-label pl-1">{VIEW_BUTTON[nextListView(Document, viewType)].label}</span>
       </Button>,
     ]] : []),
   ];
@@ -242,9 +252,10 @@ export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...prop
         <span className="flex shrink-0 empty:hidden"><SaveState Document={Document} /></span>
       </div>
       <Toolbar
-        defaults={defaults}
-        actions={[
-          ...Object.entries(actions),
+        // View actions sit in the row (⋯ on phones) unless the view opts into `actionsInMenu`.
+        inline={[...(actionsInMenu ? [] : viewActions), ...defaults]}
+        menu={[
+          ...(actionsInMenu ? viewActions : []),
           ...(canRename(Document, canUpdate) ? [["__rename", <RenameAction key="__rename" Document={Document} />]] : []),
         ]}
         toggle={<PrintToggle Document={Document} />}

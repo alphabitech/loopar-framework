@@ -3,7 +3,7 @@
  * layout props.
  *
  * VIEW options — presentation, kept as React state (base/view-options.jsx):
- *   slots · actions · rowActions · handlers · columns · gridTemplate · sidebar · sidebarHeader ·
+ *   slots · actions · actionsInMenu · rowActions · handlers · columns · gridTemplate · sidebar · sidebarHeader ·
  *   primaryAction · canUpdate · readOnly · hasSidebar · hasHeader · hasBreadcrumb · hasHistory ·
  *   hasSearchForm · hasSelectAll · hasSelectRow · disabledSearchFields · onlyList · onlyGrid
  *
@@ -11,7 +11,7 @@
  *   controller · notRequireChanges · restoreScroll · overrides (raw methods)
  */
 export const VIEW_OPTION_KEYS = [
-  "slots", "actions", "rowActions", "handlers", "columns", "gridTemplate",
+  "slots", "actions", "actionsInMenu", "rowActions", "handlers", "columns", "gridTemplate",
   "sidebar", "sidebarHeader", "primaryAction",
   "canUpdate", "readOnly", "hasSidebar", "hasHeader", "hasBreadcrumb", "hasHistory",
   "hasSearchForm", "hasSelectAll", "hasSelectRow", "disabledSearchFields",

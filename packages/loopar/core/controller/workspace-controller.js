@@ -180,20 +180,22 @@ export default class WorkspaceController extends AuthController {
   }
 
   /**
-   * Sidebar for the current user: only modules the user can reach (derived
-   * from document permissions, see PermissionManager.canAccessModule) and
-   * only groups with at least one such module. Administrator sees all.
+   * Desk menu for the current user: apps (rail) → home + modules. Only
+   * modules the user can reach (derived from document permissions, see
+   * PermissionManager.canAccessModule), the home only if the user may open
+   * it, and only apps with at least one such module. Administrator sees all.
    */
   static async sidebarData(username = loopar.auth.user()) {
-    const all = loopar.modulesGroup || [];
+    const all = loopar.deskMenu || [];
     if (username === 'Administrator') return all;
 
-    const groups = [];
-    for (const g of all) {
-      const modules = (g.modules || []).filter(m => PermissionManager.canAccessModule(m.link, username));
-      if (modules.length) groups.push({ ...g, modules });
+    const apps = [];
+    for (const app of all) {
+      const modules = (app.modules || []).filter(m => PermissionManager.canAccessModule(m.link, username));
+      const home = app.home && PermissionManager.can(app.home, 'view', username) ? app.home : null;
+      if (modules.length) apps.push({ ...app, home, modules });
     }
-    return groups;
+    return apps;
   }
 
   static async portalMenuData(username) {
@@ -201,9 +203,9 @@ export default class WorkspaceController extends AuthController {
     const can = (doc, action) => PermissionManager.can(doc, action, username);
 
     const groups = [];
-    for (const g of (loopar.modulesGroup || [])) {
+    for (const app of (loopar.deskMenu || [])) {
       const routes = [];
-      for (const m of (g.modules || [])) {
+      for (const m of (app.modules || [])) {
         for (const r of (m.routes || [])) {
           const entity = r.description;
           const action = r.link === 'update' ? 'update' : 'list';
@@ -212,7 +214,7 @@ export default class WorkspaceController extends AuthController {
           }
         }
       }
-      if (routes.length) groups.push({ name: g.name, routes });
+      if (routes.length) groups.push({ name: app.description, routes });
     }
 
     return {

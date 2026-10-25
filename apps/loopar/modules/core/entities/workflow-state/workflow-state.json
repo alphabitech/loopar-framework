@@ -1,0 +1,20 @@
+{
+  "name": "Workflow State",
+  "module": "core",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 1,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "search_fields": "state",
+  "title_fields": "state",
+  "naming_series": "",
+  "resources": [],
+  "doc_structure": "[{\"node\":\"wfs_1\",\"element\":\"input\",\"data\":{\"name\":\"parent_id\",\"label\":\"Parent ID\",\"type\":\"INTEGER\",\"hidden\":1}},{\"node\":\"wfs_2\",\"element\":\"input\",\"data\":{\"name\":\"parent_document\",\"label\":\"Parent Entity\",\"type\":\"VARCHAR\",\"hidden\":1}},{\"node\":\"wfs_3\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Name\",\"type\":\"VARCHAR\",\"required\":1,\"unique\":1,\"set_only_time\":1,\"hidden\":1}},{\"node\":\"wfs_16\",\"element\":\"row\",\"data\":{\"layout\":\"[20,12,10,10,12,36]\"},\"elements\":[{\"node\":\"wfs_10\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wfs_4\",\"element\":\"input\",\"data\":{\"name\":\"state\",\"label\":\"State\",\"required\":1,\"in_list_view\":1}}]},{\"node\":\"wfs_11\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wfs_5\",\"element\":\"select\",\"data\":{\"name\":\"color\",\"label\":\"Color\",\"options\":\"gray\\nblue\\namber\\ngreen\\nred\\nviolet\",\"default\":\"gray\",\"in_list_view\":1}}]},{\"node\":\"wfs_12\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wfs_6\",\"element\":\"switch\",\"data\":{\"name\":\"is_initial\",\"label\":\"Initial\",\"in_list_view\":1}}]},{\"node\":\"wfs_13\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wfs_7\",\"element\":\"switch\",\"data\":{\"name\":\"is_final\",\"label\":\"Final\",\"in_list_view\":1}}]},{\"node\":\"wfs_14\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wfs_8\",\"element\":\"switch\",\"data\":{\"name\":\"show_on_board\",\"label\":\"On board\",\"default\":1,\"in_list_view\":1}}]},{\"node\":\"wfs_15\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"wfs_9\",\"element\":\"input\",\"data\":{\"name\":\"public_label\",\"label\":\"Public label\",\"in_list_view\":1,\"description\":\"Shown to the submitter in the portal. Empty = hidden.\"}}]}]}]",
+  "__ENTITY__": "Entity"
+}

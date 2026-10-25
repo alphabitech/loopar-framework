@@ -380,8 +380,9 @@ class InstallerBuilder {
 
   /**
    * Snapshot a Module entry for every module this app's entities belong
-   * to. Modules are folders on disk — the filesystem is the source of
-   * truth — so we derive the module set from getEntities()' __MODULE__.
+   * to, as declared by each entity's `module` field. The folder name
+   * (__MODULE__) is only a fallback: it can differ in case from the Module
+   * row ("web" folder → "Web" module) and would ship a duplicate module.
    * If a real Module row exists in the DB we snapshot that; otherwise we
    * synthesize a minimal one so the installer can create the row and
    * targetApp() resolves on the target. Entries already queued by
@@ -393,7 +394,7 @@ class InstallerBuilder {
 
     const moduleNames = new Set(
       loopar.getEntities(this.app)
-        .map(e => e.__MODULE__)
+        .map(e => e.module || e.__MODULE__)
         .filter(Boolean)
     );
 
@@ -409,7 +410,6 @@ class InstallerBuilder {
             name: moduleName,
             description: moduleName,
             app_name: this.app,
-            module_group: "modules",
             in_sidebar: 1,
           };
       await this.queue(moduleRef, payload);

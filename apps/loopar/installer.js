@@ -105,6 +105,7 @@ export default class Installer extends CoreInstaller {
       const result = await super.install(true);
       await this.#migrateAppTypeToHasWebsite();
       await this.#restoreNameIdentity();
+      await this.#dropModuleGroup();
       return result;
     }
     await this.validate(reinstall);
@@ -150,6 +151,48 @@ export default class Installer extends CoreInstaller {
       } catch (e) {
         console.error(`[Installer] UNIQUE(name) for "${table}" failed:`, e.message);
       }
+    }
+  }
+
+  /**
+   * One-time migration (7.3.0): Module Group was removed — the desk menu is
+   * grouped by App now. Drops the entity (meta row, permissions, table), the
+   * Module.module_group column, and the duplicated "web"/"integrations"
+   * modules an old installer snapshot created from folder names (the real
+   * modules are "Web"/"Integrations"). Names are matched exactly in JS:
+   * MySQL compares case-insensitively and would hit the real modules.
+   * Idempotent; delete once every tenant is past 7.3.0.
+   */
+  async #dropModuleGroup() {
+    const q = () => loopar.db.qx();
+    // A knex SchemaBuilder accumulates statements: take a fresh one per call.
+    const schema = () => q().schema;
+
+    try {
+      const entityModules = new Set((await q()("Entity").select("module")).map(r => r.module));
+      const orphans = (await q()("Module").select("id", "name", "app_name"))
+        .filter(m => ["web", "integrations"].includes(m.name) && m.app_name === "loopar" && !entityModules.has(m.name));
+      if (orphans.length) {
+        await q()("Module").whereIn("id", orphans.map(m => m.id)).delete();
+        console.log(`[Installer] Removed duplicated modules: ${orphans.map(m => m.name).join(", ")}`);
+      }
+
+      const meta = (await q()("Entity").select("id", "name")).filter(e => e.name === "Module Group");
+      if (meta.length) await q()("Entity").whereIn("id", meta.map(e => e.id)).delete();
+
+      if (await schema().hasTable("Permission")) {
+        const perms = (await q()("Permission").select("id", "document")).filter(p => p.document === "Module Group");
+        if (perms.length) await q()("Permission").whereIn("id", perms.map(p => p.id)).delete();
+      }
+
+      if (await schema().hasTable("Module Group")) await schema().dropTable("Module Group");
+      if (await schema().hasColumn("Module", "module_group")) {
+        await schema().alterTable("Module", t => t.dropColumn("module_group"));
+      }
+
+      if (meta.length) console.log("[Installer] Module Group removed");
+    } catch (e) {
+      console.error("[Installer] Module Group removal failed:", e.message);
     }
   }
 

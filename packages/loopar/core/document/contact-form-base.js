@@ -83,10 +83,50 @@ export function detectSpamHeuristics(text) {
 export default class ContactFormBase extends BaseDocument {
   async beforeSave() {
     if (this.__IS_NEW__) {
-      this.name = this.name || this.generateId();
+      // With a naming series the core assigns the name after validation.
+      if (!this.__ENTITY__.naming_series) this.name = this.name || this.generateId();
       this.status = this.status || 'New';
-      this.submitted_at = this.submitted_at || new Date().toISOString();
+      // Set only by submit(): it marks a record that came from the website.
+      // Explicit null, otherwise an unset date_time persists as NOW().
+      this.submitted_at = this.submitted_at || null;
+    } else {
+      await this.#keepSubmittedContent();
     }
+  }
+
+  /**
+   * What a visitor submitted is evidence of what was received: once stored,
+   * staff can't change it (corrections go to the documents created from it).
+   * Internal fields and the envelope status stay editable. Records created by
+   * staff from the desk have no `submitted_at` and stay fully editable.
+   */
+  lockedFields() {
+    return this.contentFields()
+      .filter(f => ![1, '1', true, 'true'].includes(f.internal))
+      .map(f => f.name);
+  }
+
+  async #keepSubmittedContent() {
+    const locked = this.lockedFields();
+    const stored = await loopar.db.getDoc(this.__ENTITY__.name, this.__DOCUMENT_NAME__, [...locked, 'submitted_at']);
+    if (!stored?.submitted_at) return;
+    for (const name of locked) this[name] = stored[name];
+    this.submitted_at = stored.submitted_at;
+  }
+
+  /** Renders the submitted content read-only on website records. */
+  async __meta__(...args) {
+    const meta = await super.__meta__(...args);
+    if (this.__IS_NEW__ || !this.submitted_at) return meta;
+
+    const locked = new Set(this.lockedFields());
+    const mark = (nodes = []) => nodes.map(el => ({
+      ...el,
+      ...(locked.has(el.data?.name) ? { data: { ...el.data, readonly: 1 } } : {}),
+      ...(el.elements ? { elements: mark(el.elements) } : {}),
+    }));
+    meta.Entity.doc_structure = JSON.stringify(mark(loopar.utils.JSONparse(meta.Entity.doc_structure, [])));
+    return meta;
   }
 
   generateId() {
@@ -117,6 +157,7 @@ export default class ContactFormBase extends BaseDocument {
    * validator every entity uses, from this entity's own metadata).
    */
   async submit(context = {}) {
+    this.submitted_at = new Date().toISOString();
     this.ip_address = context.ip || '';
     this.app = context.app || loopar.webApp?.name || '';
 

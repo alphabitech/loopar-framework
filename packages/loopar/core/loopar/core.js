@@ -73,7 +73,7 @@ export class Core extends Builder {
   }
 
   entityIsSingle(ENT) {
-    return (["Page", "Form", "Report", "View", "Controller", "Print Format"].includes(ENT.type) || ENT.is_single) ? 1 : 0;
+    return (["Page", "Form", "Report", "View", "Controller", "Print Format", "Desk Page"].includes(ENT.type) || ENT.is_single) ? 1 : 0;
   }
 
   getRef(entity) {

@@ -65,15 +65,14 @@ export default class DynamicField {
     }
     if ([DATE, TIME, DATE_TIME].includes(this.element)) {
       const fn = this.element === DATE ? 'getDate' : this.element === DATE_TIME ? 'getDateTime' : 'getTime';
-      return loopar.dateUtils[fn](value, 'DB');
+      // An empty date stays empty. The date-utils helpers default a missing
+      // argument to `new Date()`, so passing `undefined` (an unset field)
+      // used to persist NOW.
+      return loopar.utils.nullValue(value) ? null : loopar.dateUtils[fn](value, 'DB');
     }
 
     if (this.element === FORM_TABLE) {
       return loopar.utils.isJSON(value) ? JSON.parse(value) : value;
-    }
-
-    if (this.element === SELECT && loopar.utils.isJSON(value)) {
-      return JSON.parse(value)?.option || ""
     }
 
     if ([CHECKBOX, SWITCH].includes(this.element)) {

@@ -18,11 +18,13 @@ export class ActionScanner {
   
       if (publicOnly) {
         const publicArr = (ControllerClass.publicActions ?? []).map(a => a.toLowerCase());
+        const revoked = (ControllerClass.revokedPublicActions ?? []).map(a => String(a).toLowerCase());
         return candidates
           .filter(action =>
             action.startsWith('public') || publicArr.includes(action.toLowerCase())
           )
-          .map(clean);
+          .map(clean)
+          .filter(action => !revoked.includes(action.toLowerCase()));
       }
   
       const enabled = ControllerClass.actionsEnabled;

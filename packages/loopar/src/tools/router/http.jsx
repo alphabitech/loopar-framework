@@ -1,4 +1,5 @@
 import { getWorkspaceName, workspaceRequiresAuth } from "@global/router-utils";
+import { navTrace } from "./nav-trace.js";
 
 export default class HTTP {
   #ui = {
@@ -141,6 +142,9 @@ export default class HTTP {
    *   `success` receives the full response (redirect included) so the caller
    *   can act on it. Used by saves inside a modal mini-workspace, where the
    *   global navigate would move the BASE page, not the modal.
+   * @param {boolean}  [options.notifyError=true] - Pass `false` when the
+   *   caller renders the error itself (e.g. the navigation fetch shows the
+   *   error view) to avoid a duplicate toast.
    */
   async send(options = {}) {
     const freeze = options.freeze !== false;
@@ -170,6 +174,19 @@ export default class HTTP {
     try {
       const fetchPromise = fetch(url, fetchOptions)
         .then(async response => {
+          // fetch() follows 3xx silently. The server never redirects the AJAX
+          // channel on purpose (redirects travel inside the JSON); if one was
+          // followed anyway, the body belongs to ANOTHER url and rendering it
+          // would show that page under the current URL. Make it a real
+          // navigation to where the server sent us instead.
+          if (response.redirected && typeof window !== 'undefined') {
+            const finalUrl = new URL(response.url, window.location.origin);
+            const dest = this.#withReturnUrl(finalUrl.pathname + finalUrl.search);
+            navTrace('followed-302', { request: url, to: dest });
+            window.location.replace(dest);
+            return new Promise(() => {}); // page is unloading — never settle
+          }
+
           const isJson = response.headers.get('content-type')?.includes('application/json');
           const data = isJson ? await response.json() : null;
 
@@ -183,6 +200,7 @@ export default class HTTP {
           }
 
           if (data?.redirect && options.followRedirect !== false) {
+            navTrace('redirect', { request: url, to: data.redirect, hard: !!data.hardRedirect });
             if (data.hardRedirect) {
               window.location.replace(data.redirect);
             } else {
@@ -201,6 +219,7 @@ export default class HTTP {
           data?.notify && this.#ui.notify(data.notify);
 
           if (data?.refresh) {
+            navTrace('refresh', { request: url, mode: data.refresh });
             if (data.refresh === 'hard') {
               window.location.reload();
             } else {
@@ -215,6 +234,7 @@ export default class HTTP {
     } catch (error) {
       if (error?.redirect) {
         const dest = this.#withReturnUrl(error.redirect);
+        navTrace('error-redirect', { request: url, to: dest, hard: !!error.hardRedirect, code: error.code, message: error.message });
         if (error.hardRedirect) {
           window.location.replace(dest);
         } else {
@@ -224,11 +244,13 @@ export default class HTTP {
       }
 
       if (options.error) {
-        this.#ui.notify(error.notify || {
-          title: error.title,
-          message: error.message,
-          type: "error"
-        });
+        if (options.notifyError !== false) {
+          this.#ui.notify(error.notify || {
+            title: error.title,
+            message: error.message,
+            type: "error"
+          });
+        }
         options.error(error);
       } else {
         this.#ui.error({

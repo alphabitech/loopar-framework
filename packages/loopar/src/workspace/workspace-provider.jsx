@@ -7,6 +7,7 @@ import { AppSourceLoader } from "@loopar/loader";
 import {useAuth} from "@context/auth-context"
 import Emitter from "@services/emitter/emitter";
 import { LoopSocket } from "@services/realtime/LoopSocket";
+import { navTrace } from "@@tools/router/nav-trace";
 
 /** Read the current public session (JWT is httpOnly → ask the server). */
 async function fetchSession() {
@@ -202,7 +203,29 @@ export function WorkspaceProvider({
     root.classList.add(resolved);
   }, [storedTheme, pathname]);
 
-  const goToErrorView = useCallback((e) => {
+  // A fetch is "current" while no newer navigation/refresh has started.
+  // Checked AFTER every async step (fetch, then the lazy view import): a slow
+  // chunk of an older document must never land on top of a newer one — that
+  // rendered a previous page under the current URL.
+  const isCurrentFetch = (fetchId) => fetchId === undefined || fetchId === fetchIdRef.current;
+
+  // One atomic swap: deactivate everything and activate `entry` in the SAME
+  // state update (two separate transitions could interleave between
+  // concurrent loads and leave two views active, or the wrong one).
+  const activateDocument = useCallback((entry) => {
+    startTransition(() => {
+      setDocuments(prevDocuments => {
+        const next = {};
+        for (const [k, doc] of Object.entries(prevDocuments)) {
+          next[k] = doc.active ? { ...doc, active: false } : doc;
+        }
+        next[entry.key] = { ...entry, active: true };
+        return next;
+      });
+    });
+  }, []);
+
+  const goToErrorView = useCallback((e, fetchId) => {
     const Document = {
       key: "error-view",
       entryPoint: "error-view",
@@ -217,45 +240,25 @@ export function WorkspaceProvider({
     };
 
     AppSourceLoader(Document).then((Module) => {
-      startTransition(() => {
-        setDocuments(prevDocuments => {
-          const updatedDocuments = { ...prevDocuments };
-          Object.values(updatedDocuments).forEach((doc) => {
-            doc.active = false;
-          });
-
-          updatedDocuments[Document.key] = {
-            View: Module.default,
-            key: Document.key,
-            Document,
-            active: true,
-          };
-
-          return updatedDocuments;
-        });
+      if (!isCurrentFetch(fetchId)) return;
+      navTrace('render-error', { code: Document.data.code, message: e.message });
+      activateDocument({
+        View: Module.default,
+        key: Document.key,
+        Document,
       });
     });
-  }, []);
+  }, [activateDocument]);
 
   const loadDocument = useCallback((__META__, Module) => {
     try {
-      startTransition(() => {
-        setDocuments(setDocuments => ({
-          ...setDocuments,
-          [__META__.key]: {
-            View: Module.default,
-            ...__META__,
-            active: true,
-          }
-        }));
-        
-      });
+      activateDocument({ View: Module.default, ...__META__ });
     } catch (err) {
       goToErrorView(err);
     }
-  }, [goToErrorView]);
+  }, [activateDocument, goToErrorView]);
 
-  const setDocument = useCallback((r) => {
+  const setDocument = useCallback((r, fetchId, path) => {
     const cache = metaCacheRef.current;
     let __META__ = {};
 
@@ -271,21 +274,22 @@ export function WorkspaceProvider({
     }
 
     AppSourceLoader(__META__.Document).then((Module) => {
-      startTransition(() => {
-        setDocuments(prevDocuments => {
-          const updatedDocuments = { ...prevDocuments };
-          Object.values(updatedDocuments).forEach((Document) => {
-            Document.active = false;
-          });
-          return updatedDocuments;
-        });
-      });
-
+      if (!isCurrentFetch(fetchId)) {
+        navTrace('stale-document-dropped', { path, key: __META__.key });
+        return;
+      }
+      navTrace('render', { path, key: __META__.key, entity: __META__.Document?.Entity?.name });
       loadDocument(__META__, Module);
-    }).catch(e => goToErrorView(e));
+    }).catch(e => goToErrorView(e, fetchId));
   }, [loadDocument, goToErrorView]);
 
-  const fetchDocument = useCallback((url) => {
+  // Transient server states (tenant restarting / re-initializing, app being
+  // (re)installed) answer 502/503/504: retry the SAME navigation quietly a few
+  // times before showing the error view. Never retries over a newer navigation.
+  const RETRYABLE = [502, 503, 504];
+  const MAX_RETRIES = 6;
+
+  const fetchDocument = useCallback((url, { attempt = 0, forceMeta = false } = {}) => {
     // Works off the path string alone (router location for the base,
     // in-memory path for a modal) — one code path, no second <Router>.
     const raw = String(url ?? '');
@@ -296,25 +300,49 @@ export function WorkspaceProvider({
     const targetSearch = rawSearch ? `?${rawSearch}` : '';
 
     const currentFetchId = ++fetchIdRef.current;
-    const preloadedMeta = !!metaCacheRef.current[loopar.utils.urlInstance({ pathname: targetPath })];
+    const preloadedMeta = !forceMeta && !!metaCacheRef.current[loopar.utils.urlInstance({ pathname: targetPath })];
 
     // The ONLY request that names a workspace (as a parameter) — RPCs never send one.
     const queryParams = Object.fromEntries(new URLSearchParams(targetSearch));
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       loopar.fetchDocument(targetPath, {
         workspace: __WORKSPACE_NAME__,
         query: { ...queryParams, preloaded: preloadedMeta },
+        // The error view below is the UI for a failed navigation — no toast.
+        notifyError: false,
         success: r => {
-          if (currentFetchId !== fetchIdRef.current) return;
+          if (currentFetchId !== fetchIdRef.current) return resolve();
+
+          // We asked for data only (meta cached) but the response carries no
+          // meta we hold → ask once more for the full meta instead of
+          // rendering a keyless/partial document.
+          if (preloadedMeta && r && !r.key && !metaCacheRef.current[r.instance]) {
+            navTrace('meta-cache-miss', { path: raw, instance: r.instance });
+            return resolve(fetchDocument(url, { attempt, forceMeta: true }));
+          }
+
           lastFetchedPath.current = raw;
-          setDocument(r);
+          setDocument(r, currentFetchId, raw);
           resolve();
         },
         error: e => {
-          if (currentFetchId !== fetchIdRef.current) return;
+          if (currentFetchId !== fetchIdRef.current) return resolve();
+
+          const code = Number(e?.code || e?.status);
+          if (RETRYABLE.includes(code) && attempt < MAX_RETRIES) {
+            const delay = Math.min(500 * 2 ** attempt, 4000);
+            navTrace('retry', { path: raw, code, attempt: attempt + 1, delay });
+            setTimeout(() => {
+              // A newer navigation started meanwhile → it owns the view now.
+              if (currentFetchId !== fetchIdRef.current) return resolve();
+              resolve(fetchDocument(url, { attempt: attempt + 1, forceMeta }));
+            }, delay);
+            return;
+          }
+
           lastFetchedPath.current = raw;
-          goToErrorView(e);
+          goToErrorView(e, currentFetchId);
           resolve();
         }
       });

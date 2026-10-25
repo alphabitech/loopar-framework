@@ -53,7 +53,7 @@ export default defineConfig(({ command }) => {
   return {
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.d.ts'],
-      dedupe: ['react', 'react-dom', '@codemirror/state', '@codemirror/view', '@codemirror/language'],
+      dedupe: ['react', 'react-dom', '@codemirror/state', '@codemirror/view', '@codemirror/language', 'lexical'],
       alias: {
         // Framework namespaces (the document system) FIRST: Vite matches
         // aliases in key order, and `Alias(src)` below also emits a generic
