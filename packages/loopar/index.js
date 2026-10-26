@@ -30,6 +30,7 @@ import FormController from "./core/controller/form-controller.js";
 import PrintFormatController from "./core/controller/print-format-controller.js";
 import DeskPageController from "./core/controller/desk-page-controller.js";
 import { listDeskPages, deskHomes } from "./core/document/desk-page.js";
+import { chartData, getChart, dashboardItems, dashboardItemData, sidebarDashboards } from "./core/document/dashboard-data.js";
 import { listPrintFormats, getPrintFormat, getLetterhead } from "./core/document/print-format.js";
 import SystemController from "./apps/core/modules/system/controllers/system/system-controller.js";
 import CoreInstaller from "./apps/core/modules/system/forms/installer/installer.js";
@@ -109,6 +110,11 @@ export {
   DeskPageController,
   listDeskPages,
   deskHomes,
+  chartData,
+  getChart,
+  dashboardItems,
+  dashboardItemData,
+  sidebarDashboards,
   listPrintFormats,
   getPrintFormat,
   getLetterhead,

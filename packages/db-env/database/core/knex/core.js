@@ -13,7 +13,11 @@ import {
   addAuditColumns,
   addPrimaryKey,
   COLUMN_FORMATS,
+  requestContext,
 } from "loopar";
+
+/** Key of the per-request transaction states in the request's store. */
+const TX_STATES = Symbol("db.transactions");
 
 import { orphanManager } from "./orphan-manager.js";
 
@@ -230,27 +234,76 @@ export default class Core {
     } catch (e) { console.error("Database drop error:", e.message); throw e; }
   }
 
+  /**
+   * The open transaction belongs to the request that opened it (its
+   * AsyncLocalStorage store), never to the shared connection: a concurrent
+   * request must not run its queries inside another request's transaction,
+   * nor lose them to its rollback. Outside a request (boot, CLI) there is
+   * one per database.
+   */
+  txState(create = false) {
+    const store = requestContext.getStore();
+    if (!store) {
+      if (!this.#unscopedTx && create) this.#unscopedTx = { trx: null, after: [] };
+      return this.#unscopedTx;
+    }
+    const states = store[TX_STATES] ??= new Map();
+    if (!states.has(this) && create) states.set(this, { trx: null, after: [] });
+    return states.get(this) ?? null;
+  }
+
+  #unscopedTx = null;
+
+  #clearTx() {
+    const store = requestContext.getStore();
+    if (store) store[TX_STATES]?.delete(this);
+    else this.#unscopedTx = null;
+  }
+
+  get transaction() { return this.txState()?.trx ?? null; }
+
   async beginTransaction() {
     if (this.transaction) throw new Error("Transaction already active");
-    this.transaction = await this.knex.transaction();
-    return this.transaction;
+    const trx = await this.knex.transaction();
+    this.txState(true).trx = trx;
+    return trx;
   }
 
   async safeRollback() {
-    if (!this.transaction) return;
-    try   { await this.transaction.rollback(); }
+    const trx = this.transaction;
+    if (!trx) return;
+    try   { await trx.rollback(); }
     catch (e) { console.error("Rollback failed:", e.message); }
-    finally   { this.transaction = null; }
+    finally   { this.#clearTx(); }
   }
 
   async endTransaction() {
-    if (!this.transaction) return;
-    try   { await this.transaction.commit(); }
+    const trx = this.transaction;
+    if (!trx) return;
+    try   { await trx.commit(); }
     catch (e) { console.error("Commit failed:", e.message); await this.safeRollback(); throw e; }
-    finally   { this.transaction = null; }
+    finally   { this.#clearTx(); }
   }
 
   async rollbackTransaction() { await this.safeRollback(); }
+
+  /**
+   * Runs `fn` in a transaction: commits when it resolves, rolls back when it
+   * throws. Inside an open transaction it just joins it (the outermost one
+   * commits or rolls back).
+   */
+  async withTransaction(fn) {
+    if (this.transaction) return await fn();
+    await this.beginTransaction();
+    try {
+      const result = await fn();
+      await this.endTransaction();
+      return result;
+    } catch (e) {
+      await this.safeRollback();
+      throw e;
+    }
+  }
 
   /**
    * Helper: return the active query interface (transaction if open, else

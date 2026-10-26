@@ -37,6 +37,7 @@ function goToTarget(Document) {
   if (Document.isNew || !data.name) return null;
   if (["Entity", "Builder"].includes(Entity.name)) return `/desk/${data.name}/${data.is_single ? "update" : "list"}`;
   if (["Page Builder", "View Builder", "Print Format Builder", "Desk Page Builder"].includes(Entity.name)) return `/desk/${data.name}/view`;
+  if (Entity.name === "Dashboard") return `/desk/Dashboard/view?name=${encodeURIComponent(data.name)}`;
   return null;
 }
 
@@ -173,7 +174,8 @@ function backTarget(Document, contextName) {
 function headerTexts(Document, contextName) {
   const { Entity = {}, data = {} } = Document;
 
-  // (meta.title is always set by the server — the entity/document title — so it doesn't mark a module page.)
+  // Module pages render the "Module" entity: show the module itself.
+  if (Document.__MODULE__) return { title: Document.__MODULE__.description || Document.__MODULE__.name, subtitle: null };
   if (contextName === "module") return { title: Entity.name, subtitle: null };
   if (contextName === "list" || Entity.is_single || Document.isNew) return { title: Entity.name, subtitle: null };
   const name = Document.name || data.name;

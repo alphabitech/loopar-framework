@@ -372,6 +372,8 @@ export const elementsDefinition = {
     { element: "number_card", icon: "Hash", droppable: false },
     { element: "quick_list", icon: "ListOrdered", droppable: false },
     { element: "module_cards", icon: "LayoutGrid", droppable: false },
+    { element: "chart", icon: "ChartColumn", droppable: false },
+    { element: "dashboard", icon: "LayoutDashboard", droppable: false },
   ]
 }
 

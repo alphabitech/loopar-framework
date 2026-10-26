@@ -1,7 +1,7 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.3.1"
+    "version": "7.3.3"
   },
   "documents": {
     "Entity:Module": {
@@ -21,7 +21,7 @@
       "has_website": 0,
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.3.1",
+      "version": "7.3.3",
       "autor": "Administrator",
       "icon": "Infinity",
       "gap": "",
@@ -341,6 +341,15 @@
     },
     "Entity:Letterhead": {
       "__root__": "/apps/loopar/modules/core/entities/letterhead"
+    },
+    "Entity:Dashboard Chart": {
+      "__root__": "/apps/loopar/modules/core/entities/dashboard-chart"
+    },
+    "Entity:Dashboard Item": {
+      "__root__": "/apps/loopar/modules/core/entities/dashboard-item"
+    },
+    "Entity:Dashboard": {
+      "__root__": "/apps/loopar/modules/core/entities/dashboard"
     },
     "Entity:Post": {
       "__root__": "/apps/loopar/modules/web/entities/post"

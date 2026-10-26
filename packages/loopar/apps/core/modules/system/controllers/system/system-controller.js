@@ -1,6 +1,7 @@
 'use strict'
 
 import { loopar, fileManage, BaseController, PermissionManager } from "loopar";
+import { safeReturnPath } from "../../../../../../core/global/router-utils.js";
 
 /**
  * Setup actions. They are `publicAction*` so the bootstrap pages (connect /
@@ -22,8 +23,22 @@ export default class SystemController extends BaseController {
     super(props);
   }
 
-  redirect(route = '/auth/login', opts = {}) {
+  // Default landing after a setup action. It used to be always /auth/login:
+  // for a user who is already logged in (the usual case after an update)
+  // the login page bounces to /desk — the "update → lands on Desk" redirect.
+  redirect(route = loopar.auth.user() ? '/desk' : '/auth/login', opts = {}) {
     return super.redirect(route, { hard: true, ...opts });
+  }
+
+  /**
+   * `?redirect=` forwarded by the update page (set by the system middleware
+   * when it detoured the user there). undefined → the controller's default
+   * landing (System: desk/login; App Manager: its own view).
+   */
+  postSetupDestination() {
+    const back = safeReturnPath(this.query?.redirect);
+    if (!back) return undefined;
+    return loopar.auth.user() ? back : `/auth/login?redirect=${encodeURIComponent(back)}`;
   }
 
   /**
@@ -160,7 +175,7 @@ export default class SystemController extends BaseController {
       model.app_name ??= this.getAppName();
 
       await model.install(true);
-      return this.redirect();
+      return this.redirect(this.postSetupDestination());
     } else {
       const model = await loopar.newDocument("Update", this.data)
       const response = await model.__meta__();

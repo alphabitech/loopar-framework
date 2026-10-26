@@ -88,9 +88,10 @@ export function parseDeskFilter(raw, ref) {
  * Query of `entity` as `user` sees it: null when the user can't list it;
  * narrowed to the user's records when their list scope is "own".
  */
-function scopedQuery(entity, filter, user) {
+export function scopedQuery(entity, filter, user) {
   const ref = loopar.getRef(entity, false);
-  if (!ref || ref.is_single || ref.is_child || ref.__TYPE__ !== "Entity") return null;
+  // Records with a table of their own: entities and contact forms.
+  if (!ref || ref.is_single || ref.is_child || !["Entity", "Contact Form"].includes(ref.__TYPE__)) return null;
 
   const scope = PermissionManager.scope(ref.__NAME__, "list", user);
   if (!scope) return null;
@@ -105,7 +106,8 @@ function scopedQuery(entity, filter, user) {
   return { qb, ref };
 }
 
-async function aggregate(data, user) {
+/** One figure of an entity (count / sum / avg / min / max) as `user` sees it. */
+export async function aggregate(data, user) {
   const q = scopedQuery(data.entity, data.filter, user);
   if (!q) return { denied: true };
 
@@ -132,7 +134,18 @@ async function quickList(data, user) {
     .orderBy("id", "desc")
     .limit(limit);
 
-  return { entity: q.ref.__NAME__, fields, rows };
+  // Titles instead of codes: each row's own title and the title of the
+  // record a link field points to. Links keep using `name`.
+  const doc = await loopar.newDocument(q.ref.__NAME__);
+  const titles = await doc.titlesFor(rows.map(row => row.name)) || {};
+  const linked = await doc.linkTitles(rows);
+  const links = doc.linkedFields();
+  const labels = {};
+  for (const field of fields) {
+    if (links[field] && linked[links[field]]) labels[field] = linked[links[field]];
+  }
+
+  return { entity: q.ref.__NAME__, fields, rows, titles, labels };
 }
 
 /**

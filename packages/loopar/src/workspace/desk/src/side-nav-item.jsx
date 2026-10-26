@@ -46,7 +46,7 @@ export const SideNavItem = (props) => {
       active={active}
       //activeClassName="bg-red-500 font-medium text-primary-foreground hover:bg-primary"
     >
-      {icon ? <Icon data={{icon}} className="h-6 w-8"/> : <ChevronRightIcon className="h-6 w-8"/>}
+      {icon ? <Icon data={{icon}} className="h-6 w-8 shrink-0"/> : <ChevronRightIcon className="h-6 w-8 shrink-0"/>}
       { title && (title.replace(" ", "-")).split('-').map((word, index) => (
         <small 
           key={path + index} 
@@ -61,13 +61,14 @@ export const SideNavItem = (props) => {
   return compact ? link : (
     <Link
       award={false}
-      className={`flex w-full justify-start rounded py-1 text-left align-middle ${props.className || ''}`}
+      className={`flex w-full items-center justify-start rounded py-1 text-left align-middle ${props.className || ''}`}
       {...linkProps}
       to={`/desk/${path}`}
       active={active}
     >
-      {icon ? <Icon data={{icon}} className="mr-2 h-6 w-6"/> : <ChevronRightIcon className="mr-2 h-6 w-6"/>}
-      <span className="w-full">{title}</span>
+      {/* shrink-0: a long title would squeeze the icon to 0px in the flex row */}
+      {icon ? <Icon data={{icon}} className="mr-2 h-6 w-6 shrink-0"/> : <ChevronRightIcon className="mr-2 h-6 w-6 shrink-0"/>}
+      <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug" title={title}>{title}</span>
     </Link>
   );
 };

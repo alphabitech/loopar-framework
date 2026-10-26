@@ -3,7 +3,7 @@ import { useShallowStable } from "./base/use-shallow-stable";
 import { DocumentProvider, DefaultView } from "./base/provider";
 import { FormProvider, FormLayout, ReportLayout, BareLayout } from "./form";
 import { ListProvider, ListLayout } from "./list";
-import { PageLayout, WebLayout } from "./page";
+import { PageLayout, WebLayout, DeskPageLayout, DashboardLayout } from "./page";
 import { PrintLayout } from "./print";
 import { DocumentController } from "./controller/document-controller";
 import { FormController } from "./controller/form-controller";
@@ -35,6 +35,8 @@ export const entries = {
   auth:       { middleware: "form", layout: BareLayout,   defaults: { controller: "Auth" }, form: { schema: false } },
   list:       { middleware: "list", layout: ListLayout },
   page:       { layout: PageLayout },
+  "desk-page": { layout: DeskPageLayout, defaults: { hasHistory: false, hasSidebar: false } },
+  dashboard:  { layout: DashboardLayout, defaults: { hasHistory: false, hasSidebar: false } },
   web:        { layout: WebLayout },
   controller: { layout: null },
 };

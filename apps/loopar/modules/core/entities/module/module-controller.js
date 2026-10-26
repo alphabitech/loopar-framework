@@ -77,9 +77,19 @@ export default class ModuleController extends BaseController {
     list.__TYPE__ = type;
     list.key = `${list.Entity.name}:${list.Entity.id}` */
     list.Entity.name = "Module"
+
+    // The module being shown, for the AppBar title (Entity is always "Module").
+    const moduleName = queryData.module || this.name;
+    // getAll, not getRow: getRow resets the shared pagination state.
+    const [moduleRow = null] = moduleName
+      ? await loopar.db.getAll("Module", ["name", "description", "icon", "app_name"], { name: moduleName })
+      : [];
+
     return this.render(list, {
       __TYPES__: types,
       __TYPE__: type,
+      __MODULE__: moduleRow || null,
+      title: moduleRow?.description || moduleRow?.name || list.title,
       key: `${list.Entity.name}:${list.Entity.id}`}
     );
   }

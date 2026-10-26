@@ -28,8 +28,8 @@ export default class Workflow extends BaseDocument {
     this.document = ref.__NAME__;
     this.name = ref.__NAME__;
 
-    const field = (ref.__FIELDS__ || []).find(f => f?.data?.name === this.state_field);
-    if (!field) loopar.throw(`"${this.state_field}" is not a field of ${ref.__NAME__}.`);
+    // __FIELDS__ holds the column names.
+    if (!(ref.__FIELDS__ || []).includes(this.state_field)) loopar.throw(`"${this.state_field}" is not a field of ${ref.__NAME__}.`);
 
     const states = toRows(await this.states);
     if (!states.length) loopar.throw('A workflow needs at least one state.');

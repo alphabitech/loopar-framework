@@ -1,0 +1,20 @@
+{
+  "name": "Dashboard",
+  "module": "core",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 1,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 1,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "search_fields": "name,description",
+  "title_fields": "name",
+  "naming_series": "",
+  "resources": [],
+  "doc_structure": "[{\"node\":\"db_name_row\",\"element\":\"row\",\"data\":{\"name\":\"name_and_status_container\"},\"elements\":[{\"node\":\"db_name\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Name\",\"required\":1,\"type\":\"VARCHAR\",\"in_list_view\":1,\"set_only_time\":1,\"unique\":1,\"searchable\":1}}]},{\"node\":\"db_r1\",\"element\":\"row\",\"data\":{\"layout\":\"[50,25,25]\"},\"elements\":[{\"node\":\"db_r1_c0\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"db_description\",\"element\":\"input\",\"data\":{\"name\":\"description\",\"label\":\"Description\",\"in_list_view\":1}}]},{\"node\":\"db_r1_c1\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"db_app\",\"element\":\"select\",\"data\":{\"name\":\"app\",\"label\":\"App\",\"options\":\"App\",\"in_list_view\":1,\"description\":\"App whose sidebar lists it.\"}}]},{\"node\":\"db_r1_c2\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"db_in_sidebar\",\"element\":\"switch\",\"data\":{\"name\":\"in_sidebar\",\"label\":\"Show in sidebar\",\"in_list_view\":1}}]}]},{\"node\":\"db_card_items\",\"element\":\"card\",\"data\":{\"label\":\"Items\"},\"elements\":[{\"node\":\"db_items\",\"element\":\"form_table\",\"data\":{\"name\":\"items\",\"label\":\"Items\",\"options\":\"Dashboard Item\"}}]}]",
+  "__ENTITY__": "Entity"
+}

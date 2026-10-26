@@ -341,6 +341,17 @@ export function WorkspaceProvider({
             return;
           }
 
+          // Retries exhausted and the server says a full page load would go
+          // to a system page (pending update): go there, remembering where we
+          // were, instead of leaving an error view under the current URL.
+          if (RETRYABLE.includes(code) && typeof e?.requires === 'string' && primary) {
+            const here = window.location.pathname + window.location.search;
+            const dest = `${e.requires}?redirect=${encodeURIComponent(here)}`;
+            navTrace('system-detour', { path: raw, to: dest });
+            window.location.replace(dest);
+            return resolve();
+          }
+
           lastFetchedPath.current = raw;
           goToErrorView(e, currentFetchId);
           resolve();

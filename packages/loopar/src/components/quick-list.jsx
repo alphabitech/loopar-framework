@@ -19,6 +19,9 @@ export default function QuickList(props) {
   const rows = designing
     ? [1, 2, 3].map(i => ({ name: `${data.entity || "Record"} ${i}` }))
     : result?.rows || [];
+  // Titles from the server: the row's own and those of its link fields.
+  const title = (row) => result?.titles?.[row.name] ?? row.name;
+  const display = (row, f) => String(result?.labels?.[f]?.[row[f]] ?? row[f] ?? "");
 
   return (
     <div className={cn("w-full rounded-xl border bg-card", props.className)}>
@@ -39,10 +42,10 @@ export default function QuickList(props) {
           {rows.map(row => {
             const content = (
               <>
-                <span className="truncate font-medium">{row.name}</span>
+                <span className="truncate font-medium" title={row.name}>{title(row)}</span>
                 {fields.filter(f => f !== "name").map(f => (
                   <span key={f} className="truncate text-sm text-muted-foreground" title={humanize(f)}>
-                    {designing ? `{${f}}` : String(row[f] ?? "")}
+                    {designing ? `{${f}}` : display(row, f)}
                   </span>
                 ))}
               </>

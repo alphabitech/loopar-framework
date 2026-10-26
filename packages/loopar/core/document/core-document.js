@@ -159,7 +159,7 @@ export default class CoreDocument {
             const field = this.#fields[fieldName];
             const currentValue = field.value;
             if((!currentValue || currentValue.length === 0) && !this.__IS_NEW__) {
-              return await this.getChildValues(field.options);
+              return await this.getChildRawValues(field.options);
             }
             return field.value;
           },
@@ -253,25 +253,57 @@ export default class CoreDocument {
     return await loopar.db.getValue(this.__ENTITY__.name, "id", this.__DOCUMENT_NAME__);
   }
 
-  async deleteChildRecords(force = false) {
-    const ID = await this.__ID__();
-    const childValuesReq = this.childValuesReq;
+  /** Child entities of this document (its form tables) that have a table. */
+  async #childEntities() {
+    const out = [];
+    for (const entity of Object.keys(this.childValuesReq)) {
+      if (entity !== this.name && await loopar.db.hasTable(entity)) out.push(entity);
+    }
+    return out;
+  }
 
-    if (Object.keys(childValuesReq).length === 0) return;
+  /** Query of the rows of `entity` that belong to this document (`parentId`). */
+  #childRows(entity, parentId) {
+    return loopar.db.qx()(entity).where({ parent_id: parentId, parent_document: this.__ENTITY__.name });
+  }
 
-    if (ID == null) return;
+  async deleteChildRecords() {
+    const parentId = await this.__ID__();
+    if (parentId == null) return;
+    for (const entity of await this.#childEntities()) {
+      await this.#childRows(entity, parentId).delete();
+    }
+  }
 
-    for (const [key, value] of Object.entries(childValuesReq)) {
-      if(key == this.name) continue;
-      if(!await loopar.db.hasTable(key)) continue;
+  /**
+   * Writes the child tables sent with this document. A table is replaced as a
+   * whole, in the order received (that order is the rows' order), but each row
+   * that already belonged to this document keeps its `name`: links to a row
+   * survive its parent's saves. Only new rows get a new name. Tables not sent
+   * (not an array) are left as they are.
+   */
+  async #writeChildren(args) {
+    const parentId = await this.__ID__();
+    const parentDocument = this.__ENTITY__.name;
+    const cleanParentId = Number.isFinite(+parentId) ? parseInt(parentId, 10) : parentId;
 
-      const values = loopar.utils.isJSON(value) ? JSON.parse(value) : Array.isArray(value) ? value : null;
+    for (const entity of await this.#childEntities()) {
+      const value = this.childValuesReq[entity];
+      const rows = loopar.utils.isJSON(value) ? JSON.parse(value) : Array.isArray(value) ? value : null;
+      if (!rows) continue;
 
-      if (values || force) {
-        await loopar.db.raw(
-          `DELETE FROM ${loopar.db.tableName(key)} WHERE parent_id = ?`,
-          [ID]
-        );
+      const kept = new Set((await this.#childRows(entity, parentId).select("name")).map(row => String(row.name)));
+      await this.#childRows(entity, parentId).delete();
+
+      const nextId = await loopar.db.nextId(entity);
+      for (const [index, row] of rows.entries()) {
+        row.id = nextId + index;
+        row.name = row.name != null && kept.has(String(row.name)) ? row.name : loopar.utils.randomString(15);
+        row.parent_document = parentDocument;
+        row.parent_id = cleanParentId;
+
+        const document = await loopar.newDocument(entity, row);
+        await document.save(args.forceChildren ? { forceChildren: true } : undefined);
       }
     }
   }
@@ -279,32 +311,6 @@ export default class CoreDocument {
   async save() {
     const args = arguments[0] || {};
     const validate = args.validate !== false;
-
-    const updateRows = async (Ent, rows, parentType, parentId) => {
-      const nextId = await loopar.db.nextId(Ent);
-      const cleanParentId = Number.isFinite(+parentId) ? parseInt(parentId, 10) : parentId;
-      for (const [index, row] of rows.entries()) {
-        row.id = nextId + index;
-        row.name = loopar.utils.randomString(15);
-        row.parent_document = parentType;
-        row.parent_id = cleanParentId;
-
-        const document = await loopar.newDocument(Ent, row);
-        await document.save(args.forceChildren ? { forceChildren: true } : undefined);
-      }
-    }
-    
-    const updateChildRecords = async (childValuesReq, parentType, parentId) => {
-      for (const [key, value] of Object.entries(childValuesReq)) {
-        if(key == this.name) continue;
-        if(!await loopar.db.hasTable(key)) continue;
-
-        const rows = loopar.utils.isJSON(value) ? JSON.parse(value) : Array.isArray(value) ? value : null;
-        if(!rows) continue;
-
-        await updateRows(key, rows, parentType, parentId);
-      }
-    }
 
     this.setUniqueName();
     // Workflow entities: the state only changes through a transition.
@@ -319,33 +325,29 @@ export default class CoreDocument {
     // rejected save doesn't burn a number.
     const seriesPending = this.#usesNamingSeries;
     if (validate) await this.validate({ skipName: seriesPending });
-    if (seriesPending) this.name = await nextSeriesName(this.__ENTITY__.name, this.__ENTITY__.naming_series);
-    await this.#hashSecrets();
+    // The record and its child rows are written together or not at all.
+    await loopar.db.withTransaction(async () => {
+      if (seriesPending) this.name = await nextSeriesName(this.__ENTITY__.name, this.__ENTITY__.naming_series);
+      await this.#hashSecrets();
 
-    if (this.__IS_NEW__ || this.__ENTITY__.is_single) {
-      await loopar.db.insertRow(this.__ENTITY__.name, this.stringifyValues(true), this.__ENTITY__.is_single);
-      this.__DOCUMENT_NAME__ = this.name;
-    } else {
-      const data = this.valuesToSetDataBase(true);
+      if (this.__IS_NEW__ || this.__ENTITY__.is_single) {
+        await loopar.db.insertRow(this.__ENTITY__.name, this.stringifyValues(true), this.__ENTITY__.is_single);
+        this.__DOCUMENT_NAME__ = this.name;
+      } else {
+        const data = this.valuesToSetDataBase(true);
 
-      if (Object.keys(data).length) {
-        await loopar.db.updateRow(
-          this.__ENTITY__.name,
-          this.__DOCUMENT_NAME__,
-          data,
-          this.__ENTITY__.is_single
-        );
+        if (Object.keys(data).length) {
+          await loopar.db.updateRow(
+            this.__ENTITY__.name,
+            this.__DOCUMENT_NAME__,
+            data,
+            this.__ENTITY__.is_single
+          );
+        }
       }
-    }
 
-    if (!loopar.installing || args.forceChildren) {
-      const childValuesReq = this.childValuesReq;
-
-      if (Object.keys(childValuesReq).length) {
-        await this.deleteChildRecords();
-        await updateChildRecords(childValuesReq, this.__ENTITY__.name, await this.__ID__());
-      }
-    }
+      if (!loopar.installing || args.forceChildren) await this.#writeChildren(args);
+    });
 
     const uploadedRefs = await this.saveFiles();
     if (uploadedRefs.length > 0) {
@@ -674,11 +676,10 @@ export default class CoreDocument {
       return;
     }
 
-    await loopar.db.beginTransaction();
-    await this.deleteChildRecords(true);
-    await loopar.db.deleteRow(this.__ENTITY__.name, this.__DOCUMENT_NAME__, sofDelete);
-
-    await loopar.db.endTransaction();
+    await loopar.db.withTransaction(async () => {
+      await this.deleteChildRecords();
+      await loopar.db.deleteRow(this.__ENTITY__.name, this.__DOCUMENT_NAME__, sofDelete);
+    });
     console.log(["Deleting", this.__ENTITY__.name, this.name]);
 
     await this.trigger('afterDelete', this);
@@ -775,7 +776,7 @@ export default class CoreDocument {
       if (field.element === DESIGNER) {
         return field.value ? JSON.stringify(await parseDocStructure(field.value, false, this.name, {}, this.__APP__)) : "[]";
       } else if (field.element === FORM_TABLE || field.element == REVIEW) {
-        return await this.getChildValues(field.options);
+        return await this.getChildRawValues(field.options);
       }
       
       /*else if (field.element === SELECT) {
@@ -881,18 +882,16 @@ export default class CoreDocument {
     }
   }
 
-  async getChildValues(field) {
-    return await loopar.getListToForm(field, {
-      filters: {
-        parent_id: await this.__ID__()
-      }
-    })
-  }
-
+  /**
+   * Every row of a child table, with every column, in insertion order. Server
+   * code reads, edits and saves these rows back, so nothing may be left out
+   * (no list columns, pages or owner scope: a child row belongs to its parent).
+   */
   async getChildRawValues(field) {
-    return await loopar.db.getAll(field, ["*"], {
-      parent_id: await this.__ID__()
-    })
+    return await loopar.db.qx()(field)
+      .select("*")
+      .where({ parent_id: await this.__ID__(), parent_document: this.__ENTITY__.name })
+      .orderBy("id");
   }
 
   stringifyValues(toSave = false) {

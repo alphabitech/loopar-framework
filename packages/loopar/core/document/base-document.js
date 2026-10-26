@@ -6,6 +6,13 @@ import { Op } from 'db-env';
 import { CREATED_BY_COLUMN } from '../global/audit.js';
 import { requestOwnerFilter } from '../auth/record-scope.js';
 
+/** The entity a select links to, or null for inline options. */
+function linkedEntity(options) {
+  const entity = typeof options === "string" ? options.trim() : "";
+  if (!entity || entity.includes("\n")) return null;
+  return loopar.getRef(entity, false) ? entity : null;
+}
+
 function combineSConditions(...conditions) {
   const validConditions = conditions.filter(cond => {
     if (!cond || typeof cond !== 'object' || Array.isArray(cond)) {
@@ -279,21 +286,16 @@ export default class BaseDocument extends CoreDocument {
 
   /**
    * Titles of the records this document links to, for read-only renderings
-   * (print): `{ [Entity]: { [name]: "Title" } }`. Covers the entity selects of
+   * (print, desk lists): `{ [Entity]: { [name]: "Title" } }`. `rows` are
+   * records of this entity (default: this document). Covers the entity selects of
    * the document and of its child tables, one query per linked entity. A title
    * follows the linked entity's `title_fields` (joined " - ", like
    * getValueDescriptive); entities without title_fields are left out, their
    * name already is the title.
    */
-  async linkTitles() {
-    const values = await this.rawValues();
+  async linkTitles(rows = null) {
+    rows ??= [await this.rawValues()];
     const wanted = {};
-
-    const linkedEntity = (options) => {
-      const entity = typeof options === "string" ? options.trim() : "";
-      if (!entity || entity.includes("\n")) return null;   // inline options, not a link
-      return loopar.getRef(entity, false) ? entity : null;
-    };
 
     const collect = async (structure, rows) => {
       for (const el of structure || []) {
@@ -327,7 +329,7 @@ export default class BaseDocument extends CoreDocument {
       }
     };
 
-    await collect(loopar.utils.JSONparse(this.__ENTITY__.doc_structure, []), [values]);
+    await collect(loopar.utils.JSONparse(this.__ENTITY__.doc_structure, []), rows);
 
     const titles = {};
     for (const [entity, names] of Object.entries(wanted)) {
@@ -337,6 +339,22 @@ export default class BaseDocument extends CoreDocument {
     }
 
     return titles;
+  }
+
+  /** `{ [field]: Entity }` for the entity selects of this document (child tables aside). */
+  linkedFields() {
+    const out = {};
+    const walk = (structure) => {
+      for (const el of structure || []) {
+        if (el.element === SELECT && el.data?.name) {
+          const entity = linkedEntity(el.data.options);
+          if (entity) out[el.data.name] = entity;
+        }
+        if (el.element !== FORM_TABLE) walk(el.elements);
+      }
+    };
+    walk(loopar.utils.JSONparse(this.__ENTITY__.doc_structure, []));
+    return out;
   }
 
   /** Whether a record named `name` exists (select link validation). */

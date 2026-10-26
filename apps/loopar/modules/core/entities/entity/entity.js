@@ -110,26 +110,28 @@ export default class Entity extends BaseDocument {
       }
     }
 
-    if (!loopar.installing) await loopar.db.beginTransaction();
+    const write = async () => {
+      if (this.isDBEntity()) {
+        await loopar.db.makeTable(this.name, this.doc_structure, {
+          entityMeta: {
+            name: this.name,
+            is_static: this.is_static,
+            is_child: this.is_child,
+            is_single: this.is_single,
+            is_audited: this.is_audited,
+          },
+        });
+      }
 
-    if (this.isDBEntity()) {
-      await loopar.db.makeTable(this.name, this.doc_structure, {
-        entityMeta: {
-          name: this.name,
-          is_static: this.is_static,
-          is_child: this.is_child,
-          is_single: this.is_single,
-          is_audited: this.is_audited,
-        },
-      });
-    }
-
-    args.save != false && await super.save(arguments[0] || {});
+      args.save != false && await super.save(arguments[0] || {});
+    };
 
     if (!loopar.installing) {
-      await loopar.db.endTransaction();
+      // The table change and the entity record, together or not at all.
+      await loopar.db.withTransaction(write);
       await this.__build__();
-    }else{
+    } else {
+      await write();
       await this.makeViews();
     }
   }

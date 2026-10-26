@@ -11,7 +11,7 @@ import { deskElementData } from '../document/desk-page.js';
  * card reads is filtered again by the user's permissions on its entity.
  */
 export default class DeskPageController extends SingleController {
-  client = 'page';
+  client = 'desk-page';
   static inheritedActions = ['view'];
 
   constructor(props) {

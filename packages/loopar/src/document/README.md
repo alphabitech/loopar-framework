@@ -26,7 +26,7 @@ Workspace
 | `chrome/` | Desk UI pieces used by layouts: `DeskUI`, `AppBar` (one row: ← · Entity (big) record (small) · save state · `Toolbar`; phones: record in bold under a small entity), `Toolbar` (record ⇄ print toggle icon right before the primary button, same spot on both pages; framework buttons — Go to, view toggle — on wide screens, in "⋯" on phones; the view's `actions` always in "⋯", in order; Save/New the only filled button) | internal |
 
 Kinds (`Document.entry`): `form` `view` `report` `installer` `auth` `print` → form middleware ·
-`list` → list middleware · `page` `web` `controller` → base only.
+`list` → list middleware · `page` `desk-page` `dashboard` `web` `controller` → base only.
 The server picks the kind in the controller (`entry = "list"`); the view file
 suffix (`-form`, `-list`, `-view`...) is only a file name.
 

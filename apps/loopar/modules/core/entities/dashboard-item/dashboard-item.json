@@ -1,0 +1,20 @@
+{
+  "name": "Dashboard Item",
+  "module": "core",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 1,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "search_fields": "label",
+  "title_fields": "label",
+  "naming_series": "",
+  "resources": [],
+  "doc_structure": "[{\"node\":\"di_parent_id\",\"element\":\"input\",\"data\":{\"name\":\"parent_id\",\"label\":\"Parent ID\",\"type\":\"INTEGER\",\"hidden\":1}},{\"node\":\"di_parent_doc\",\"element\":\"input\",\"data\":{\"name\":\"parent_document\",\"label\":\"Parent Entity\",\"type\":\"VARCHAR\",\"hidden\":1}},{\"node\":\"di_name\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Name\",\"type\":\"VARCHAR\",\"required\":1,\"unique\":1,\"set_only_time\":1,\"hidden\":1}},{\"node\":\"di_r1\",\"element\":\"row\",\"data\":{\"layout\":\"[20,30,30,20]\"},\"elements\":[{\"node\":\"di_r1_c0\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"di_type\",\"element\":\"select\",\"data\":{\"name\":\"item_type\",\"label\":\"Type\",\"options\":\"chart:Chart\\nnumber:Number\",\"default\":\"chart\",\"required\":1,\"in_list_view\":1}}]},{\"node\":\"di_r1_c1\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"di_label\",\"element\":\"input\",\"data\":{\"name\":\"label\",\"label\":\"Label\",\"in_list_view\":1}}]},{\"node\":\"di_r1_c2\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"di_chart\",\"element\":\"select\",\"data\":{\"name\":\"chart\",\"label\":\"Chart\",\"options\":\"Dashboard Chart\",\"in_list_view\":1,\"display_on\":\"item_type == 'chart'\"}}]},{\"node\":\"di_r1_c3\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"di_width\",\"element\":\"select\",\"data\":{\"name\":\"width\",\"label\":\"Width\",\"options\":\"3:1/4\\n4:1/3\\n6:1/2\\n8:2/3\\n12:Full\",\"default\":\"6\",\"in_list_view\":1}}]}]},{\"node\":\"di_r2\",\"element\":\"row\",\"data\":{\"layout\":\"[25,20,20,35]\"},\"elements\":[{\"node\":\"di_r2_c0\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"di_entity\",\"element\":\"input\",\"data\":{\"name\":\"entity\",\"label\":\"Entity\",\"display_on\":\"item_type == 'number'\"}}]},{\"node\":\"di_r2_c1\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"di_aggregate\",\"element\":\"select\",\"data\":{\"name\":\"aggregate\",\"label\":\"Value\",\"options\":\"count:Count\\nsum:Sum\\navg:Average\\nmin:Min\\nmax:Max\",\"default\":\"count\",\"display_on\":\"item_type == 'number'\"}}]},{\"node\":\"di_r2_c2\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"di_value\",\"element\":\"input\",\"data\":{\"name\":\"value_field\",\"label\":\"Value field\",\"display_on\":\"item_type == 'number'\"}},{\"node\":\"di_format\",\"element\":\"select\",\"data\":{\"name\":\"format\",\"label\":\"Format\",\"options\":\"number:Number\\ncurrency:Currency\",\"default\":\"number\",\"display_on\":\"item_type == 'number'\"}},{\"node\":\"di_prefix\",\"element\":\"input\",\"data\":{\"name\":\"prefix\",\"label\":\"Prefix\",\"display_on\":\"item_type == 'number'\"}}]},{\"node\":\"di_r2_c3\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"di_filter\",\"element\":\"textarea\",\"data\":{\"name\":\"filter\",\"label\":\"Filter\",\"display_on\":\"item_type == 'number'\",\"description\":\"JSON of field: value. Tokens: \\\"@me\\\", \\\"@today\\\".\"}}]}]}]",
+  "__ENTITY__": "Entity"
+}

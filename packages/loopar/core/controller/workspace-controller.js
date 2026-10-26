@@ -3,7 +3,7 @@
 import { pathToFileURL } from 'node:url';
 import AuthController from "../auth/AuthController.js";
 import { signWorkspaceToken } from "../auth/workspace-token.js";
-import { loopar, fileManager, PermissionManager } from "loopar";
+import { loopar, fileManager, PermissionManager, sidebarDashboards } from "loopar";
 import { shouldServeProduction } from "../server/runtime-mode.js";
 import fs from 'fs';
 
@@ -187,13 +187,15 @@ export default class WorkspaceController extends AuthController {
    */
   static async sidebarData(username = loopar.auth.user()) {
     const all = loopar.deskMenu || [];
-    if (username === 'Administrator') return all;
+    // Dashboards are records (not part of the built menu): read per request.
+    const dashboards = await sidebarDashboards(username);
+    if (username === 'Administrator') return all.map(app => ({ ...app, dashboards: dashboards[app.name] || [] }));
 
     const apps = [];
     for (const app of all) {
       const modules = (app.modules || []).filter(m => PermissionManager.canAccessModule(m.link, username));
       const home = app.home && PermissionManager.can(app.home, 'view', username) ? app.home : null;
-      if (modules.length) apps.push({ ...app, home, modules });
+      if (modules.length) apps.push({ ...app, home, modules, dashboards: dashboards[app.name] || [] });
     }
     return apps;
   }

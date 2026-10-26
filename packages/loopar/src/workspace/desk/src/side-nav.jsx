@@ -2,7 +2,7 @@
 
 import { SideNavItem } from "./side-nav-item";
 import { useWorkspace } from "@workspace/workspace-provider";
-import { ChevronLeftIcon, HouseIcon, LayoutGridIcon } from "lucide-react";
+import { ChevronLeftIcon, HouseIcon, LayoutDashboardIcon, LayoutGridIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 import { usePersist } from "@services/persist-state";
@@ -26,11 +26,13 @@ const appHome = (app) => app.home ? homePath(app) : `/desk/${app.modules?.[0]?.l
  */
 function useActiveApp(apps) {
   const { activeModule } = useWorkspace();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const [stored, setStored] = usePersist("desk-active-app", null);
 
   const segment = decodeURIComponent(pathname.split("/")[2] || "");
-  const fromRoute = apps.find(a => appOwns(a, activeModule)) || apps.find(a => appOwns(a, segment));
+  const dashboard = segment === "Dashboard" ? new URLSearchParams(search).get("name") : null;
+  const fromRoute = (dashboard && apps.find(a => (a.dashboards || []).some(d => d.name === dashboard)))
+    || apps.find(a => appOwns(a, activeModule)) || apps.find(a => appOwns(a, segment));
 
   useEffect(() => {
     if (fromRoute && fromRoute.name !== stored) setStored(fromRoute.name);
@@ -129,8 +131,35 @@ function HomeItem({ app, compact }) {
           compact ? "h-auto flex-col items-center text-center" : "justify-start text-left"
         )}
       >
-        <HouseIcon className={compact ? "h-6 w-8" : "mr-2 h-6 w-6"} />
-        {compact ? <small className="w-full truncate">Home</small> : <span className="w-full">Home</span>}
+        <HouseIcon className={compact ? "h-6 w-8 shrink-0" : "mr-2 h-6 w-6 shrink-0"} />
+        {compact ? <small className="w-full truncate">Home</small> : <span className="min-w-0 flex-1">Home</span>}
+      </Link>
+    </li>
+  );
+}
+
+/** A dashboard pinned to the app's sidebar (Dashboard: app + "Show in sidebar"). */
+function DashboardItem({ dashboard, compact }) {
+  const { pathname, search } = useLocation();
+  const active = decodeURIComponent(pathname.split("/")[2] || "") === "Dashboard"
+    && new URLSearchParams(search).get("name") === dashboard.name;
+
+  return (
+    <li>
+      <Link
+        award={false}
+        to={`/desk/Dashboard/view?name=${encodeURIComponent(dashboard.name)}`}
+        active={active}
+        title={dashboard.description || dashboard.name}
+        className={cn(
+          "flex w-full rounded-md py-2 hover:bg-slate-300/50 dark:hover:bg-slate-700/80",
+          compact ? "h-auto flex-col items-center text-center" : "justify-start text-left"
+        )}
+      >
+        <LayoutDashboardIcon className={compact ? "h-6 w-8 shrink-0" : "mr-2 h-6 w-6 shrink-0"} />
+        {compact
+          ? <small className="w-full truncate">{dashboard.name}</small>
+          : <span className="min-w-0 flex-1 truncate">{dashboard.name}</span>}
       </Link>
     </li>
   );
@@ -154,6 +183,10 @@ function ModuleList({ app, compact }) {
           className="rounded-md py-2 hover:bg-slate-300/50 dark:hover:bg-slate-700/80"
         />
       ))}
+      {(app?.dashboards || []).length > 0 && !compact && (
+        <li className="mt-4 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dashboards</li>
+      )}
+      {(app?.dashboards || []).map(d => <DashboardItem key={d.name} dashboard={d} compact={compact} />)}
     </ul>
   );
 }

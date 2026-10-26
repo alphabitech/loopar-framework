@@ -16,8 +16,6 @@ import { applyCondition } from "./core/knex/op-translator.js";
 const isAuditColumnName = f => AUDIT_COLUMN_SET.has(f);
 
 export class KnexORM extends Connector {
-  transaction = null;
-  transactionActive = false;
   executionTimeInsertedIds = {};
 
   static _bus = new EventEmitter();
@@ -81,7 +79,7 @@ export class KnexORM extends Connector {
     // hit "Transaction query already complete". Queue them and dispatch once
     // the commit lands; drop them on rollback (the change never happened).
     if (this.transaction) {
-      this.#pendingAfter.push([event, payload]);
+      this.txState().after.push([event, payload]);
       return;
     }
     KnexORM.#dispatchAfter(event, payload);
@@ -93,18 +91,11 @@ export class KnexORM extends Connector {
     if (document) KnexORM._bus.emit(`${event}:${document}`, payload);
   }
 
-  #pendingAfter = [];
-
   async endTransaction() {
-    const pending = this.#pendingAfter;
-    this.#pendingAfter = [];
+    // The queue lives with the transaction: a rollback drops both.
+    const pending = this.txState()?.after ?? [];
     await super.endTransaction(); // throws (and rolls back) on commit failure → pending dropped
     for (const [event, payload] of pending) KnexORM.#dispatchAfter(event, payload);
-  }
-
-  async safeRollback() {
-    this.#pendingAfter = [];
-    return await super.safeRollback();
   }
 
   dbFielTypeCanHaveDefaultValue(fieldType) {

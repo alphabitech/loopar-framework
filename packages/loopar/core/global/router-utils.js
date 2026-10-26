@@ -172,6 +172,19 @@ export function setDefaultParams(params, workspaceName) {
   return params;
 }
 
+/**
+ * A `?redirect=` value we may send the user back to: a same-origin absolute
+ * path, never an auth / system-setup / API url (those would loop or make no
+ * sense as a landing page). Returns null when unsafe.
+ */
+export function safeReturnPath(url) {
+  if (typeof url !== 'string' || !url) return null;
+  if (!url.startsWith('/') || url.startsWith('//') || url.includes('\\')) return null;
+  const lower = url.toLowerCase();
+  if (/^\/(auth|loopar|api)(\/|\?|$)/.test(lower)) return null;
+  return url;
+}
+
 export function buildUrl(href, currentURL) {
   if (!href || href.startsWith('http') || href.startsWith('/')) return href;
 

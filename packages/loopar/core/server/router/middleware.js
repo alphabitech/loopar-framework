@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import path from 'pathe';
 import { loopar } from '../../loopar.js';
 import { RouterUtils } from './router-utils.js';
+import { safeReturnPath } from '../../global/router-utils.js';
 import { verifyWorkspaceToken } from '../../auth/workspace-token.js';
 import { getTenant } from './request-context.js';
 import WorkspaceController from '../../controller/workspace-controller.js';
@@ -106,15 +107,21 @@ export class Middleware {
                 title: 'Service Unavailable',
                 message: 'The system is starting or updating. Please try again in a moment.',
                 retryable: true,
+                // Where a full page load would go, if the state persists.
+                requires: requiredPath,
               });
             }
-            return this.redirect(req, res, requiredPath);
+            // Carry the page the user was on, so finishing the update brings
+            // them back there instead of to the default landing.
+            const back = safeReturnPath(req.originalUrl);
+            console.warn(`[system] GET ${req.originalUrl} → ${requiredPath}`);
+            return this.redirect(req, res, back ? `${requiredPath}?redirect=${encodeURIComponent(back)}` : requiredPath);
           }
         } else {
           const spentPages = [status.connectPath, status.installPath, status.updatePath]
             .map((path) => path.toLowerCase());
           if (spentPages.includes(currentUrlLower)) {
-            return sendRedirect('/desk');
+            return sendRedirect(safeReturnPath(req.query?.redirect) || '/desk');
           }
         }
       }
