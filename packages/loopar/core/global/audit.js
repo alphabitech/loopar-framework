@@ -50,6 +50,22 @@ export const AUDIT_COLUMN_FAMILY = Object.freeze({
   __created_by__: "string",
 });
 
+/**
+ * Order of a child-table row inside its parent (form tables). Framework-owned
+ * column of every child table: rows are updated in place, so `id` no longer
+ * says where a row goes.
+ */
+export const CHILD_POSITION_COLUMN = "__position__";
+
+/**
+ * Orders a knex query of child rows: by position, rows without one (saved
+ * outside their parent) last, then by insertion. Written by hand: knex 3
+ * drops the column itself when `nulls` goes in an orderBy array.
+ */
+export function orderChildRows(qb) {
+  return qb.orderByRaw("(?? is null), ??, ??", [CHILD_POSITION_COLUMN, CHILD_POSITION_COLUMN, "id"]);
+}
+
 /** Username that created the row. Immutable after insert. */
 export const CREATED_BY_COLUMN = "__created_by__";
 export const CREATED_BY_LENGTH = 140;

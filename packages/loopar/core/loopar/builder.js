@@ -9,7 +9,8 @@ import { fileManage } from "../file-manage.js";
 import { elementsDict, elementsDefinition } from "../global/element-definition.js";
 import { formulaFields } from "../global/formula.js";
 import { deskHomes } from "../document/desk-page.js";
-import { isAuditableEntity, AUDIT_COLUMN_NAMES } from "../global/audit.js";
+import { isAuditableEntity, AUDIT_COLUMN_NAMES, orderChildRows } from "../global/audit.js";
+import { migrateChildPositions } from "../global/child-position-migration.js";
 import {PermissionManager} from "../auth/PermissionManager.js"
 import { existsSync, readdirSync, readFileSync } from "fs";
 
@@ -350,12 +351,18 @@ export class Builder {
     data.__installed__ = this.__installed__;
 
     if (data.__installed__) {
+      // Child tables need their position column before anything reads them in order.
+      await migrateChildPositions(this);
+
       const loadWebApp = async (appName) => {
         const webApp = appName ? await this.db.getParseDoc('App', appName) : null;
+        const appRows = (entity) => orderChildRows(this.db.qx()(entity)
+          .where({ parent_id: webApp.id, parent_document: "App" }))
+          .select("*");
         return {
           ...(webApp || {}),
-          menu_items: webApp ? await this.db.getAll("Menu Item", ["*"], { parent_id: webApp.id, parent_document: "App" }) : [],
-          menu_actions: webApp ? await this.db.getAll("Menu Action", ["*"], { parent_id: webApp.id, parent_document: "App" }) : []
+          menu_items: webApp ? await appRows("Menu Item") : [],
+          menu_actions: webApp ? await appRows("Menu Action") : []
         };
       };
 

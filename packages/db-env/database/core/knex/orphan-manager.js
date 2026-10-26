@@ -1,11 +1,11 @@
 'use strict';
 
-import { loopar, AUDIT_COLUMN_SET } from "loopar";
+import { loopar, AUDIT_COLUMN_SET, CHILD_POSITION_COLUMN } from "loopar";
 
 // Built lazily: `loopar` (index.js) imports db-env while it is still
 // evaluating, so reading AUDIT_COLUMN_SET at module top-level hits the TDZ.
 let immuneColumns = null;
-const IMMUNE = () => (immuneColumns ??= new Set(["id", "name", ...AUDIT_COLUMN_SET]));
+const IMMUNE = () => (immuneColumns ??= new Set(["id", "name", CHILD_POSITION_COLUMN, ...AUDIT_COLUMN_SET]));
 
 export class OrphanManager {
   async getOrphanColumns(orm, document) {

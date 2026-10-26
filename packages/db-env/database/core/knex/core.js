@@ -9,6 +9,7 @@ import {
   AUDIT_COLUMN_FAMILY,
   CREATED_BY_COLUMN,
   CREATED_BY_LENGTH,
+  CHILD_POSITION_COLUMN,
   isAuditableEntity,
   addAuditColumns,
   addPrimaryKey,
@@ -412,6 +413,7 @@ export default class Core {
 
   async createTable(literalName, fields, entityMeta = null) {
     const auditable = this.#isAuditableTable(literalName, entityMeta);
+    const child = this.#isChildTable(literalName, entityMeta);
 
     await this.qx().schema.createTable(literalName, (table) => {
       // utf8mb4 + InnoDB only matter on MySQL/MariaDB; Knex no-ops them elsewhere.
@@ -439,13 +441,43 @@ export default class Core {
       fields.forEach(process);
 
       if (auditable) addAuditColumns(table, this.qx());
+      if (child) table.integer(CHILD_POSITION_COLUMN).nullable();
     });
   }
+
+  /** Child tables (form-table rows) carry CHILD_POSITION_COLUMN. */
+  #isChildTable(name, entityMeta = null) {
+    const flag = entityMeta ? entityMeta.is_child : loopar.getRef?.(name, false)?.is_child;
+    return flag === 1 || flag === true || flag === "1";
+  }
+
+  /**
+   * Adds CHILD_POSITION_COLUMN to an existing child table, seeding it with
+   * `id` (the order rows had until now). Idempotent.
+   */
+  async ensureChildPosition(literalName) {
+    if (this.#positioned.has(literalName)) return false;
+    if (!(await this.hasTable(literalName))) return false;
+    const columns = await this.getTableDescription(literalName);
+    if (columns.some(c => c.name.toLowerCase() === CHILD_POSITION_COLUMN)) {
+      this.#positioned.add(literalName);
+      return false;
+    }
+
+    await this.qx().schema.alterTable(literalName, (t) => t.integer(CHILD_POSITION_COLUMN).nullable());
+    await this.qx()(literalName).update({ [CHILD_POSITION_COLUMN]: this.knex.ref("id") });
+    this.invalidateColumnsCache(literalName);
+    this.#positioned.add(literalName);
+    return true;
+  }
+
+  /** Child tables known to have CHILD_POSITION_COLUMN (see ensureChildPosition). */
+  #positioned = new Set();
 
   #isFrameworkColumn(name, auditable) {
     if (!name) return false;
     const lower = name.toLowerCase();
-    if (lower === "id") return true;
+    if (lower === "id" || lower === CHILD_POSITION_COLUMN) return true;
     if (auditable && AUDIT_COLUMN_SET.has(lower)) return true;
     return false;
   }
@@ -495,6 +527,10 @@ export default class Core {
 
     if (auditable) {
       addAudit = this.#auditColumnsNeedAlter(existingByName);
+    }
+
+    if (this.#isChildTable(literalName, entityMeta) && !existingByName.has(CHILD_POSITION_COLUMN)) {
+      await this.ensureChildPosition(literalName);
     }
 
     if (!newFields.length && !changedFields.length && !addAudit) return;
@@ -715,7 +751,7 @@ export default class Core {
     };
     fields.forEach(collect);
 
-    const IMMUNE = new Set(["id", "name", ...AUDIT_COLUMN_SET]);
+    const IMMUNE = new Set(["id", "name", CHILD_POSITION_COLUMN, ...AUDIT_COLUMN_SET]);
     const orphans = existingFields.filter(
       f => !structureCols.has(f.name.toLowerCase()) && !IMMUNE.has(f.name.toLowerCase())
     );

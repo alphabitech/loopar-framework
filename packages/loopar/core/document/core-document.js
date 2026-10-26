@@ -3,11 +3,28 @@ import DynamicField from './dynamic-field.js';
 import { loopar } from '../loopar.js';
 import { fileManage } from '../file-manage.js';
 import { parseDocStructure, stripEphemeralDocStructure, injectCookieIndexes } from './tools.js';
-import { FRAMEWORK_OWNED_COLUMN_NAMES } from '../global/audit.js';
+import { FRAMEWORK_OWNED_COLUMN_NAMES, CHILD_POSITION_COLUMN, orderChildRows } from '../global/audit.js';
+import { documentManage } from './document-manage.js';
 import { isHashedSecret } from '../global/secrets.js';
 import { nextSeriesName } from './naming-series.js';
 import { guardWorkflowState, workflowFor, describeWorkflow } from './workflow.js';
 import { computeFormulas, tableRows } from '../global/formula.js';
+
+/**
+ * Whether saving `incoming` would change the stored child `row`: compares the
+ * columns it sends (and its position). Values are compared as text, the way
+ * they reach the database; anything that differs is written again.
+ */
+function childRowChanged(row, incoming, columns) {
+  const text = (v) => (v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
+  for (const [key, value] of Object.entries(incoming)) {
+    if (key === "id" || key === "name") continue;
+    if (key !== CHILD_POSITION_COLUMN && !columns.has(key)) continue;
+    if (Array.isArray(value)) return true;   // nested table: let the row's save handle it
+    if (text(value) !== text(row[key])) return true;
+  }
+  return false;
+}
 
 export default class CoreDocument {
   #fields = {};
@@ -276,34 +293,56 @@ export default class CoreDocument {
   }
 
   /**
-   * Writes the child tables sent with this document. A table is replaced as a
-   * whole, in the order received (that order is the rows' order), but each row
-   * that already belonged to this document keeps its `name`: links to a row
-   * survive its parent's saves. Only new rows get a new name. Tables not sent
-   * (not an array) are left as they are.
+   * Writes the child tables sent with this document (tables not sent, not an
+   * array, are left as they are). Rows are matched by `name` against the ones
+   * this document already has:
+   *   - unchanged rows (same values, same place) are not written at all;
+   *   - changed rows are updated in place, keeping their `id` and `name`;
+   *   - new rows are inserted (the name a client made up is replaced);
+   *   - rows no longer sent are deleted.
+   * Every written row goes through its own model (`save()`), so its
+   * validations, formulas and hooks run. Its place in the list is stored in
+   * CHILD_POSITION_COLUMN. Runs inside save()'s transaction.
    */
   async #writeChildren(args) {
     const parentId = await this.__ID__();
     const parentDocument = this.__ENTITY__.name;
     const cleanParentId = Number.isFinite(+parentId) ? parseInt(parentId, 10) : parentId;
+    const saveArgs = args.forceChildren ? { forceChildren: true } : undefined;
 
     for (const entity of await this.#childEntities()) {
       const value = this.childValuesReq[entity];
       const rows = loopar.utils.isJSON(value) ? JSON.parse(value) : Array.isArray(value) ? value : null;
       if (!rows) continue;
 
-      const kept = new Set((await this.#childRows(entity, parentId).select("name")).map(row => String(row.name)));
-      await this.#childRows(entity, parentId).delete();
+      const existing = new Map(
+        (await this.#childRows(entity, parentId).select("*")).map(row => [String(row.name), row])
+      );
+      const columns = new Set(loopar.getRef(entity)?.__FIELDS__ || []);
+      const sent = new Set();
+      const writes = [];
 
-      const nextId = await loopar.db.nextId(entity);
-      for (const [index, row] of rows.entries()) {
-        row.id = nextId + index;
-        row.name = row.name != null && kept.has(String(row.name)) ? row.name : loopar.utils.randomString(15);
-        row.parent_document = parentDocument;
-        row.parent_id = cleanParentId;
+      for (const [position, row] of rows.entries()) {
+        const current = row?.name != null ? existing.get(String(row.name)) : null;
+        const data = { ...row, parent_document: parentDocument, parent_id: cleanParentId, [CHILD_POSITION_COLUMN]: position };
 
-        const document = await loopar.newDocument(entity, row);
-        await document.save(args.forceChildren ? { forceChildren: true } : undefined);
+        if (current && !sent.has(String(row.name))) {
+          sent.add(String(row.name));
+          if (!childRowChanged(current, data, columns)) continue;
+          writes.push({ name: current.name, data: { ...current, ...data, id: current.id, name: current.name } });
+        } else {
+          writes.push({ name: null, data: { ...data, id: null, name: loopar.utils.randomString(15) } });
+        }
+      }
+
+      const removed = [...existing.keys()].filter(name => !sent.has(name));
+      if (removed.length) await this.#childRows(entity, parentId).whereIn("name", removed).delete();
+
+      let nextId = null;
+      for (const { name, data } of writes) {
+        if (!name) data.id = nextId = (nextId == null ? await loopar.db.nextId(entity) : nextId + 1);
+        const document = await documentManage.newDocument(entity, data, name || undefined);
+        await document.save(saveArgs);
       }
     }
   }
@@ -888,17 +927,22 @@ export default class CoreDocument {
    * (no list columns, pages or owner scope: a child row belongs to its parent).
    */
   async getChildRawValues(field) {
-    return await loopar.db.qx()(field)
+    return await orderChildRows(loopar.db.qx()(field)
       .select("*")
-      .where({ parent_id: await this.__ID__(), parent_document: this.__ENTITY__.name })
-      .orderBy("id");
+      .where({ parent_id: await this.__ID__(), parent_document: this.__ENTITY__.name }));
   }
 
   stringifyValues(toSave = false) {
     return Object.values(this.#fields)
       .filter(field => field.element !== FORM_TABLE)
       .filter(field => (field.element === PASSWORD ? field.value != this.protectedPassword : true))
-      .reduce((acc, cur) => ({ ...acc, [cur.name]: cur.stringifyValue(toSave) }), {});
+      .reduce((acc, cur) => ({ ...acc, [cur.name]: cur.stringifyValue(toSave) }), this.#childPosition());
+  }
+
+  /** A child row's place in its parent's table (not a field of its own). */
+  #childPosition() {
+    const position = this.__ENTITY__?.is_child ? this.__DATA__?.[CHILD_POSITION_COLUMN] : null;
+    return position === null || position === undefined ? {} : { [CHILD_POSITION_COLUMN]: position };
   }
 
   valuesToSetDataBase(toSave = false) {
@@ -910,7 +954,7 @@ export default class CoreDocument {
       }
 
       return true;
-    }).reduce((acc, cur) => ({ ...acc, [cur.name]: cur.stringifyValue(toSave) }), {});
+    }).reduce((acc, cur) => ({ ...acc, [cur.name]: cur.stringifyValue(toSave) }), this.#childPosition());
   }
 
   get childValuesReq() {

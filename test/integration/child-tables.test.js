@@ -1,6 +1,6 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { loopar } from "loopar";
+import { loopar, orderChildRows } from "loopar";
 import { KnexORM } from "db-env";
 import { bootTestTenant } from "../support/tenant.js";
 
@@ -12,8 +12,22 @@ import { bootTestTenant } from "../support/tenant.js";
 const ROWS = 12;
 let t;
 
-const transitions = () => loopar.db.qx()("Workflow Transition")
-  .where({ parent_document: "Workflow" }).orderBy("id").select("name", "action", "confirm", "style");
+const transitions = () => orderChildRows(loopar.db.qx()("Workflow Transition")
+  .where({ parent_document: "Workflow" })).select("id", "name", "action", "confirm", "style");
+
+/** Counts the inserts and updates of `entity` made while `fn` runs. */
+async function countWrites(entity, fn) {
+  const writes = { created: 0, updated: 0 };
+  const onCreate = () => { writes.created++; };
+  const onUpdate = () => { writes.updated++; };
+  KnexORM.on(`beforeCreate:${entity}`, onCreate);
+  KnexORM.on(`beforeUpdate:${entity}`, onUpdate);
+  try { await fn(); } finally {
+    KnexORM.off(`beforeCreate:${entity}`, onCreate);
+    KnexORM.off(`beforeUpdate:${entity}`, onUpdate);
+  }
+  return writes;
+}
 
 before(async () => {
   t = await bootTestTenant();
@@ -118,27 +132,100 @@ test("a child row that fails while saving leaves the saved children untouched", 
   });
 });
 
-test("rows keep their name across saves; only new rows get one", async () => {
+test("reordering keeps every row (same id and name) and only writes the moved ones", async () => {
   await t.run(async () => {
-    const before = (await transitions()).map((r) => r.name);
+    const before = await transitions();
     const doc = await loopar.getDocument("Workflow", "Letterhead");
     const rows = await doc.transitions;
-    rows.reverse();                                        // reordered in the form
+    rows.reverse();
     rows.push({ action: "Extra", from_state: "A", to_state: "B", name: "1712345678901" }); // client temp name
     doc.transitions = rows;
-    await doc.save();
+    const writes = await countWrites("Workflow Transition", () => doc.save());
 
-    const after = await loopar.db.qx()("Workflow Transition")
-      .where({ parent_document: "Workflow" }).orderBy("id").select("name", "action");
+    const after = await transitions();
     assert.equal(after.length, ROWS + 1);
-    assert.deepEqual(after.slice(0, ROWS).map((r) => r.name), [...before].reverse(), "same names, new order");
+    assert.deepEqual(after.slice(0, ROWS).map((r) => [r.id, r.name]), [...before].reverse().map((r) => [r.id, r.name]));
     assert.notEqual(after[ROWS].name, "1712345678901", "a new row gets its own name");
     assert.equal(after[ROWS].action, "Extra");
+    assert.deepEqual(writes, { created: 1, updated: ROWS }, "every old row moved, one new");
 
     // Back to the original rows for the other tests.
     const back = await loopar.getDocument("Workflow", "Letterhead");
     back.transitions = (await back.transitions).filter((r) => r.action !== "Extra").reverse();
     await back.save();
+    assert.deepEqual((await transitions()).map((r) => r.name), before.map((r) => r.name));
+  });
+});
+
+test("saving unchanged rows writes nothing; one change writes one row", async () => {
+  await t.run(async () => {
+    const doc = await loopar.getDocument("Workflow", "Letterhead");
+    doc.transitions = await doc.transitions;
+    assert.deepEqual(await countWrites("Workflow Transition", () => doc.save()), { created: 0, updated: 0 });
+
+    const again = await loopar.getDocument("Workflow", "Letterhead");
+    const rows = await again.transitions;
+    rows[3].confirm = "Changed?";
+    again.transitions = rows;
+    assert.deepEqual(await countWrites("Workflow Transition", () => again.save()), { created: 0, updated: 1 });
+
+    const saved = await transitions();
+    assert.equal(saved[3].confirm, "Changed?");
+    assert.equal(saved[3].name, rows[3].name);
+    saved[3].confirm = "Sure 3?";
+    const restore = await loopar.getDocument("Workflow", "Letterhead");
+    const restoreRows = await restore.transitions;
+    restoreRows[3].confirm = "Sure 3?";
+    restore.transitions = restoreRows;
+    await restore.save();
+  });
+});
+
+test("a row sent with only some fields keeps the others", async () => {
+  await t.run(async () => {
+    const doc = await loopar.getDocument("Workflow", "Letterhead");
+    // `confirm` not sent (the workflow itself needs action and states).
+    const rows = (await doc.transitions).map((r, i) => (i === 0
+      ? { name: r.name, action: r.action, from_state: r.from_state, to_state: r.to_state, style: "primary" }
+      : r));
+    doc.transitions = rows;
+    await doc.save();
+
+    const first = (await transitions())[0];
+    assert.equal(first.style, "primary");
+    assert.equal(first.confirm, "Sure 0?", "fields not sent are kept");
+    assert.equal(first.action, "Move 0");
+  });
+});
+
+test("rows no longer sent are deleted; the rest keep their ids", async () => {
+  await t.run(async () => {
+    const before = await transitions();
+    const doc = await loopar.getDocument("Workflow", "Letterhead");
+    doc.transitions = (await doc.transitions).filter((r) => r.action !== "Move 5");
+    await doc.save();
+
+    const after = await transitions();
+    assert.equal(after.length, ROWS - 1);
+    assert.deepEqual(after.map((r) => r.id), before.filter((r) => r.action !== "Move 5").map((r) => r.id));
+
+    const back = await loopar.getDocument("Workflow", "Letterhead");
+    const rows = await back.transitions;
+    rows.splice(5, 0, { action: "Move 5", from_state: "A", to_state: "B", confirm: "Sure 5?" });
+    back.transitions = rows;
+    await back.save();
+    assert.equal((await transitions())[5].action, "Move 5");
+  });
+});
+
+test("an updated row is validated by its model", async () => {
+  await t.run(async () => {
+    const doc = await loopar.getDocument("Workflow", "Letterhead");
+    const rows = await doc.transitions;
+    rows[2].action = "";                                   // required
+    doc.transitions = rows;
+    await assert.rejects(() => doc.save());
+    assert.equal((await transitions())[2].action, "Move 2");
   });
 });
 

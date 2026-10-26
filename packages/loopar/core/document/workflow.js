@@ -2,6 +2,7 @@
 
 import { loopar } from '../loopar.js';
 import { Op } from 'db-env';
+import { orderChildRows } from '../global/audit.js';
 
 /**
  * Workflows: an entity's lifecycle as data (core entities Workflow,
@@ -33,9 +34,8 @@ export function invalidateWorkflows() {
 }
 
 async function childRows(entity, parentId) {
-  return await loopar.db.query(entity)
-    .where({ parent_document: 'Workflow', parent_id: parentId })
-    .orderBy('id', 'asc')
+  return await orderChildRows(loopar.db.query(entity)
+    .where({ parent_document: 'Workflow', parent_id: parentId }))
     .select('*');
 }
 
