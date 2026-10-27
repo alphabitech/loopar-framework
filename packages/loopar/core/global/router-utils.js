@@ -9,10 +9,17 @@ export const ASSET_EXTENSIONS = new Set([
   'json', 'xml', 'txt', 'yaml', // Data
 ]);
 
-export const VALID_WORKSPACES = ['desk', 'auth', 'loopar', 'api', 'portal'];
+export const VALID_WORKSPACES = ['desk', 'auth', 'loopar', 'api', 'portal', 'kiosk'];
 
+/**
+ * `webPages`: the workspace serves the web app's pages, resolved through its
+ * menu links (`/station` on web, `/kiosk/station` on kiosk). `kiosk` renders
+ * them without the site's navigation, for shared devices (station tablets,
+ * check-in screens) that authenticate on their own, not with a user session.
+ */
 export const WORKSPACE_CAPABILITIES = {
-  web: { public: true, requiresAuth: false, enforceCsrf: false, blockWebUsers: false, isAuth: false, urlPrefixed: false },
+  web: { public: true, requiresAuth: false, enforceCsrf: false, blockWebUsers: false, isAuth: false, urlPrefixed: false, webPages: true },
+  kiosk: { public: true, requiresAuth: false, enforceCsrf: false, blockWebUsers: false, isAuth: false, urlPrefixed: true, webPages: true },
   loopar: { public: true, requiresAuth: false, enforceCsrf: false, blockWebUsers: false, isAuth: false, urlPrefixed: true  },
   auth: { public: false, requiresAuth: false, enforceCsrf: false, blockWebUsers: false, isAuth: true, urlPrefixed: false },
   desk: { public: false, requiresAuth: true, enforceCsrf: true, blockWebUsers: true, isAuth: false, urlPrefixed: true  },
@@ -28,6 +35,11 @@ export function workspaceCapabilities(name) {
 /** True when the workspace requires a logged-in user. */
 export function workspaceRequiresAuth(name) {
   return !!workspaceCapabilities(name).requiresAuth;
+}
+
+/** True when the workspace serves the web app's pages (see WORKSPACE_CAPABILITIES). */
+export function workspaceServesWebPages(name) {
+  return !!workspaceCapabilities(name).webPages;
 }
 
 /**
@@ -161,6 +173,7 @@ export function setDefaultParams(params, workspaceName) {
     desk: 'view',
     auth: 'login',
     web: 'view',
+    kiosk: 'view',
   };
 
   if (!params.action || !params.document) {
@@ -276,6 +289,7 @@ export const RouterUtils = {
   workspaceCapabilities,
   workspaceRequiresAuth,
   workspaceIsUrlPrefixed,
+  workspaceServesWebPages,
   setDefaultParams,
   buildUrl,
 

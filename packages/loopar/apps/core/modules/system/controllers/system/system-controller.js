@@ -1,7 +1,9 @@
 'use strict'
 
+import crypto from "node:crypto";
 import { loopar, fileManage, BaseController, PermissionManager } from "loopar";
 import { safeReturnPath } from "../../../../../../core/global/router-utils.js";
+import { isPrivateIp } from "../../../../../../core/global/storage/upload-guard.js";
 
 /**
  * Setup actions. They are `publicAction*` so the bootstrap pages (connect /
@@ -92,10 +94,82 @@ export default class SystemController extends BaseController {
     return appName;
   }
 
+  // ---- Pre-install setup gate ------------------------------------------------
+  // Before a tenant is installed, `connect`/`install` are public so the setup
+  // wizard works with no user yet. That left a fresh tenant reachable over a
+  // public IP open to takeover by whoever POSTed first. The gate below closes
+  // it WITHOUT touching the browser wizard:
+  //   - local / LAN origin  -> allowed, no token (dev + same-network installs).
+  //   - remote (public IP)  -> a valid install token is required. The token
+  //     rides in the install link the CLI/TUI prints; opening that link drops
+  //     a short-lived setup cookie, so the wizard's own POSTs carry it with no
+  //     hand-typing. After install the actions are revoked and it goes inert.
+
+  #setupCookieName() {
+    return `loopar_setup_${loopar.tenantId || 'default'}`;
+  }
+
+  #clientIp() {
+    return this.req?.ip
+      || this.req?.socket?.remoteAddress
+      || '';
+  }
+
+  #isLocalRequest() {
+    return isPrivateIp(String(this.#clientIp()).replace(/^::ffff:/, ''));
+  }
+
+  #tokensMatch(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    try { return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); }
+    catch { return false; }
+  }
+
+  #providedSetupToken() {
+    return (
+      this.req?.headers?.['x-install-token'] ||
+      this.query?.install_token ||
+      loopar.cookie.get(this.#setupCookieName()) ||
+      ''
+    );
+  }
+
+  #hasValidSetupToken() {
+    const expected = loopar.installToken || '';
+    return !!expected && this.#tokensMatch(String(this.#providedSetupToken()), expected);
+  }
+
+  /** On a setup GET carrying a valid `?install_token`, remember it in a cookie. */
+  #captureSetupToken() {
+    if (loopar.__installed__) return;
+    const token = this.query?.install_token;
+    const expected = loopar.installToken || '';
+    if (token && expected && this.#tokensMatch(String(token), expected)) {
+      loopar.cookie.set(this.#setupCookieName(), expected, {
+        httpOnly: true,
+        path: '/',
+        maxAge: 30 * 60 * 1000, // 30 min: long enough to finish the wizard
+      });
+    }
+  }
+
+  #assertSetupOrigin() {
+    if (loopar.__installed__) return;
+    if (this.#isLocalRequest()) return;
+    if (this.#hasValidSetupToken()) return;
+    loopar.throw({
+      code: 403,
+      title: 'Forbidden',
+      message: 'This workspace can only be set up from its own machine or with a valid install link.',
+    });
+  }
+
   async publicActionConnect() {
+    this.#captureSetupToken();
     const model = await loopar.newDocument("Connector", this.data);
 
     if (this.hasData()) {
+      this.#assertSetupOrigin();
       if (await model.connect()) {
         return this.redirect('/desk');
       }
@@ -141,23 +215,12 @@ export default class SystemController extends BaseController {
   }
 
   async publicActionInstall(reinstall = false) {
+    this.#captureSetupToken();
     if (this.hasData()) {
-      // When INSTALL_TOKEN is set in the tenant env (cloud-provisioned
-      // tenants), the install endpoint demands a matching `X-Install-Token`
-      // header before the first install. Tenants created by hand on a
-      // private network don't set the token and keep the legacy public
-      // behaviour — backward compatible.
-      //
-      // Once the system is installed (`loopar.__installed__`), the legacy
-      // "already installed / role check" guard inside unInstallApp takes
-      // over, so the token becomes inert and we don't gate again here.
-      const expectedToken = loopar.installToken || '';
-      if (expectedToken && !loopar.__installed__) {
-        const provided = this.req?.headers?.['x-install-token'] || '';
-        if (provided !== expectedToken) {
-          return { status: 401, success: false, message: 'Install token required' };
-        }
-      }
+      // Pre-install, remote clients need the install token; local/LAN don't.
+      // Once installed, unInstallApp's "already installed / role" guard takes
+      // over and this is inert.
+      this.#assertSetupOrigin();
       await this.unInstallApp(this.getAppName(), this.data, reinstall);
       return this.redirect("view");
     } else {

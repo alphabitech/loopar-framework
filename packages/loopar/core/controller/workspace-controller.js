@@ -5,6 +5,7 @@ import AuthController from "../auth/AuthController.js";
 import { signWorkspaceToken } from "../auth/workspace-token.js";
 import { loopar, fileManager, PermissionManager, sidebarDashboards } from "loopar";
 import { shouldServeProduction } from "../server/runtime-mode.js";
+import { kioskHeadTags } from "../global/kiosk-manifest.js";
 import fs from 'fs';
 
 export default class WorkspaceController extends AuthController {
@@ -24,7 +25,8 @@ export default class WorkspaceController extends AuthController {
 
     if (workspace === "desk") {
       WORKSPACE.menu_data =  await WorkspaceController.sidebarData();
-    } else if (workspace === "web") {
+    } else if (workspace === "web" || workspace === "kiosk") {
+      // Kiosk pages are web pages without the site's navigation: same app (logo, theme).
       WORKSPACE.web_app = loopar.webApp;
     } else if (workspace === "portal") {
       WORKSPACE.menu_data = await WorkspaceController.portalMenuData(loopar.auth.user());
@@ -134,7 +136,8 @@ export default class WorkspaceController extends AuthController {
 
     const faviconSrc = fileManager.getMappedFiles(__META__.web_app?.favicon)[0]?.src;
 
-    html = html.replace(`<!--__favicon__-->`, `<link rel="icon" href="${faviconSrc || "/assets/public/loopar-favicon.ico"}"/>`)
+    const kioskTags = (__META__.name || this.workspace) === "kiosk" ? kioskHeadTags(__META__.Document?.Entity?.name) : "";
+    html = html.replace(`<!--__favicon__-->`, `<link rel="icon" href="${faviconSrc || "/assets/public/loopar-favicon.ico"}"/>${kioskTags}`)
 
     let themeVersion = '0';
     try { themeVersion = Math.floor(fs.statSync(loopar.themeCssPath()).mtimeMs).toString(36); } catch {}

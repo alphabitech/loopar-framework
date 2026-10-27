@@ -14,12 +14,16 @@ import { tenantRegistry } from './tenant-registry.js';
 import { shouldServeProduction } from './runtime-mode.js';
 import http from "http";
 import { RealtimeManager } from "../realtime/RealtimeManager.js";
+import { kioskManifest } from "../global/kiosk-manifest.js";
 
 const server = new express();
 
 // Trust the loopback hop only (Caddy → app) so req.secure comes from Caddy's
 // X-Forwarded-Proto; a direct external client isn't loopback and can't spoof it.
 server.set('trust proxy', 'loopback');
+
+// Don't advertise the server stack.
+server.disable('x-powered-by');
 
 export class Server extends Router {
   server = server;
@@ -40,6 +44,7 @@ export class Server extends Router {
 
     // One HTTP server for Express, realtime and Vite HMR — so HMR rides it
     this.httpServer = http.createServer(server);
+    this.#installSecurityHeaders();
     this.#installTenantResolution();
 
     if (this.serveProduction) {
@@ -107,6 +112,31 @@ export class Server extends Router {
       `<span style="opacity:.6">Loopar</span></body></html>`;
   }
 
+  /**
+   * Baseline security headers on every response. Set as the very first
+   * middleware so they also ride error pages, asset 404s and the suspended
+   * page. HSTS is only emitted over real HTTPS (req.secure, from Caddy's
+   * X-Forwarded-Proto) so plain-HTTP-by-IP access isn't locked out.
+   *
+   * CSP here is intentionally minimal (frame-ancestors / object-src /
+   * base-uri): it hardens clickjacking and base-tag injection without a
+   * script-src that would break Vite dev and inline SSR. A full script-src
+   * policy with nonces is a follow-up. Inline-executable uploads (SVG/HTML)
+   * are blocked at upload time instead (upload-guard.js).
+   */
+  #installSecurityHeaders() {
+    this.server.use((req, res, next) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+      res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      res.setHeader('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'");
+      if (req.secure) {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+      }
+      next();
+    });
+  }
+
   #installTenantResolution() {
     server.use(async (req, res, next) => {
       try {
@@ -152,6 +182,13 @@ export class Server extends Router {
       res.sendFile(loopar.themeCssPath(), cache, (err) => {
         if (err) next();
       });
+    });
+
+    // Manifest of the kiosk workspace's pages (installable as apps), per web app.
+    server.get("/assets/public/kiosk.webmanifest", (req, res, next) => {
+      if (!loopar.requestTenantId) return next();
+      res.type("application/manifest+json").set("Cache-Control", "no-cache")
+        .send(JSON.stringify(kioskManifest(String(req.query?.page || ""))));
     });
 
     if (this.serveProduction) {

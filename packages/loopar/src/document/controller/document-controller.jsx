@@ -116,7 +116,8 @@ export class DocumentController {
     const documentType = entity.name;
     const documentName = isPage ? documentType : (this.__DOCUMENT_NAME__ || this.Document?.name);
 
-    if (!documentType && !documentName) return null;
+    // A new record has no history or comments yet.
+    if (!documentType || !documentName || (!isPage && this.Document?.isNew)) return null;
 
     return (
       <section className="mt-10 pt-6 border-t border-border w-full max-w-3xl">

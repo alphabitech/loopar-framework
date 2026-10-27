@@ -792,6 +792,8 @@ export default class CoreDocument {
     return {
       name: this.__DOCUMENT_NAME__,
       isNew: this.__IS_NEW__,
+      // The name comes from the naming series on save: the form must not require it.
+      nameFromSeries: this.#usesNamingSeries,
       Entity: {
         id: __ENTITY__.id,
         name: __ENTITY__.name,

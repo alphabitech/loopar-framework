@@ -7,7 +7,12 @@ export default class Login extends BaseDocument {
     super(props);
   }
 
-  async login() {
+  /**
+   * First factor only: returns the User row when the credentials are valid.
+   * The session is opened by the controller (auth/mfa.js completeLogin),
+   * which may still ask for a second factor.
+   */
+  async verifyCredentials() {
     const user = await loopar.auth.getUser(this.user_name);
   
     const storedHash = user?.password ?? await loopar.hash('dummy');
@@ -16,9 +21,7 @@ export default class Login extends BaseDocument {
     if (user && isValidPassword && !(user.disabled && user.name !== 'Administrator') &&
       (this.user_name === user.name || this.user_name === user.email)
     ) {
-      // Return the session payload (name, user_type, profile_picture, ...) so
-      // the controller can decide where to land the user post-login.
-      return loopar.auth.login(user);
+      return user;
     } else {
       loopar.auth.killSession();
       loopar.throw({ code: 401, title: 'Login Error', message: 'Invalid user or password' });

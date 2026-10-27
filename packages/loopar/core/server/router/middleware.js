@@ -191,7 +191,7 @@ export class Middleware {
         method: req.method
       };
 
-      if (req.__WORKSPACE_NAME__ === "web") {
+      if (RouterUtils.workspaceServesWebPages(req.__WORKSPACE_NAME__)) {
         routeStructure.action ??= "view";
         controllerParams.action = routeStructure.action;
       }
@@ -490,9 +490,16 @@ export class Middleware {
       const doc = String(req.__params__?.document || '').toLowerCase();
       const action = String(req.__params__?.action || '').toLowerCase();
 
-      const isLoginPost = req.method === 'POST' && doc === 'auth' && action === 'login';
+      // Limit every unauthenticated auth action that can be abused for
+      // brute force, user enumeration or email flooding — not just login.
+      const RL_ACTIONS = new Set([
+        'login', 'register',
+        'recoverypasswordrequest', 'recoverypassword',
+        'recoveryuser', 'mfaverify',
+      ]);
+      const isRateLimited = req.method === 'POST' && doc === 'auth' && RL_ACTIONS.has(action);
 
-      if (!isLoginPost) return next();
+      if (!isRateLimited) return next();
       return loginLimiter(req, res, next);
     };
   }

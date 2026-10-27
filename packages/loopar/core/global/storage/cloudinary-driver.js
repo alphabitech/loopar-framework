@@ -3,6 +3,7 @@
 import crypto from 'node:crypto';
 import { loopar } from 'loopar';
 import { StorageDriver } from './storage-driver.js';
+import { assertSafeUpload, assertSafeRemoteUrl } from './upload-guard.js';
 
 /**
  * CloudinaryDriver — persists assets on Cloudinary via the native REST API.
@@ -252,6 +253,7 @@ export class CloudinaryDriver extends StorageDriver {
     if (!buffer || !Buffer.isBuffer(buffer)) {
       throw new Error('CloudinaryDriver.upload: buffer is required');
     }
+    assertSafeUpload(originalName, contentType);
     const folder = this.#folder({ app, visibility });
     const req = this.#buildUploadRequest({
       file: buffer,
@@ -265,6 +267,7 @@ export class CloudinaryDriver extends StorageDriver {
 
   async importFromUrl({ url, app, visibility }) {
     if (!url) throw new Error('CloudinaryDriver.importFromUrl: url is required');
+    await assertSafeRemoteUrl(url);
     const folder = this.#folder({ app, visibility });
     const req = this.#buildUploadRequest({ file: url, folder });
     const body = await this.#postUpload(req);

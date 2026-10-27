@@ -1,10 +1,12 @@
 'use strict';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDocument, useHandlers } from '@loopar/document';
 import { useForm, BareLayout } from '@loopar/form';
 import {useNavigate} from 'react-router';
 import loopar from 'loopar';
+import { Button } from '@cn/components/ui/button';
+import { Input } from '@cn/components/ui/input';
 
 /** Inline brand logos, keyed by provider. Avoids any icon-package dependency. */
 const ProviderIcons = {
@@ -32,6 +34,7 @@ const OAUTH_ERRORS = {
   not_member: "This account doesn't belong to this site.",
   email_unverified: 'Your email is not verified with that provider.',
   access_denied: 'Sign in was cancelled.',
+  mfa_locked: 'Too many verification attempts. Try again in a few minutes.',
 };
 const oauthErrorMessage = (reason) =>
   OAUTH_ERRORS[reason] || 'Could not complete sign in. Please try again.';
@@ -47,7 +50,7 @@ const oauthErrorMessage = (reason) =>
  * payload shape). Popup blocked → graceful fallback to the full-page
  * redirect flow, which the server keeps supporting (no `popup=1` flag).
  */
-function OAuthButtons({ inModal, onClose }) {
+function OAuthButtons({ inModal, onClose, onMfaRequired }) {
   const [providers, setProviders] = useState([]);
   const [connecting, setConnecting] = useState(null); // provider key or null
   const [error, setError] = useState(null);
@@ -77,6 +80,12 @@ function OAuthButtons({ inModal, onClose }) {
       clearInterval(watchdogRef.current);
       setConnecting(null);
 
+      // Provider login succeeded but the account has 2FA: code step next.
+      if (!data.ok && data.reason === 'mfa_required') {
+        onMfaRequired?.();
+        return;
+      }
+
       if (!data.ok) {
         setError(oauthErrorMessage(data.reason));
         return;
@@ -95,7 +104,7 @@ function OAuthButtons({ inModal, onClose }) {
       window.removeEventListener('message', onMessage);
       clearInterval(watchdogRef.current);
     };
-  }, [inModal, onClose]);
+  }, [inModal, onClose, onMfaRequired]);
 
   const start = (e, provider) => {
     e.preventDefault();
@@ -177,6 +186,123 @@ function OAuthButtons({ inModal, onClose }) {
   );
 }
 
+/**
+ * Second login step for accounts with two-factor authentication. The
+ * challenge lives server-side (signed cookie set by the first step); this
+ * only sends the 6-digit code from the authenticator app, or a one-time
+ * recovery code.
+ */
+function MfaStep({ inModal, onClose, onBack }) {
+  const [mode, setMode] = useState('code'); // 'code' | 'recovery'
+  const [value, setValue] = useState('');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, [mode]);
+
+  const back = () => {
+    loopar.call('Auth', 'mfaCancel', { freeze: false, followRedirect: false, notifyError: false }).catch(() => {});
+    onBack();
+  };
+
+  const verify = async (raw) => {
+    const v = String(raw ?? value).trim();
+    if (!v || busy) return;
+    setBusy(true);
+    setError(null);
+
+    try {
+      const r = await loopar.call('Auth', 'mfaVerify', {
+        body: mode === 'code' ? { code: v } : { recovery_code: v },
+        query: inModal ? { inModal: 1 } : {},
+        followRedirect: false,
+        notifyError: false,
+      });
+
+      if (inModal) {
+        onClose?.();
+        loopar.emit('auth:changed');
+        return;
+      }
+      window.location.replace(r?.redirect || '/');
+    } catch (e) {
+      setBusy(false);
+      setValue('');
+      // 410: the challenge expired or ran out of tries → start over.
+      if (e?.code === 410) {
+        onBack(e.message);
+        return;
+      }
+      setError(e?.message || 'Invalid code.');
+      inputRef.current?.focus();
+    }
+  };
+
+  const onChange = (e) => {
+    if (mode === 'code') {
+      const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+      setValue(digits);
+      if (digits.length === 6) verify(digits);
+      return;
+    }
+    setValue(e.target.value);
+  };
+
+  return (
+    <form
+      onSubmit={(e) => { e.preventDefault(); verify(); }}
+      className="flex flex-col gap-4 p-6"
+    >
+      <div className="flex flex-col gap-1">
+        <h2 className="text-lg font-semibold">Two-factor authentication</h2>
+        <p className="text-sm text-muted-foreground">
+          {mode === 'code'
+            ? 'Enter the 6-digit code from your authenticator app.'
+            : 'Enter one of the recovery codes you saved when you turned on two-factor authentication.'}
+        </p>
+      </div>
+
+      <Input
+        ref={inputRef}
+        value={value}
+        onChange={onChange}
+        disabled={busy}
+        autoComplete="one-time-code"
+        inputMode={mode === 'code' ? 'numeric' : 'text'}
+        placeholder={mode === 'code' ? '123456' : 'xxxxx-xxxxx'}
+        className={mode === 'code' ? 'text-center text-xl tracking-[0.5em] font-mono' : 'font-mono'}
+        aria-label={mode === 'code' ? 'Authentication code' : 'Recovery code'}
+      />
+
+      {error && (
+        <div role="alert" className="text-sm text-destructive">{error}</div>
+      )}
+
+      <Button type="submit" disabled={busy || !value.trim()}>
+        {busy ? 'Verifying…' : 'Verify'}
+      </Button>
+
+      <div className="flex items-center justify-between text-sm">
+        <button
+          type="button"
+          className="underline-offset-4 hover:underline text-muted-foreground"
+          onClick={() => { setMode(mode === 'code' ? 'recovery' : 'code'); setValue(''); setError(null); }}
+        >
+          {mode === 'code' ? 'Use a recovery code' : 'Use the authenticator app'}
+        </button>
+        <button
+          type="button"
+          className="underline-offset-4 hover:underline text-muted-foreground"
+          onClick={back}
+        >
+          Back to sign in
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /** Only the credentials travel to `Auth/login` (no other form state). */
 export const config = {
   overrides: {
@@ -194,6 +320,10 @@ export default function LoginForm() {
   const { inModal, onClose } = useDocument();
   const { send, setError } = useForm();
   const navigate = useNavigate();
+  // Second step (2FA code). Starts on after a full-page OAuth / claim flow
+  // that redirected here with ?mfa=1; set after mount to keep SSR in sync.
+  const [mfaStep, setMfaStep] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     // Normalize to /auth/login WITHOUT stripping the ?redirect= return URL.
@@ -201,20 +331,36 @@ export default function LoginForm() {
     if (window.location.pathname !== '/auth/login') {
       navigate('/auth/login' + window.location.search, { replace: true });
     }
+    if (new URLSearchParams(window.location.search).get('mfa') === '1') setMfaStep(true);
   }, []);
+
+  const openMfaStep = useCallback(() => setMfaStep(true), []);
+
+  const backToCredentials = (message = null) => {
+    setMfaStep(false);
+    setNotice(typeof message === 'string' ? message : null);
+  };
 
   useHandlers({
     /** "Login" button (`data.action: "login"`). */
     login: () => send({
       action: 'login',
       query: inModal ? { inModal: 1 } : {},
-      error: () => {
+      // Handle the redirect here: a 2FA account answers without one.
+      followRedirect: false,
+      error: (e) => {
+        const message = e?.code === 429 ? e.message : "Invalid user name or password";
         setTimeout(() => {
-          setError("user_name", { message: "Invalid user name or password" });
-          setError("password", { message: "Invalid user name or password" });
+          setError("user_name", { message });
+          setError("password", { message });
         }, 10);
       },
-      success: () => {
+      success: (r) => {
+        setNotice(null);
+        if (r?.mfa_required) {
+          setMfaStep(true);
+          return;
+        }
         if (inModal) {
           // In-place login: close the modal and flip the session reactively
           // (chrome + comment form switch to logged-in) WITHOUT reloading the
@@ -222,17 +368,26 @@ export default function LoginForm() {
           // comment) is preserved.
           onClose?.();
           loopar.emit('auth:changed');
+          return;
         }
-        // Full-page login: the server returns a hard redirect to the right
-        // place (?redirect= or user-type landing); http handles the navigation.
+        // Full-page login: the server answers with the right place
+        // (?redirect= or user-type landing).
+        if (r?.redirect) window.location.replace(r.redirect);
       },
     }),
   });
 
+  if (mfaStep) {
+    return <MfaStep inModal={inModal} onClose={onClose} onBack={backToCredentials} />;
+  }
+
   return (
     <>
+      {notice && (
+        <div role="alert" className="mx-6 mt-4 text-sm text-destructive">{notice}</div>
+      )}
       <BareLayout />
-      <OAuthButtons inModal={inModal} onClose={onClose} />
+      <OAuthButtons inModal={inModal} onClose={onClose} onMfaRequired={openMfaStep} />
     </>
   );
 }

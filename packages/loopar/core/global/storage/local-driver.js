@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'pathe';
 import { loopar } from 'loopar';
 import { StorageDriver } from './storage-driver.js';
+import { assertSafeUpload, assertSafeRemoteUrl } from './upload-guard.js';
 
 /**
  * LocalDriver — persists assets on the local filesystem.
@@ -97,6 +98,10 @@ export class LocalDriver extends StorageDriver {
       throw new Error('LocalDriver.upload: buffer is required');
     }
 
+    // Reject active content that the browser would execute in our origin
+    // when the file is later served inline (SVG/HTML/JS…).
+    assertSafeUpload(originalName, contentType);
+
     const base = this.#pathBase({ app, visibility });
     fs.mkdirSync(base, { recursive: true });
 
@@ -135,6 +140,8 @@ export class LocalDriver extends StorageDriver {
   }
 
   async importFromUrl({ url, app, visibility }) {
+    // SSRF guard: only http(s) to a public host.
+    await assertSafeRemoteUrl(url);
     const res = await fetch(url);
     if (!res.ok) {
       throw new Error(`LocalDriver.importFromUrl: ${res.status} ${res.statusText} for ${url}`);

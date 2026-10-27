@@ -76,7 +76,17 @@ export async function createTenant(data, { activate: doActivate = false } = {}) 
   });
 
   await refreshCaddy();
-  return { name, activated: doActivate };
+
+  // Remote tenants (public domain) get a tokened install link so the setup
+  // wizard can be opened safely over the internet; local tenants don't need
+  // one (the wizard is unrestricted from loopback/LAN).
+  let installUrl = null;
+  const effectiveDomain = domain || `${name}.localhost`;
+  if (!tenant.isLocalDomain(effectiveDomain)) {
+    installUrl = await tenant.installUrl(name, { domain: effectiveDomain });
+  }
+
+  return { name, activated: doActivate, installUrl };
 }
 
 /** Full teardown: remove the on-disk site and drop its domain from the route. */

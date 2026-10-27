@@ -42,6 +42,7 @@ const registry = {
   watch:   () => c.watch(),
   startup: () => c.startup(),
   logs:    () => c.logs(siteName, extraArg),
+  'mfa-reset': () => c.mfaReset(siteName, extraArg), // <tenant> <user>
   help:    () => c.help(),
 };
 

@@ -30,6 +30,7 @@
     "kill": "node bin/cli/index.js kill",
     "startup": "node bin/cli/index.js startup",
     "logs": "node bin/cli/index.js logs",
+    "mfa-reset": "node bin/cli/index.js mfa-reset",
     "build": "node bin/build/prepare.js && yarn build:client && yarn build:server && node bin/build/activate.js",
     "build:client": "node bin/build/run-vite.js client",
     "build:server": "node bin/build/run-vite.js server",

@@ -94,7 +94,7 @@ export default class Router extends Middleware {
     const params = req.__params__;
 
     const setDocument = (validate=true) => {
-      if (req.__WORKSPACE_NAME__ === "web") {
+      if (RouterUtils.workspaceServesWebPages(req.__WORKSPACE_NAME__)) {
         const webApp = loopar.webApp;
         if (!webApp?.name) {
           return loopar.throw({

@@ -9,6 +9,8 @@
     "mailchecker": "6.0.21",
     "nodemailer": "10.1.7",
     "openai": "7.39.0",
+    "otpauth": "9.5.2",
+    "qrcode": "1.5.4",
     "stripe": "23.0.0"
   }
 }

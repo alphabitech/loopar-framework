@@ -156,6 +156,8 @@ export class FormController extends DocumentController {
     Object.entries(values).forEach(([key, value]) => {
       const field = this.__FIELD__(key);
       if (!field || !this.get(key)) return;
+      // A new record named by its series gets the name on save (the server checks it then).
+      if (key === "name" && this.Document?.nameFromSeries) return;
       field.value = value;
 
       if ([FORM_TABLE].includes(field.def.element)) {

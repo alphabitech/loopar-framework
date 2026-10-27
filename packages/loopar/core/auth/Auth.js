@@ -162,6 +162,7 @@ export default class Auth {
           avatar: userData.avatar,
           profile_picture: userData.profile_picture,
           user_type: userData.user_type,
+          mfa: !!userData.mfa,
           tenant: this.tenantId,
           csrfToken: userData.csrfToken || generateCsrfToken(),
         };
@@ -180,6 +181,7 @@ export default class Auth {
         avatar: userData.avatar,
         profile_picture: userData.profile_picture,
         user_type: userData.user_type,
+        mfa: !!userData.mfa,
         tenant: userData.tenant || this.tenantId,
         exp: userData.exp,
         iat: userData.iat,
@@ -192,15 +194,23 @@ export default class Auth {
     }
   }
 
-  login(user) {
-    // On a website domain (tenant `sites`) only Web users may sign in: desk
-    // accounts never authenticate there, so its login can't be used to probe
-    // or brute-force administrators. Same message as a wrong password — no
-    // oracle about which accounts exist or what type they are.
+  /**
+   * On a website domain (tenant `sites`) only Web users may sign in: desk
+   * accounts never authenticate there, so its login can't be used to probe
+   * or brute-force administrators. Same message as a wrong password — no
+   * oracle about which accounts exist or what type they are.
+   * Public so a login flow can run it BEFORE a second-factor challenge.
+   */
+  assertLoginAllowed(user) {
     if (getTenant()?.webApp && user?.user_type !== 'Web') {
       this.killSession();
       loopar.throw({ code: 401, title: 'Login Error', message: 'Invalid user or password' });
     }
+  }
+
+  /** `mfa`: the session was opened after a verified second factor. */
+  login(user, { mfa = false } = {}) {
+    this.assertLoginAllowed(user);
 
     const payload = {
       name: user.name,
@@ -208,6 +218,7 @@ export default class Auth {
       avatar: user.name.substring(0, 1).toUpperCase(),
       profile_picture: user.profile_picture,
       user_type: user.user_type,
+      mfa: !!mfa,
       tenant: this.tenantId,
       csrfToken: generateCsrfToken(),
     };

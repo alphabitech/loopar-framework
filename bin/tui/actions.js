@@ -296,13 +296,17 @@ export function advanceWizard() {
 async function createTenant(data, startAfter) {
   state.busy = true; render();
   try {
-    await tenantOps.createTenant(
+    const created = await tenantOps.createTenant(
       { name: data.name, port: data.port, domain: data.domain || undefined },
       { activate: startAfter }
     );
-    state.message = startAfter
+    const base = startAfter
       ? `${data.name} created and turned on`
       : `${data.name} created (off — press Start to turn on)`;
+    // Remote tenants: show the tokened install link once (also in config.json).
+    state.message = created?.installUrl
+      ? `${base} — install: ${created.installUrl}`
+      : base;
     state.messageKind = "ok";
   } catch (err) {
     state.message = err.message || String(err);

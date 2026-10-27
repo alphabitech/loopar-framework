@@ -255,6 +255,45 @@ export function startup() {
   log(cyan(`  pm2 unstartup ${platform}\n`));
 }
 
+/**
+ * `yarn mfa-reset <tenant> <user>` → turn 2FA off for a user (name or email)
+ * who lost the phone AND the recovery codes. The way back in for the
+ * Administrator, who has nobody above to reset it from the desk.
+ */
+export async function mfaReset(tenantName, userName) {
+  if (!tenantName || !userName) {
+    log(red('\nUsage: yarn mfa-reset <tenant> <user>\n'));
+    process.exit(1);
+  }
+
+  const { tenants } = await import('loopar/bin/tenant/tenant-builder.js');
+  if (!tenants().some(t => t.name === tenantName)) {
+    log(red(`\n❌ Unknown tenant: ${tenantName}\n`));
+    process.exit(1);
+  }
+
+  const { loopar, getOrCreateTenantInstance, requestContext } = await import('loopar');
+  const { resetMfa } = await import('../../apps/loopar/modules/auth/controllers/auth/mfa.js');
+
+  await getOrCreateTenantInstance(tenantName);
+  const name = await requestContext.run({ tenant: { name: tenantName } }, async () => {
+    const row = await loopar.db.query('User')
+      .where({ name: userName }).orWhere({ email: userName })
+      .select('name').first();
+    if (!row) return null;
+    await resetMfa(row.name);
+    return row.name;
+  });
+
+  if (!name) {
+    log(red(`\n❌ No user "${userName}" on tenant "${tenantName}".\n`));
+    process.exit(1);
+  }
+
+  log(green(`\n✅ Two-factor authentication reset for "${name}" on "${tenantName}".\n`));
+  process.exit(0);
+}
+
 export function help() {
   log(cyan('\nLoopar CLI\n'));
   log(white('Usage: ') + cyan('yarn <command> [siteName]') + gray('  (or: node bin/cli/index.js <command>)\n'));
@@ -276,6 +315,7 @@ export function help() {
   log(cyan('  migrate           ') + gray('One-shot: legacy sites/<t>/.env → config.json'));
   log(cyan('  watch             ') + gray('Warm release builder → build/staging under pm2 (stop: yarn stop build-watch)'));
   log(cyan('  startup           ') + gray('Register reboot-safe boot hook (run once after first deploy)'));
+  log(cyan('  mfa-reset <tenant> <user>') + gray('  Turn 2FA off for a user who lost the phone and recovery codes'));
   log(cyan('  help              ') + gray('Show this message'));
   log();
   log(gray('dev/prod is a GLOBAL core switch (config/core.json → nodeEnv), toggled from'));

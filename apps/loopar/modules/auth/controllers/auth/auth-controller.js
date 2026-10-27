@@ -6,9 +6,12 @@ import {validatePasswordResetToken, generatePasswordResetToken, resetPassword} f
 import {sendPasswordResetEmail} from "./recovery-email.js"
 import {getProvider, providerKeys, providerLabel, generateState, generateCodeVerifier} from "./oauth-providers.js"
 import {setOauthTx, readOauthTx, clearOauthTx, oauthRedirectUri, loadProviderConfig, parseScopes, linkUser} from "./oauth.js"
+import {completeLogin, verifyChallenge, cancelChallenge} from "./mfa.js"
 
 export default class AuthController extends BaseController {
  static actionsEnabled = ['login', 'logout', 'requestReset', 'oauthCallback'];
+  // Mutations: never reachable over GET.
+  static postOnlyActions = ['mfaVerify', 'mfaCancel'];
   
   constructor(props){
     super(props);
@@ -16,16 +19,51 @@ export default class AuthController extends BaseController {
 
   async publicActionLogin() {
     return await this.#makeAction('Login', async (form) => {
-      const session = await form.login();
+      const user = await form.verifyCredentials();
+      const result = await completeLogin(user, { landing: (row) => this.#postLoginDestination(row) });
 
-      // In-place login (web modal): no navigation, the client soft-refreshes.
-      if (this.query.inModal || this.req.__WORKSPACE_NAME__ === 'web') {
-        return this.success('Welcome', { user: session || null, notify: false });
+      if (result.mfa_locked) {
+        loopar.throw({
+          code: 429,
+          title: 'Too many attempts',
+          message: 'Too many verification attempts. Try again in a few minutes.',
+        });
       }
 
-      // Full-page login: safe return URL if given, else land by user type.
-      return this.redirect(this.#postLoginDestination(session), { hard: true });
+      // Second factor pending: the client shows the code step.
+      if (result.mfa_required) {
+        return this.success('Verification required', { mfa_required: true, notify: false });
+      }
+
+      return this.#sessionOpened(result.session, this.#postLoginDestination(result.session));
     });
+  }
+
+  /**
+   * POST /auth/mfaVerify { code } | { recovery_code } — second step of a
+   * login whose user has 2FA on. The pending challenge rides a signed cookie
+   * set by the first step (password, OAuth or claim).
+   */
+  async publicActionMfaVerify() {
+    const { code, recovery_code } = this.body || {};
+    const { session, landing } = await verifyChallenge({ code, recovery_code });
+    return this.#sessionOpened(session, landing || this.#postLoginDestination(session));
+  }
+
+  /** POST /auth/mfaCancel — "back to sign in" from the code step. */
+  async publicActionMfaCancel() {
+    cancelChallenge();
+    return this.success('ok', { notify: false });
+  }
+
+  #sessionOpened(session, destination) {
+    // In-place login (web modal): no navigation, the client soft-refreshes.
+    if (this.query.inModal || this.req.__WORKSPACE_NAME__ === 'web') {
+      return this.success('Welcome', { user: session || null, notify: false });
+    }
+
+    // Full-page login: safe return URL if given, else land by user type.
+    return this.redirect(destination, { hard: true });
   }
 
   /** Validated `?redirect=` first, else landing by user type. */
@@ -167,7 +205,9 @@ export default class AuthController extends BaseController {
       return this.redirect('/auth/login?claim=user_not_found');
     }
 
-    await loopar.auth.login(user);
+    const result = await completeLogin(user, { landing: '/desk' });
+    if (result.mfa_locked) return this.redirect('/auth/login?claim=mfa_locked');
+    if (result.mfa_required) return this.redirect('/auth/login?mfa=1');
 
     // No forced /auth/set-password — the desk banner (must_change_password)
     // and Profile's "Reset by email" cover it.
@@ -249,6 +289,8 @@ export default class AuthController extends BaseController {
    */
   #oauthFinish(tx, { ok, landing = null, reason = null }) {
     if (!tx?.popup) {
+      // Second factor pending: the login page resumes at the code step.
+      if (reason === 'mfa_required') return this.redirect('/auth/login?mfa=1');
       return ok
         ? this.redirect(landing, { hard: true })
         : this.redirect(`/auth/login?oauth=${encodeURIComponent(reason || 'login_failed')}`);
@@ -356,9 +398,11 @@ export default class AuthController extends BaseController {
       return this.#oauthFinish(tx, { ok: false, reason: reason || 'login_failed' });
     }
 
-    await loopar.auth.login(user);
     // System users → desk; Web users (self-signup) → website.
     const landing = user.user_type === 'Web' ? (process.env.WEB_LANDING || '/') : '/desk';
+    const result = await completeLogin(user, { landing });
+    if (result.mfa_locked) return this.#oauthFinish(tx, { ok: false, reason: 'mfa_locked' });
+    if (result.mfa_required) return this.#oauthFinish(tx, { ok: false, reason: 'mfa_required' });
     return this.#oauthFinish(tx, { ok: true, landing });
   }
 

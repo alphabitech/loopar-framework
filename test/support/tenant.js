@@ -25,7 +25,7 @@ import {
 export const ADMIN = Object.freeze({
   company: "Loopar Test",
   email: "admin@loopar.test",
-  password: "test-password-123",
+  password: "Test-Password-123!",   // meets the installer's password policy
 });
 
 export async function bootTestTenant({ name = `__loopar_test_${process.pid}__` } = {}) {

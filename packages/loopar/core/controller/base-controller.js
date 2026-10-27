@@ -2,6 +2,7 @@
 
 import { loopar, DOC_STATUS, coerceDocStatus } from "loopar";
 import CoreController from './core-controller.js';
+import { workspaceServesWebPages } from '../global/router-utils.js';
 import { printPayload } from '../document/print-format.js';
 import { renameEntity } from '../document/entity-rename.js';
 import { readRuntimeMode } from '../server/runtime-mode.js';
@@ -360,7 +361,7 @@ export default class BaseController extends CoreController {
    * on the public web). Body: { name, status }
    */
   async actionModerate() {
-    if (this.req?.__WORKSPACE_NAME__ === 'web') loopar.throw({ status: 403, title: 'Forbidden', message: 'Not allowed' });
+    if (workspaceServesWebPages(this.req?.__WORKSPACE_NAME__)) loopar.throw({ status: 403, title: 'Forbidden', message: 'Not allowed' });
 
     const d = this.data || {};
     if (!d.name) loopar.throw('name is required');

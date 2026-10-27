@@ -67,7 +67,8 @@ function ChartItem({ item }) {
  */
 export function DashboardBoard({ name, description, items: rawItems, link = "edit", title }) {
   const items = useMemo(() => parseItems(rawItems), [rawItems]);
-  const href = name && (link === "edit"
+  // link: "edit" | "open" | null (the dashboard page has Edit in its AppBar).
+  const href = name && link && (link === "edit"
     ? `/desk/Dashboard/update?name=${encodeURIComponent(name)}`
     : `/desk/Dashboard/view?name=${encodeURIComponent(name)}`);
 

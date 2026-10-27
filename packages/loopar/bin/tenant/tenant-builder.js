@@ -215,6 +215,37 @@ export function tenantUrl(name, override = {}) {
   return isLocal ? `http://${domain}` : `https://${domain}`;
 }
 
+/** True when the domain is served locally (no public exposure). */
+export function isLocalDomain(domain = '') {
+  const d = String(domain || '').trim().toLowerCase();
+  return d === 'localhost' || d.endsWith('.localhost');
+}
+
+/**
+ * Ensure a tenant has a random install token; generate + persist on first
+ * need. The token gates the pre-install setup wizard for REMOTE (public-IP)
+ * clients — a fresh tenant reachable over the internet can't be seized before
+ * its owner installs it. Local/LAN installs don't need it (origin is trusted).
+ */
+export async function ensureInstallToken(name) {
+  const t = readTenant(name);
+  if (t?.installToken) return t.installToken;
+  const token = crypto.randomBytes(24).toString('hex');
+  await saveTenant({ NAME: name, INSTALL_TOKEN: token });
+  return token;
+}
+
+/**
+ * The one-click install link for a remote tenant: the normal setup wizard URL
+ * carrying the install token as a query param. Opening it drops a short-lived
+ * setup cookie so the wizard's own POSTs are authorized — the operator never
+ * pastes the token by hand.
+ */
+export async function installUrl(name, override = {}) {
+  const token = await ensureInstallToken(name);
+  return `${tenantUrl(name, override)}/loopar/system/connect?install_token=${token}`;
+}
+
 /**
  * Pre-seed `config/db.config.json` for a new tenant by copying another
  * tenant's template and picking a unique `database` name.
@@ -254,7 +285,10 @@ export const tenant = {
   saveTenant,
   ensureJwtSecret,
   ensureSecretKey,
+  ensureInstallToken,
   tenantUrl,
+  installUrl,
+  isLocalDomain,
   saveDbConfig,
 };
 

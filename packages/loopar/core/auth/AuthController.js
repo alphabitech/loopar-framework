@@ -1,7 +1,7 @@
 import { loopar, PermissionManager, CREATED_BY_COLUMN } from "loopar";
 import { SCOPE } from "./PermissionManager.js";
 import { validateCsrfToken } from './csrf.js';
-import { workspaceCapabilities, workspaceRequiresAuth, getWorkspaceName } from "../global/router-utils.js";
+import { workspaceCapabilities, workspaceRequiresAuth, getWorkspaceName, workspaceServesWebPages } from "../global/router-utils.js";
 
 export default class AuthController {
   async validateCsrf() {
@@ -32,7 +32,8 @@ export default class AuthController {
   }
 
   #isPublicAction(workspace){
-    if(workspace == "web" && !this.#isRpc) return true;
+    // Navigating to a web page (on the site or a kiosk) is public; its actions are not.
+    if (workspaceServesWebPages(workspace) && !this.#isRpc) return true;
     const method = this[`publicAction${loopar.utils.Capitalize(this.action)}`];
     if(method && typeof method == "function" && !this.isRevokedPublicAction(this.action)) return true;
 

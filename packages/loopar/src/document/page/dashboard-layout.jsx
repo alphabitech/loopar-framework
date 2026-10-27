@@ -7,7 +7,7 @@ function DashboardBody() {
   const { Document } = useDocument();
   const data = Document?.data || {};
 
-  return <DashboardBoard name={data.name || Document?.name} description={data.description} items={data.items} link="edit" />;
+  return <DashboardBoard name={data.name || Document?.name} description={data.description} items={data.items} link={null} />;
 }
 
 /** Dashboard record opened with `view`: the board instead of the form. */

@@ -1,9 +1,11 @@
 'use strict'
 
 import { BaseController, loopar } from "loopar";
+import { resetMfa } from "../../controllers/auth/mfa.js";
 
 export default class UserController extends BaseController {
   static freeActions=["profile"]
+  static postOnlyActions = ["resetMfa"]
   constructor(props) {
     super(props);
   }
@@ -22,6 +24,17 @@ export default class UserController extends BaseController {
   actionLogout() {
     loopar.session.destroy();
     this.redirect('/login/login');
+  }
+
+  /**
+   * POST User/resetMfa?name=<user> — turns 2FA off for a user who lost the
+   * phone and the recovery codes. Needs the `resetMfa` grant on User
+   * (Administrator always has it).
+   */
+  async actionResetMfa() {
+    if (!this.name) loopar.throw('User is required.');
+    await resetMfa(this.name);
+    return this.success(`Two-factor authentication was reset for ${this.name}`);
   }
 
   async actionGetRoles(){

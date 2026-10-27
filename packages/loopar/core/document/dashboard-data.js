@@ -19,6 +19,8 @@ const MAX_BUCKETS = 400;
 
 const pad = (n) => String(n).padStart(2, "0");
 const isoDay = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+/** Today in the server's local time zone (the UTC date runs ahead in the evening in the Americas). */
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 
 /** 'YYYY-MM-DD' of a stored date/datetime (string or Date), or null. */
 function dayOf(value) {
@@ -110,7 +112,7 @@ export async function chartData(chart, user = loopar.auth.user()) {
   if (byTime) {
     const grain = GRAINS.includes(chart.time_grain) ? chart.time_grain : "day";
     const span = parseInt(chart.timespan, 10) || 0;
-    const today = isoDay(new Date());
+    const today = localToday();
     let from = null;
     if (span > 0) {
       const d = utc(today);

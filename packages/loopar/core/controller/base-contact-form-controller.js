@@ -43,6 +43,13 @@ export default class BaseContactFormController extends BaseController {
       .map(f => f.data.name);
   }
 
+  /** True when the form declares at least one file/upload field. */
+  #declaresFileField(entity) {
+    const FILE_ELEMENTS = ['file_input', 'image_input', 'file_uploader'];
+    return loopar.utils.fieldList(entity.doc_structure)
+      .some(f => FILE_ELEMENTS.includes(f.element));
+  }
+
   async publicActionCreate(){
     if (this.#isStaffRequest()) return await super.actionCreate();
     return await this.publicActionSubmit();
@@ -82,6 +89,12 @@ export default class BaseContactFormController extends BaseController {
 
     const entity = (await loopar.newDocument(this.document)).__ENTITY__;
     for (const key of this.#internalFieldNames(entity)) delete payload[key];
+
+    // Public submitters never drive remote-URL imports (SSRF), and may only
+    // upload binaries when the form actually declares a file field. Anything
+    // that still gets through is validated by the storage upload guard.
+    delete payload.__REMOTE_FILES__;
+    if (!this.#declaresFileField(entity)) delete payload.__REQ_FILES__;
 
     const doc = await loopar.newDocument(this.document, payload);
 
