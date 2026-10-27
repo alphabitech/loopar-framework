@@ -6,11 +6,13 @@
     "altcha": "3.4.1",
     "altcha-lib": "2.6.0",
     "arctic": "^3.7.0",
+    "barcode-detector": "3.2.3",
     "mailchecker": "6.0.21",
     "nodemailer": "10.1.7",
     "openai": "7.39.0",
     "otpauth": "9.5.2",
     "qrcode": "1.5.4",
-    "stripe": "23.0.0"
+    "stripe": "23.0.0",
+    "zxing-wasm": "3.1.6"
   }
 }

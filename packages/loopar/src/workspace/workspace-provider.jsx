@@ -381,17 +381,24 @@ export function WorkspaceProvider({
     return Document?.activeParentMenu || Document?.Entity?.name;
   }, [getActiveDocument]);
 
+  // Until hydrated, the theme must be the server's (no cookie → "dark", see
+  // WorkspaceController.render): reading the system preference in the first
+  // client render mismatched the server HTML. The mount effect above then
+  // stores the detected theme.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+
   const getTheme = useCallback(() => {
     if (storedTheme === "light" || storedTheme === "dark") return storedTheme;
 
     const cookieTheme = loopar.cookie.get(storageKey);
     if (cookieTheme === "light" || cookieTheme === "dark") return cookieTheme;
 
-    if (typeof window !== "undefined") {
+    if (hydrated) {
       return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
     return "dark";
-  }, [storedTheme, storageKey]);
+  }, [storedTheme, storageKey, hydrated]);
 
   useEffect(() => {
     setTimeout(() => {
