@@ -37,12 +37,13 @@ export default function Card(props) {
 
 Card.dontHaveMetaElements = ["text"];
 
-function CardHover(props){
+function CardHover({ className, children, ...props }){
   return (
-    <CardComponent 
-      className={cn(props.className, "transition-all hover:shadow-lg h-full")}
+    <CardComponent
+      {...props}
+      className={cn("transition-all hover:shadow-lg h-full", className)}
     >
-      {props.children}
+      {children}
     </CardComponent>
   )
 }

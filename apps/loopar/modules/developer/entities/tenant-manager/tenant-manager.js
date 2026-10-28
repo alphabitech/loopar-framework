@@ -252,10 +252,7 @@ export default class TenantManager extends BaseDocument {
     pagination.totalRecords = filtered.length;
     pagination.totalPages = Math.max(1, Math.ceil(filtered.length / pagination.pageSize));
 
-    if (pagination.page > pagination.totalPages) {
-      pagination.page = 1;
-      loopar.setPage(this.__ENTITY__.name, 1);
-    }
+    if (pagination.page > pagination.totalPages) pagination.page = pagination.totalPages;
 
     const startIndex = (pagination.page - 1) * pagination.pageSize;
     const rows = filtered.slice(startIndex, startIndex + pagination.pageSize);

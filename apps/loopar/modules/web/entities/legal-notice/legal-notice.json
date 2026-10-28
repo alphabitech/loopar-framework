@@ -1,0 +1,19 @@
+{
+  "name": "Legal Notice",
+  "module": "Web",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 1,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 1,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "doc_structure": "[{\"node\":\"ti71wo35u\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Name\",\"type\":\"VARCHAR\",\"unique\":1,\"hidden\":1,\"set_only_time\":1}},{\"node\":\"auy7u06lq\",\"element\":\"card\",\"data\":{\"label\":\"Notice\"},\"elements\":[{\"node\":\"a5t53v6hd\",\"element\":\"row\",\"data\":{\"label\":\"Row1\",\"layout\":\"[50,50]\"},\"elements\":[{\"node\":\"uxkuq6w7f\",\"element\":\"col\",\"data\":{\"label\":\"Col1\"},\"elements\":[{\"node\":\"oob2a1901\",\"element\":\"input\",\"data\":{\"label\":\"Title\",\"name\":\"title\",\"type\":\"VARCHAR\",\"required\":1,\"in_list_view\":1,\"searchable\":1,\"description\":\"For example: Privacy Notice, Terms of Use, Cookie Notice.\"}},{\"node\":\"fd0rbtvla\",\"element\":\"input\",\"data\":{\"label\":\"Slug\",\"name\":\"slug\",\"type\":\"VARCHAR\",\"in_list_view\":1,\"searchable\":1,\"description\":\"Last part of the public address (/legal/<slug>). Generated from the title when empty. Links and forms point to it, so change it with care.\"}},{\"node\":\"wrynhus7v\",\"element\":\"select\",\"data\":{\"label\":\"App\",\"name\":\"app\",\"options\":\"App\",\"required\":1,\"in_list_view\":1,\"searchable\":1,\"description\":\"The website this notice belongs to.\"}}]},{\"node\":\"y3ynzmcw6\",\"element\":\"col\",\"data\":{\"label\":\"Col2\"},\"elements\":[{\"node\":\"l0se1237a\",\"element\":\"switch\",\"data\":{\"label\":\"Published\",\"name\":\"published\",\"in_list_view\":1,\"searchable\":1,\"description\":\"Only published notices are shown on the website.\"}},{\"node\":\"lfn7t8vth\",\"element\":\"date\",\"data\":{\"label\":\"Effective Date\",\"name\":\"effective_date\",\"in_list_view\":1,\"description\":\"Date from which this version applies.\"}},{\"node\":\"32z1vmcrw\",\"element\":\"date\",\"data\":{\"label\":\"Last Updated\",\"name\":\"last_updated\",\"description\":\"Set automatically when the content changes.\"}}]}]}]},{\"node\":\"zu9wq4lnz\",\"element\":\"card\",\"data\":{\"label\":\"Content\"},\"elements\":[{\"node\":\"o4ohqtuev\",\"element\":\"textarea\",\"data\":{\"label\":\"Summary\",\"name\":\"summary\",\"description\":\"Optional. Short introduction shown under the title.\"}},{\"node\":\"y7b7b5rok\",\"element\":\"markdown_input\",\"data\":{\"label\":\"Content\",\"name\":\"description\",\"description\":\"Full text of the notice. Write it, or have it reviewed, with your legal advisor.\"}}]}]",
+  "search_fields": "title,slug",
+  "title_fields": "title",
+  "resources": [],
+  "__ENTITY__": "Entity"
+}

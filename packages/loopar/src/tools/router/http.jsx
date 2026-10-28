@@ -90,7 +90,7 @@ export default class HTTP {
    *    workspace segment).
    *  - X-CSRF-Token is the double-submit CSRF check for mutations.
    */
-  #buildFetchOptions({ method = 'POST', body }) {
+  #buildFetchOptions({ method = 'POST', body, signal }) {
     const csrf = this.getCsrfToken();
     const wsToken = this.getWorkspaceToken();
 
@@ -108,6 +108,8 @@ export default class HTTP {
       redirect: 'follow',
       referrerPolicy: 'no-referrer',
       headers,
+      // Callers cancel superseded requests (typeahead searches) with an AbortController.
+      ...(signal ? { signal } : {}),
     };
 
     if (body instanceof FormData) {
@@ -201,6 +203,8 @@ export default class HTTP {
 
           if (data?.redirect && options.followRedirect !== false) {
             navTrace('redirect', { request: url, to: data.redirect, hard: !!data.hardRedirect });
+            // A hard redirect unloads the page: its toast would never be seen.
+            if (data.notify && !data.hardRedirect) this.#ui.notify(data.notify);
             if (data.hardRedirect) {
               window.location.replace(data.redirect);
             } else {
@@ -232,6 +236,9 @@ export default class HTTP {
 
       return await withFreeze(fetchPromise);
     } catch (error) {
+      // Cancelled by the caller: not a failure, nothing to show or report.
+      if (error?.name === 'AbortError') return;
+
       if (error?.redirect) {
         const dest = this.#withReturnUrl(error.redirect);
         navTrace('error-redirect', { request: url, to: dest, hard: !!error.hardRedirect, code: error.code, message: error.message });

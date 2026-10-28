@@ -33,7 +33,7 @@ export const MetaRender = ({ meta, metaProps, Comp, docRef, parent, data, thresh
 
     className = cn(
       className,
-      `transform transition-all ease-in-out"`,
+      "transform transition-all ease-in-out",
       isVisible ? animation.visible : animation.initial,
       data.class
     );

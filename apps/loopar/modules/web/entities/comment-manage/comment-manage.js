@@ -35,8 +35,7 @@ export default class CommentManage extends BaseDocument {
     const totalRecords = Number(totalRow?.count || 0);
     const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
 
-    const safePage = page > totalPages ? 1 : page;
-    if (safePage !== page) loopar.setPage(entityName, safePage);
+    const safePage = Math.min(page, totalPages);
 
     const raw = await this.#applyScope(loopar.db.qx()(COMMENT_TABLE), q)
       .select(['name', 'user', 'guest_name', 'comment', 'document', 'document_name', 'parent', 'status', 'created_at'])

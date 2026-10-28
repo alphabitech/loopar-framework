@@ -100,18 +100,37 @@ function MenuActions({ menuActions = [], onOpenLogin, onOpenProfile }) {
           size: "icon",
           variant: "ghost",
         }).replaceAll("text-primary", "");
+        // Only other sites open in a new tab; site pages stay in this one.
+        const external = /^(https?:)?\/\//i.test(action.action || "");
+        const target = external ? { target: "_blank", rel: "noreferrer" } : {};
+        const key = (action.action || "") + i;
+
+        // With a button text: a button on wide screens, the icon on small ones.
+        if (action.label) {
+          return (
+            <span key={key} className="contents">
+              <a href={action.action} {...target} className={`${buttonVariants({ size: "sm" })} hidden lg:inline-flex mr-2`}>
+                {action.label}
+              </a>
+              <a href={action.action} {...target} className="hover:text-primary lg:hidden" aria-label={action.label}>
+                <div className={`${classVariant} hover:text-primary`}>
+                  <BaseIcon icon={action.icon} className="h-5 w-5" />
+                </div>
+              </a>
+            </span>
+          );
+        }
 
         return (
           <a
-            key={(action.action || "") + i}
+            key={key}
             href={action.action}
-            target="_blank"
-            rel="noreferrer"
+            {...target}
             className="hover:text-primary"
           >
             <div className={`${classVariant} hover:text-primary`}>
               <BaseIcon icon={action.icon} className="h-5 w-5" />
-              <span className="sr-only">{action.label}</span>
+              <span className="sr-only">{action.action}</span>
             </div>
           </a>
         );

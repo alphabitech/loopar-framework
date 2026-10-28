@@ -10,6 +10,9 @@ export const DocumentContext = createContext({});
 
 export const DocumentProvider = ({ ctrl, layout, options, children }) => {
   const Document = ctrl.Document;
+  // A document rendered inside another one (a page's contact form) doesn't
+  // set the page title: the outer document does.
+  const nested = !!useContext(DocumentContext)?.ctrl;
   const [sidebarOpen, setSidebarOpen] = usePersist(Document.name + "sidebarOpen");
   const { inModal, onClose, onSaved } = ctrl.props || {};
 
@@ -33,7 +36,7 @@ export const DocumentProvider = ({ ctrl, layout, options, children }) => {
   return (
     <DocumentContext.Provider value={value}>
       <ViewOptionsProvider base={options}>
-        <title>{Document.meta?.title}</title>
+        {!nested && <title>{Document.meta?.title}</title>}
         {children}
       </ViewOptionsProvider>
     </DocumentContext.Provider>

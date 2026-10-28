@@ -4,6 +4,22 @@ import BaseController from './base-controller.js';
 import { loopar } from "loopar";
 import {parseDocStructure} from '../document/tools.js';
 
+/** `key=value` lines of an seo element (the value may contain "="). */
+export function seoOptions(text = "") {
+  return String(text || "").split("\n").reduce((acc, line) => {
+    const i = line.indexOf("=");
+    if (i > 0) acc[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+    return acc;
+  }, {});
+}
+
+/** The title an seo element of a page sets (meta_name "title"), if any. */
+function seoTitle(docStructure) {
+  const node = loopar.utils.fieldList(docStructure || "[]")
+    .find(el => el.element === "seo" && String(el.data?.meta_name || "").trim() === "title");
+  return node ? seoOptions(node.data.options).content || null : null;
+}
+
 export default class SingleController extends BaseController {
   static inheritedActions = ['view', 'update', 'print'];
   
@@ -56,7 +72,8 @@ export default class SingleController extends BaseController {
         element: "collection_view",
         data: {
           options: collection,
-          enable_comments: 1
+          // Comments only where the entity enables them (posts, projects…).
+          enable_comments: loopar.utils.trueToBinary(loopar.getRef(collection)?.enable_comments),
         },
       },
     ]), true, this.document, requestContext);
@@ -79,6 +96,7 @@ export default class SingleController extends BaseController {
       },
       activeParentMenu: await this.getParent(),
       __DOCUMENT_TITLE__: preloadedItem?.title || detailSlug,
+      exactTitle: preloadedItem?.title || null,
       __DETAIL_SLUG__: detailSlug,
       ...data,
     });
@@ -127,7 +145,8 @@ export default class SingleController extends BaseController {
         require_login_to_comment: loopar.utils.trueToBinary(pageRef.require_login_to_comment),
       },
       activeParentMenu: await this.getParent(),
-      __DOCUMENT_TITLE__: menu?.link || this.document,
+      __DOCUMENT_TITLE__: requestContext._detailTitle || menu?.link || this.document,
+      exactTitle: requestContext._detailTitle || seoTitle(document.__ENTITY__?.doc_structure) || null,
       ...(detailSlug? { __DETAIL_SLUG__: detailSlug } : {}),
       ...data,
     });

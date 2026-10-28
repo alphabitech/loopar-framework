@@ -436,7 +436,14 @@ export const BaseDesigner = (props) => {
     syncHistory();
   }, [applyHistory, syncHistory]);
 
-  const setMeta = useCallback((meta) => {
+  // `asBase`: structural normalization a component applies on its own when it
+  // mounts (e.g. Row adding the columns its layout requires). It is NOT a user
+  // edit: it is folded into the history base (stack[0]) without a draft, the
+  // "Unsaved changes" badge or onChange. Otherwise every load of a document
+  // that needs normalizing writes a draft that differs from the server, which
+  // resurfaces as a permanent "Unsaved changes" (or a conflict) on reload.
+  // Only honored while the user hasn't edited yet; afterwards it's a normal edit.
+  const setMeta = useCallback((meta, { asBase = false } = {}) => {
     let parsed;
     if (Array.isArray(meta)) {
       parsed = meta;
@@ -452,10 +459,18 @@ export const BaseDesigner = (props) => {
 
     storeRef.current.populate(fixed);
     setLocalMetaComponents(fixed);
-    scheduleCommit();
-  }, [scheduleCommit]);
 
-  const updateElements = useCallback((target, elements, current = null) => {
+    const h = historyRef.current;
+    if (asBase && h.index === 0 && commitTimerRef.current === null) {
+      h.stack = [JSON.stringify(storeRef.current.reconcileTree(fixed))];
+      syncHistory();
+      return;
+    }
+
+    scheduleCommit();
+  }, [scheduleCommit, syncHistory]);
+
+  const updateElements = useCallback((target, elements, current = null, options = {}) => {
     const currentElements = storeRef.current.reconcileTree(stateRef.current.localMetaComponents);
     const selfKeyNow = stateRef.current.selfKey;
     const targetKey = getNodeKey(target);
@@ -488,7 +503,7 @@ export const BaseDesigner = (props) => {
       newElements = deleteCurrentOnLastParent(newElements, selfKeyNow);
     }
 
-    setMeta(JSON.stringify(newElements));
+    setMeta(JSON.stringify(newElements), options);
   }, [setMeta]);
 
   const updateElement = useCallback((node, data, merge = true, fromEditor = false) => {

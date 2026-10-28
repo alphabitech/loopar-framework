@@ -211,11 +211,19 @@ function AppCard({app, action}) {
   const discard = () => action(app.name, 'discard', repoMode === 'full' ? true : { wasInstalled: app.installed });
 
   return (
-    <Card className="@container group flex h-full min-w-0 flex-col transition-colors hover:border-foreground/20">
-      <CardHeader className="space-y-0 p-4 pb-3">
+    <Card
+      className="@container group relative flex h-full min-w-0 flex-col overflow-hidden border-[color:var(--app-border)] shadow-sm transition-[border-color,box-shadow] hover:border-[color:var(--app-border-hover)] hover:shadow-md"
+      style={{ '--app-border': loopar.bgColor(app.name, 0.45), '--app-border-hover': loopar.bgColor(app.name, 0.8) }}
+    >
+      {/* App-colored accent: a top strip plus a faint wash behind the header, so each card reads as its own unit. */}
+      <div aria-hidden className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: color }} />
+      <CardHeader
+        className="space-y-0 p-4 pb-3 pt-5"
+        style={{ backgroundImage: `linear-gradient(to bottom, ${loopar.bgColor(app.name, 0.14)}, transparent)` }}
+      >
         <div className="flex items-start gap-3">
           <div
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl shadow-sm ring-1 ring-inset ring-white/10"
+            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl shadow-sm ring-1 ring-inset ring-white/10"
             style={{ backgroundColor: color }}
           >
             {app.icon ? (
@@ -229,7 +237,7 @@ function AppCard({app, action}) {
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <CardTitle className="truncate text-base font-semibold leading-tight">{app.name}</CardTitle>
+              <CardTitle className="truncate text-xl font-semibold leading-tight tracking-tight">{app.name}</CardTitle>
               {isFramework && (
                 <span title="Framework" className="flex-shrink-0 text-violet-400"><InfinityIcon className="h-4 w-4" /></span>
               )}

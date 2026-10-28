@@ -100,8 +100,7 @@ export default class UserDirectory extends BaseDocument {
     const term = this.#term(q);
     const totalRecords = await UserDirectory.count(term);
     const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
-    let page = loopar.getPage(entityName);
-    if (page > totalPages) { page = 1; loopar.setPage(entityName, 1); }
+    const page = Math.min(loopar.getPage(entityName), totalPages);
 
     const rows = await UserDirectory.rows({ term, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
 

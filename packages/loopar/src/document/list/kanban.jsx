@@ -8,6 +8,7 @@ import { Button } from "@cn/components/ui/button";
 import { cn } from "@cn/lib/utils";
 import { STATE_COLORS, runTransition } from "../form/workflow-bar";
 import { EntryModal } from "@app/entry-modal";
+import { useWorkspace } from "@workspace/workspace-provider";
 
 /**
  * Kanban board for entities with an active workflow: one column per state
@@ -126,9 +127,19 @@ export function KanbanBoard({ ctrl }) {
   const [active, setActive] = useState(null);
   const [opened, setOpened] = useState(null);
 
+  // The list's filters live in the URL: the board applies the same ones.
+  const { pathname: currentUrl } = useWorkspace();
+  const filters = useMemo(() => {
+    const params = new URLSearchParams(String(currentUrl || "").split("?")[1] || "");
+    params.delete("page");
+    params.delete("board");
+    return params.toString();
+  }, [currentUrl]);
+
   const load = useCallback((state, page = 1) => {
     setColumns((c) => ({ ...c, [state]: c[state] ? { ...c[state], loading: true } : c[state] }));
-    loopar.call(entity, "list", { query: { board: state, page }, freeze: false })
+    const query = { ...Object.fromEntries(new URLSearchParams(filters)), board: state, page };
+    loopar.call(entity, "list", { query, freeze: false })
       .then((r) => setColumns((c) => ({
         ...c,
         [state]: {
@@ -139,7 +150,7 @@ export function KanbanBoard({ ctrl }) {
         },
       })))
       .catch(() => setColumns((c) => ({ ...c, [state]: { rows: [], total: 0, page: 1, loading: false } })));
-  }, [entity]);
+  }, [entity, filters]);
 
   useEffect(() => {
     states.forEach((s) => load(s.state));

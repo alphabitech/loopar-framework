@@ -76,7 +76,7 @@ export function ComponentDefaults(props) {
     return props.elements || [];
   }
 
-  const setElements = (elements, callback, merge = true)=>{
+  const setElements = (elements, callback, merge = true, options = {})=>{
     const newElements = (merge ? [...elementsDict(), ...elements] : elements);
 
     function removeDuplicates(array) {
@@ -94,7 +94,7 @@ export function ComponentDefaults(props) {
       });
     }
     
-    updateElements && updateElements(props, removeDuplicates(newElements), null, callback);
+    updateElements && updateElements(props, removeDuplicates(newElements), null, options);
   }
 
   return {

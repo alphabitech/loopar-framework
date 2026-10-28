@@ -9,6 +9,10 @@ import { isHashedSecret } from '../global/secrets.js';
 import { nextSeriesName } from './naming-series.js';
 import { guardWorkflowState, workflowFor, describeWorkflow } from './workflow.js';
 import { computeFormulas, tableRows } from '../global/formula.js';
+import { acceptsFile } from '../global/file-accept.js';
+import { purgePrivateFiles } from '../global/private-files.js';
+
+const isTrue = (v) => [1, '1', true, 'true'].includes(v);
 
 /**
  * Whether saving `incoming` would change the stored child `row`: compares the
@@ -364,6 +368,8 @@ export default class CoreDocument {
     // rejected save doesn't burn a number.
     const seriesPending = this.#usesNamingSeries;
     if (validate) await this.validate({ skipName: seriesPending });
+    // Uploaded files are checked before anything is written.
+    this.#checkUploads();
     // The record and its child rows are written together or not at all.
     await loopar.db.withTransaction(async () => {
       if (seriesPending) this.name = await nextSeriesName(this.__ENTITY__.name, this.__ENTITY__.naming_series);
@@ -436,7 +442,11 @@ export default class CoreDocument {
 
     const files = this.__DATA__.__REQ_FILES__ || [];
     for (const file of files) {
-      const ref = await this._processFile(file, app);
+      const field = this.uploadFieldOf(file);
+      // Private fields: tenant storage (never inside an app's repo), owned by this record.
+      const ref = isTrue(field?.data?.private)
+        ? await this._processFile(file, null, { private: true, owner: { entity: this.__ENTITY__.name, name: this.__DOCUMENT_NAME__ ?? this.name, field: field.data.name } })
+        : await this._processFile(file, app);
       if (ref) uploadedRefs.push(ref);
     }
 
@@ -524,6 +534,49 @@ export default class CoreDocument {
     }
   }
 
+  /** The file fields of this entity (file_input, image_input, file_uploader). */
+  #fileFields() {
+    const FILE_ELEMENTS = new Set([FILE_INPUT, IMAGE_INPUT, FILE_UPLOADER]);
+    return loopar.utils.fieldList(this.getDocypeStructure()).filter(f => f?.data?.name && FILE_ELEMENTS.has(f.element));
+  }
+
+  /**
+   * The field an uploaded binary belongs to: the file field whose value lists
+   * a not-yet-stored entry (`{ name, size, type }`, no src) with that name.
+   */
+  uploadFieldOf(file) {
+    const clean = (n) => String(n ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
+    const raw = String(file?.originalname ?? file?.name ?? '');
+    const names = new Set([clean(raw), clean(Buffer.from(raw, 'latin1').toString('utf8'))]);
+    return this.#fileFields().find(f => {
+      const value = this.__DATA__?.[f.data.name] ?? this[f.data.name];
+      const items = loopar.utils.isJSON(value) ? JSON.parse(value) : (Array.isArray(value) ? value : []);
+      return (Array.isArray(items) ? items : [items]).some(item => item && !item.src && names.has(clean(item.name)));
+    }) || null;
+  }
+
+  /**
+   * Uploads must match their field: its `accept` list (".pdf", "image/*"…)
+   * is enforced here, not only by the browser, and a private field takes
+   * uploads only (no URL imports).
+   */
+  #checkUploads() {
+    const files = this.__DATA__?.__REQ_FILES__ || [];
+    for (const file of files) {
+      const field = this.uploadFieldOf(file);
+      if (field && !acceptsFile(field.data.accept, file)) {
+        loopar.throw(`${field.data.label || field.data.name}: this type of file is not accepted.`);
+      }
+    }
+    for (const field of this.#fileFields().filter(f => isTrue(f.data.private))) {
+      const value = this.__DATA__?.[field.data.name];
+      const items = loopar.utils.isJSON(value) ? JSON.parse(value) : [];
+      if ((Array.isArray(items) ? items : [items]).some(item => item?.importPending)) {
+        loopar.throw(`${field.data.label || field.data.name}: private files can only be uploaded, not imported from a URL.`);
+      }
+    }
+  }
+
   /** Import one URL via File Manager `remoteImport` (mode reference/download). Returns the ref or null. */
   async _processRemoteFile(remote, app = null) {
     if (!remote || !remote.url) return null;
@@ -553,8 +606,14 @@ export default class CoreDocument {
   }
 
   /** Upload one binary via File Manager (active driver). Returns the ref or null. `app` = scope. */
-  async _processFile(file, app = null) {
+  async _processFile(file, app = null, { private: isPrivate = false, owner = null } = {}) {
     const fileManager = await loopar.newDocument("File Manager");
+    // The name the client listed in the field value (before any renaming).
+    const uploadedAs = String(file?.originalname ?? '');
+    if (isPrivate) {
+      fileManager.visible = 'private';
+      fileManager.owner = owner;
+    }
     fileManager.reqUploadFile = file;
     if (app) fileManager.app = app;
     await fileManager.save();
@@ -563,6 +622,7 @@ export default class CoreDocument {
       const ref = JSON.parse(fileManager.file_ref || '[{}]')[0] || {};
       if (ref.src) {
         return {
+          uploadedAs: fileManager.normalizeFileName(Buffer.from(uploadedAs, 'latin1').toString('utf8')),
           name: fileManager.name,
           src: ref.src,
           previewSrc: ref.previewSrc,
@@ -583,7 +643,9 @@ export default class CoreDocument {
    * objects (missing `src`) are touched.
    */
   async #patchUploadedFileRefs(uploadedRefs) {
-    const byName = new Map(uploadedRefs.map(r => [r.name, r]));
+    // Keyed by the name the client listed: a stored file may have been renamed
+    // (collision, private token) — the value keeps the visible name, gets the src.
+    const byName = new Map(uploadedRefs.map(r => [r.uploadedAs || r.name, r]));
 
     const isFileRefShape = (obj) =>
       obj && typeof obj === 'object' && !Array.isArray(obj)
@@ -720,6 +782,12 @@ export default class CoreDocument {
       await loopar.db.deleteRow(this.__ENTITY__.name, this.__DOCUMENT_NAME__, sofDelete);
     });
     console.log(["Deleting", this.__ENTITY__.name, this.name]);
+
+    // Deleted for good (not a restorable soft delete): its private files go too.
+    if (this.#fileFields().some(f => isTrue(f.data.private))
+      && !await loopar.db.qx()(this.__ENTITY__.name).where({ name: this.__DOCUMENT_NAME__ }).first()) {
+      await purgePrivateFiles(this.__ENTITY__.name, this.__DOCUMENT_NAME__);
+    }
 
     await this.trigger('afterDelete', this);
   }

@@ -5,6 +5,7 @@ import { loopar } from '../loopar.js';
 import { Op } from 'db-env';
 import { CREATED_BY_COLUMN } from '../global/audit.js';
 import { requestOwnerFilter } from '../auth/record-scope.js';
+import { clampPage } from './list-state.js';
 
 /** The entity a select links to, or null for inline options. */
 function linkedEntity(options) {
@@ -121,7 +122,7 @@ export default class BaseDocument extends CoreDocument {
     }
   }
 
-  async getList({ fields = null, filters = {}, q = null, rowsOnly = false, unscoped = false } = {}) {
+  async getList({ fields = null, filters = {}, q = null, page = null, rowsOnly = false, unscoped = false } = {}) {
     if (this.__ENTITY__.is_single) {
       return loopar.throw({
         code: 404,
@@ -130,7 +131,7 @@ export default class BaseDocument extends CoreDocument {
     }
 
     const pagination = {
-      page: loopar.getPage(this.__ENTITY__.name),
+      page: page || loopar.getPage(this.__ENTITY__.name),
       pageSize: 10,
       totalPages: 4,
       totalRecords: 1,
@@ -155,6 +156,7 @@ export default class BaseDocument extends CoreDocument {
     
     pagination.totalRecords = await this.records(condition);
     pagination.totalPages = Math.ceil(pagination.totalRecords / pagination.pageSize);
+    pagination.page = clampPage(pagination.page, pagination.totalPages);
     const selfPagination = JSON.parse(JSON.stringify(pagination));
     loopar.db.pagination = pagination;
 
@@ -163,11 +165,6 @@ export default class BaseDocument extends CoreDocument {
     // Only when the table has it: child/static entities are not auditable and
     // an app not yet updated lacks the column.
     const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, "id", ...(await this.#ownerColumn())], condition);
-
-    if (rows.length === 0 && pagination.page > 1) {
-      loopar.setPage(this.__ENTITY__.name, 1);
-      return await this.getList({ fields, filters, q, rowsOnly, unscoped });
-    }
 
     return {...(rowsOnly ? {} : await this.__meta__(false)), ...{
         labels: this.getFieldListLabels(),
@@ -179,7 +176,7 @@ export default class BaseDocument extends CoreDocument {
     };
   }
 
-  async getListToForm({ fields = null, filters = {}, q = null, rowsOnly = false, unscoped = false } = {}) {
+  async getListToForm({ fields = null, filters = {}, q = null, page = null, rowsOnly = false, unscoped = false } = {}) {
     if (this.__ENTITY__.is_single) {
       return loopar.throw({
         code: 404,
@@ -188,7 +185,7 @@ export default class BaseDocument extends CoreDocument {
     }
 
     const pagination = {
-      page: loopar.getPage(this.__ENTITY__.name),
+      page: page || loopar.getPage(this.__ENTITY__.name),
       pageSize: 10,
       totalPages: 4,
       totalRecords: 1,
@@ -209,6 +206,7 @@ export default class BaseDocument extends CoreDocument {
     pagination.totalRecords = await this.records(condition);
 
     pagination.totalPages = Math.ceil(pagination.totalRecords / pagination.pageSize);
+    pagination.page = clampPage(pagination.page, pagination.totalPages);
     //const selfPagination = JSON.parse(JSON.stringify(pagination));
     loopar.db.pagination = pagination;
     // `__created_by__` rides along (not a visible column) so the client can
@@ -216,11 +214,6 @@ export default class BaseDocument extends CoreDocument {
     // Only when the table has it: child/static entities are not auditable and
     // an app not yet updated lacks the column.
     const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, "id", ...(await this.#ownerColumn())], condition);
-
-    if (rows.length === 0 && pagination.page > 1) {
-      loopar.setPage(this.__ENTITY__.name , 1);
-      return await this.getList({ fields, filters, q, rowsOnly });
-    }
 
     return rows;
   }

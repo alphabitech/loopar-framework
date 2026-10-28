@@ -205,7 +205,11 @@ export function SideNav({ items = [] }) {
     if (typeof window === "undefined") return;
 
     const onKeyDown = (e) => {
-      if (e.ctrlKey && e.key === "k") toogleSidebarNav();
+      // Ctrl/Cmd+K belongs to the command palette; Ctrl/Cmd+B toggles the sidebar.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toogleSidebarNav();
+      }
       if (e.key === "Escape") setOpenNav();
     };
 

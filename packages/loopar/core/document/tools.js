@@ -233,27 +233,29 @@ async function preloadCollection(field, requestContext) {
     const tag = q.tag ?? field.data.tag;
     const category = q.category ?? field.data.category;
 
+    const fields = ref.__FIELDS__ || [];
+    const has = (name) => fields.some(f => (f?.data?.name ?? f) === name);
+
     const filter = { published: 1 };
     if (app) filter.app = app;
-    if (featuredOnly) filter.featured = 1;
-    if (category) filter.category = String(category).trim();
+    if (featuredOnly && has("featured")) filter.featured = 1;
+    if (category && has("category")) filter.category = String(category).trim();
 
     let qb = loopar.db.qx()(entityName)
       .select("*")
       .where(filter)
       .whereNull("__deleted_at__");
-    if (tag) qb = qb.where("tags", "like", `%${String(tag).trim()}%`);
+    if (tag && has("tags")) qb = qb.where("tags", "like", `%${String(tag).trim()}%`);
 
     let countQb = loopar.db.qx()(entityName)
       .count({ count: "id" })
       .where(filter)
       .whereNull("__deleted_at__");
-    if (tag) countQb = countQb.where("tags", "like", `%${String(tag).trim()}%`);
+    if (tag && has("tags")) countQb = countQb.where("tags", "like", `%${String(tag).trim()}%`);
 
-    const orderBy = [{ column: "featured", order: "desc" }];
-    const fields = ref.__FIELDS__ || [];
-    const hasOrder = fields.some(f => f?.data?.name === "order");
-    if (hasOrder) orderBy.push({ column: "order", order: "asc" });
+    const orderBy = [];
+    if (has("featured")) orderBy.push({ column: "featured", order: "desc" });
+    if (has("order")) orderBy.push({ column: "order", order: "asc" });
     orderBy.push({ column: "__created_at__", order: "desc" });
 
     const [rows, countRow] = await Promise.all([
@@ -318,7 +320,10 @@ async function preloadCollectionView(field, requestContext) {
 
     if (row) {
       field.data.preloaded = { mode: "detail", item: parseRowTags(row), fields: schema };
-      if (requestContext) requestContext._anyDetailMatched = true;
+      if (requestContext) {
+        requestContext._anyDetailMatched = true;
+        requestContext._detailTitle ??= row.title || null;
+      }
       return;
     }
     // Slug didn't resolve — controller will surface a 404.

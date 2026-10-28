@@ -121,7 +121,17 @@ export function WorkspaceProvider({
     }
   }, [user, primary]);
 
-  const metaCacheRef = useRef({});
+  // Seeded with the server-rendered document: the first navigation on the same
+  // path (a list search, paging) then fetches data only and keeps the view
+  // mounted instead of swapping it for a fresh one (inputs lost their focus).
+  const metaCacheRef = useRef(null);
+  if (metaCacheRef.current === null) {
+    metaCacheRef.current = {};
+    for (const doc of Object.values(props.Documents || {})) {
+      const instance = doc?.Document?.instance;
+      if (instance && doc.key) metaCacheRef.current[instance] = { key: doc.key, Document: doc.Document };
+    }
+  }
   const lastFetchedPath = useRef(null);
   const fetchIdRef = useRef(0);
   const isInitialMount = useRef(true);
@@ -136,8 +146,8 @@ export function WorkspaceProvider({
 
   // Navigation for consumers: primary → the real URL/router; a modal advances
   // its own in-memory path, never touching the browser URL.
-  const navigate = useCallback((to) => {
-    if (primary) return loopar.navigate(to);
+  const navigate = useCallback((to, options) => {
+    if (primary) return loopar.navigate(to, options);
     setPathname(typeof to === "string" ? to : String(to ?? ""));
   }, [primary]);
 
@@ -216,10 +226,17 @@ export function WorkspaceProvider({
     startTransition(() => {
       setDocuments(prevDocuments => {
         const next = {};
+        // The same document again (same key: a list search, paging, a refresh)
+        // updates its slot and keeps its View component, so React keeps the
+        // view mounted (state, focus) instead of remounting it. The server-
+        // rendered document sits under another map key with its own View.
+        let slot = entry.key;
         for (const [k, doc] of Object.entries(prevDocuments)) {
+          if (doc.key === entry.key) slot = k;
           next[k] = doc.active ? { ...doc, active: false } : doc;
         }
-        next[entry.key] = { ...entry, active: true };
+        const previous = prevDocuments[slot];
+        next[slot] = { ...entry, ...(previous?.View ? { View: previous.View } : {}), active: true };
         return next;
       });
     });

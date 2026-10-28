@@ -35,7 +35,11 @@ export const SaveButton = ({ variant = "default" }) => {
 function goToTarget(Document) {
   const { Entity = {}, data = {} } = Document;
   if (Document.isNew || !data.name) return null;
-  if (["Entity", "Builder"].includes(Entity.name)) return `/desk/${data.name}/${data.is_single ? "update" : "list"}`;
+  if (["Entity", "Builder"].includes(Entity.name)) {
+    // Child entities have no route of their own: rows live inside the parent form.
+    if (data.is_child === 1 || data.is_child === true) return null;
+    return `/desk/${data.name}/${data.is_single ? "update" : "list"}`;
+  }
   if (["Page Builder", "View Builder", "Print Format Builder", "Desk Page Builder"].includes(Entity.name)) return `/desk/${data.name}/view`;
   if (Entity.name === "Dashboard") return `/desk/Dashboard/view?name=${encodeURIComponent(data.name)}`;
   return null;

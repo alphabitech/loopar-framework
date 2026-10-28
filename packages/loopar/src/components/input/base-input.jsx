@@ -124,7 +124,7 @@ const BaseInput = (props) => {
     
     try {
       const validation = dataInterface(
-        { data: state.data }, 
+        { element, data: state.data },
         fieldRef.current.value
       ).validate();
       
@@ -140,7 +140,7 @@ const BaseInput = (props) => {
       console.error("Validation error:", error);
       return { valid: true };
     }
-  }, [state.data, state.isInvalid, parentHidden]);
+  }, [element, state.data, state.isInvalid, parentHidden]);
 
   useEffect(() => {
     debouncedOnChangeRef.current = debounce((event) => {
@@ -316,6 +316,13 @@ BaseInput.metaFields = () => {
           data: {
             label: "Internal",
             description: "Contact form entities only: staff-only field, never shown on the public form or accepted from it."
+          }
+        },
+        required_on_website: {
+          element: SWITCH,
+          data: {
+            label: "Required on website",
+            description: "Contact form entities only: the visitor must fill it (a checkbox must be checked, e.g. a consent); staff may leave it empty in the desk."
           }
         }
       },

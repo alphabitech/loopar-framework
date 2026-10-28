@@ -137,6 +137,16 @@ export default class Router extends Middleware {
       });
     }
 
+    // Child entities (form_table rows) have no controller: they are read and
+    // written only through their parent document. Refuse any direct route,
+    // Administrator included, before trying to resolve a controller file.
+    if (ref.is_child) {
+      loopar.throw({
+        code: 404,
+        message: `Document ${ref.__NAME__} not found.`
+      });
+    }
+
     params.document = ref.__NAME__;
 
     return await this.executeController(req, res, next, params, ref);
@@ -159,13 +169,8 @@ export default class Router extends Middleware {
 
       const data = RouterUtils.prepareFileData(body, req.files);
 
-      // List state (filters + page) persisted per Document. Readers use the
-      // bare `${document}q` / `${document}page` keys (document.js,
-      // base-document.js, base-controller.js)
-      if(data && (data.q || data.page)){
-        loopar.session.set(`${req.__WORKSPACE_NAME__}${params.document}q`, data.q || {});
-        loopar.session.set(`${req.__WORKSPACE_NAME__}${params.document}page`, data.page || 1);
-      }
+      // List state (filters + page) travels in the URL query, read through
+      // document/list-state.js — nothing is persisted per user.
 
       // Filter parsedQuery to avoid shadowing controller methods. A URL like
       // `?redirect=/desk` would otherwise assign `this.redirect = "/desk"` and
@@ -178,9 +183,12 @@ export default class Router extends Middleware {
         if (!reservedNames.has(k)) safeSpreadQuery[k] = v;
       }
 
+      // Route params win over the query: a list filtered by a field named
+      // `document`, `action` or `name` (`/desk/Comment/list?document=Invoice`,
+      // a module page `/desk/Core?name=user`) must not retarget the controller.
       const Controller = new C({
-        ...params,
         ...safeSpreadQuery,
+        ...Object.fromEntries(Object.entries(params).filter(([, v]) => v != null)),
         query: parsedQuery,
         data,
         body: data,

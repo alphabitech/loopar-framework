@@ -8,6 +8,7 @@ import { verifyWorkspaceToken } from '../../auth/workspace-token.js';
 import { getTenant } from './request-context.js';
 import WorkspaceController from '../../controller/workspace-controller.js';
 import { getHttpError } from '../../global/http-errors.js';
+import { mayReadPrivateFile } from '../../global/private-files.js';
 import BaseController from '../../controller/base-controller.js';
 import { merge } from 'es-toolkit/object';
 import rateLimit from 'express-rate-limit';
@@ -262,6 +263,9 @@ export class Middleware {
    */
   setupNotFoundSourceMiddleware() {
     return async (req, res, next) => {
+      if (req._parsedUrl.pathname.startsWith('/assets/private/')) {
+        return await this.#servePrivateAsset(req, res);
+      }
       if (!req.isAssetUrl) return next();
 
       try {
@@ -287,30 +291,75 @@ export class Middleware {
   }
 
   /**
-   * Map a `/assets/{visibility}/...` path back to its real delivery
-   * URL when the binary lives outside the local filesystem.
+   * Map a `/assets/public/...` path back to its real delivery URL when
+   * the binary lives outside the local filesystem.
    *
    * Resolution is filesystem-only: the asset's mirror file
-   * (`{name}.meta.json`) lives in the same roots `express.static`
+   * (`{name}.meta.json`) lives in the same roots `express.static` serves.
    *
    * Scope is intentionally narrow: only URLs under `/assets/public/`
-   * and `/assets/private/` (with an optional `/thumbnails/` segment)
-   * are resolved. Any other 404 stays a 404.
+   * (with an optional `/thumbnails/` segment) are resolved. Any other 404
+   * stays a 404.
    */
   async #resolveRemoteAsset(pathname) {
-    const m = pathname.match(/^\/assets\/(public|private)\/(thumbnails\/)?(.+)$/);
+    // Private files never get here: #servePrivateAsset answers them.
+    const m = pathname.match(/^\/assets\/public\/(thumbnails\/)?(.+)$/);
     if (!m) return null;
-    const visibility = m[1];
-    const isThumb = !!m[2];
-    const filename = decodeURIComponent(m[3]);
+    const isThumb = !!m[1];
+    const filename = decodeURIComponent(m[2]);
     if (!filename || filename.includes('/')) return null;
 
-    // Private files are never served anonymously (locally they aren't served
-    // at all). Without a session, answer the same 404 as a missing file
-    // instead of redirecting to the remote delivery URL.
-    if (visibility === 'private' && !this.#hasSession()) return null;
+    return await this.#resolveFromMirror(filename, 'public', isThumb);
+  }
 
-    return await this.#resolveFromMirror(filename, visibility, isThumb);
+  /**
+   * Private files (`/assets/private/{name}`, `/assets/private/thumbnails/{name}`):
+   * served only to a signed-in user who may open them (see private-files.js:
+   * the record they belong to, soft-deleted records…). Anything else gets the
+   * same 404 as a missing file.
+   */
+  async #servePrivateAsset(req, res) {
+    const notFound = () => res.status(404).set('Content-Type', 'text/html')
+      .send(this.errTemplate({ code: 404, title: "Source not found", description: req.url }));
+
+    const m = req._parsedUrl.pathname.match(/^\/assets\/private\/(thumbnails\/)?([^/]+)$/);
+    if (!m) return notFound();
+    let filename;
+    try { filename = decodeURIComponent(m[2]); } catch { return notFound(); }
+    if (!filename || filename.includes('/') || filename.includes('\\') || filename.startsWith('.')) return notFound();
+    const isThumb = !!m[1];
+
+    const user = this.#hasSession() ? loopar.auth.user() : null;
+    if (!user) return notFound();
+
+    for (const root of loopar.getAssetRoots('private')) {
+      let meta;
+      try { meta = JSON.parse(await fs.promises.readFile(path.join(root, `${filename}.meta.json`), 'utf8')); } catch { continue; }
+      if (!await mayReadPrivateFile(meta, user)) return notFound();
+
+      if ((meta.storage_driver || 'local') !== 'local') {
+        const target = isThumb ? (meta.previewSrc || meta.src) : meta.src;
+        return target ? res.redirect(302, target) : notFound();
+      }
+
+      const filePath = path.join(root, isThumb ? 'thumbnails' : '', filename);
+      if (!fs.existsSync(filePath)) return notFound();
+
+      const type = String(meta.type || '');
+      const inline = type === 'image' || filename.toLowerCase().endsWith('.pdf');
+      res.set({
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+        // Whatever the file holds, it never runs as a page of this site.
+        'Content-Security-Policy': "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'",
+      });
+      // The visible name, without the random prefix of the stored one.
+      const shown = filename.replace(/^[0-9a-f]{24}-/, '');
+      res.attachment(shown);
+      if (inline) res.set('Content-Disposition', `inline; filename="${encodeURIComponent(shown)}"`);
+      return res.sendFile(filePath);
+    }
+    return notFound();
   }
 
   /** True when the request carries a valid login session (tenant context). */

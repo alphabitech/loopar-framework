@@ -28,12 +28,8 @@ export default class BaseController extends CoreController {
   async actionList() {
     if (this.query?.board !== undefined) return await this.#boardColumn();
 
-    const data = Object.entries({ ...loopar.getQ(this.document)}).reduce((acc, [key, value]) => {
-      if (value && (value.toString()).length > 0 && value !== 0) {
-        acc[key] = `${value}`;
-      }
-      return acc;
-    }, {});
+    // Filters come from the URL query (document/list-state.js), empties already dropped.
+    const data = loopar.getQ(this.document);
 
     // Scope 'own' is applied by the model (BaseDocument.getList via
     // auth/record-scope.js), so a controller overriding this action can't skip it.
@@ -43,7 +39,8 @@ export default class BaseController extends CoreController {
       return {
         instance: this.getInstance(),
         rows: list.rows,
-        pagination: list.pagination
+        pagination: list.pagination,
+        q: list.q || {}
       }
     }
 
@@ -62,7 +59,12 @@ export default class BaseController extends CoreController {
 
     if (this.hasData()) {
       await document.save();
-      return { ...this.redirect('update?name=' + document.name), name: document.name };
+      return {
+        ...this.redirect('update?name=' + document.name, {
+          notify: `${document.__ENTITY__.name} ${document.name} created successfully`,
+        }),
+        name: document.name,
+      };
     } else {
       if(this.preloaded == true) {
         return await document.values();
@@ -194,7 +196,7 @@ export default class BaseController extends CoreController {
     const document = await loopar.getDocument(this.document, this.name);
     await document.delete();
 
-    return this.redirect('list');
+    return this.redirect('list', { notify: `${this.document} ${this.name} deleted successfully` });
   }
 
   async actionBulkDelete() {
@@ -226,8 +228,7 @@ export default class BaseController extends CoreController {
 
   async fetchAudit(documentName) {
     const filters = { document: this.commentTarget(), document_name: documentName };
-    loopar.setPage(HISTORY_TABLE, parseInt(this.query?.page) || 1);
-    const list = await loopar.getList(HISTORY_TABLE, { fields: AUDIT_FIELDS, filters });
+    const list = await loopar.getList(HISTORY_TABLE, { fields: AUDIT_FIELDS, filters, page: parseInt(this.query?.page) || 1 });
     return list.rows || [];
   }
 

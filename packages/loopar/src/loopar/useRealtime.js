@@ -1,37 +1,44 @@
 import { LoopSocket } from "@services/realtime/LoopSocket";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
+/**
+ * Subscribes to a realtime event. `event` is `room:action` or a bare action
+ * (room `__global__`). The handler is read through a ref, so an inline
+ * function does not re-subscribe (leave + join) on every render.
+ */
 export function useRealtime(event, handler, { ignoreSelf = false } = {}) {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  const enabled = !!handler;
+
   useEffect(() => {
-    if (!event || !handler) return;
+    if (!event || !enabled) return;
 
     const [room, action] = event.includes(":")
       ? event.split(":")
       : ["__global__", event];
 
     let socket = null;
-    let listener = null;
     let released = false;
+
+    const listener = (payload) => {
+      if (ignoreSelf && payload?.user === window.__user__) return;
+      handlerRef.current?.(payload);
+    };
 
     LoopSocket.onReady((s) => {
       if (released) return;
       socket = s;
       LoopSocket.join(room);
-
-      listener = (payload) => {
-        if (ignoreSelf && payload?.user === window.__user__) return;
-        handler(payload);
-      };
-
       s.on(action, listener);
     });
 
     return () => {
       released = true;
       if (socket) {
-        if (listener) socket.off(action, listener);
+        socket.off(action, listener);
         LoopSocket.leave(room);
       }
     };
-  }, [event, handler, ignoreSelf]);
+  }, [event, enabled, ignoreSelf]);
 }

@@ -126,6 +126,13 @@ class FileManage {
     });
   }
 
+  async deleteFile(destiny, name, ext = 'js') {
+    const filePath = loopar.makePath(loopar.pathRoot, destiny, this.fileName(name, ext));
+    if (!existsSync(filePath)) return false;
+    await fs.promises.unlink(filePath);
+    return true;
+  }
+
   async deleteFolder(destiny, name) {
     const folderPath = loopar.makePath(loopar.pathRoot, destiny, name);
 

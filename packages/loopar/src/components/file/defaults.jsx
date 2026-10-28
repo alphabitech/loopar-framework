@@ -86,6 +86,8 @@ export const validateFile = (file, acceptedTypes = "*/*") => {
 
     if (acceptedType.startsWith('.')) {
       const extWithoutDot = acceptedType.slice(1).toLowerCase();
+      // ".pdf" accepts a file named *.pdf, whatever MIME family it reports.
+      if (extWithoutDot === String(fileExtension || '').toLowerCase()) return;
       const mimeExtension = fileType.split('/')[1]?.toLowerCase();
       
       const extensionMap = {

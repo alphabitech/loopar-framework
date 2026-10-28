@@ -18,10 +18,10 @@ packages/*/node_modules/
 package-lock.json
 npm-debug.log*
 
-# yarn
-yarn.lock
+# yarn — yarn.lock and .yarnrc.yml are versioned (same dependency tree and
+# nodeLinker everywhere); .yarn/ (cache, install state) stays local.
 .yarn/
-.yarnrc.yml
+.pnp.*
 yarn-debug.log*
 yarn-error.log*
 
@@ -79,6 +79,8 @@ yarn-error.log*
 .pnpm-debug.log*
 *.err
 /.*
+# Yarn's config is shared (see the yarn section above).
+!/.yarnrc.yml
 
 # -----------------------------------
 # 🖥️ IDE CONFIGURATIONS

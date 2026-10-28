@@ -20,6 +20,10 @@ class _LoopSocket {
   constructor() {
     this._socket = null;
     this._siteName = null;
+    // room → number of subscribers. The server keeps ONE membership per
+    // socket, so the room is joined on the first subscriber and left only
+    // when the last one goes (a single `leave` used to drop every listener).
+    this._rooms = new Map();
   }
 
   onReady(callback) {
@@ -66,6 +70,9 @@ class _LoopSocket {
 
       this._socket.on("connect", () => {
         console.log(`[LoopSocket] connected  site=${siteName}  id=${this._socket.id}`);
+        // Rooms live on the server-side socket: a reconnect starts empty.
+        // Join every room still subscribed (covers the first connect too).
+        if (this._rooms.size) this._socket.emit("join", [...this._rooms.keys()]);
         (this._queue || []).forEach(cb => cb(this._socket));
         this._queue = [];
       });
@@ -94,11 +101,29 @@ class _LoopSocket {
    * @param {string|string[]} channels
    */
   join(channels) {
-    this.get()?.emit("join", channels);
+    const fresh = [];
+    for (const ch of [].concat(channels)) {
+      const n = this._rooms.get(ch) || 0;
+      this._rooms.set(ch, n + 1);
+      if (n === 0) fresh.push(ch);
+    }
+    // While disconnected the "connect" handler joins them all.
+    if (fresh.length && this._socket?.connected) this._socket.emit("join", fresh);
   }
-  
+
+  /** Releases one subscription per channel; the room is left with its last subscriber. */
   leave(channels) {
-    this.get()?.emit("leave", channels);
+    const gone = [];
+    for (const ch of [].concat(channels)) {
+      const n = this._rooms.get(ch) || 0;
+      if (n <= 1) {
+        if (n === 1) gone.push(ch);
+        this._rooms.delete(ch);
+      } else {
+        this._rooms.set(ch, n - 1);
+      }
+    }
+    if (gone.length && this._socket?.connected) this._socket.emit("leave", gone);
   }
 
   disconnect() {
@@ -108,4 +133,6 @@ class _LoopSocket {
   }
 }
 
-export const LoopSocket = new _LoopSocket();
+// One instance per page even if the bundler loads this module twice (an
+// aliased and a relative import resolved to two URLs → two sockets).
+export const LoopSocket = (globalThis.__LOOPAR_SOCKET__ ??= new _LoopSocket());

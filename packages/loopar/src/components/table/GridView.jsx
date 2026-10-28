@@ -113,7 +113,7 @@ export function GridView(props) {
     Document,
   } = useTable();
 
-  const { hasSearchForm, hasSelectAll, gridTemplate } = useViewOptions();
+  const { hasSearchForm, hasSelectAll, gridTemplate, gridMinWidth = "22rem" } = useViewOptions();
 
   const rows = props.rows || useTable().rows || [];
   const Entity = Document?.Entity || {};
@@ -161,7 +161,7 @@ export function GridView(props) {
           )}
         </div>
       )}
-      <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(100%,22rem),1fr))]">
+      <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${gridMinWidth}), 1fr))` }}>
         {rows.length ? rows.map((row) => (
           gridTemplate ? (
             <Fragment key={row.name}>{gridTemplate(row, defaultAction(row))}</Fragment>

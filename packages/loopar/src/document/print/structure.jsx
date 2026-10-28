@@ -32,7 +32,17 @@ function PrintImages({ value }) {
 function PrintFiles({ value }) {
   const files = (fileManager.getMappedFiles(value) || []).filter(Boolean);
   if (!files.length) return null;
-  return <span>{files.map((f) => f.name || f.src).join(", ")}</span>;
+  // Linked: on screen the file opens (private files check access on the server).
+  return (
+    <span>
+      {files.map((f, i) => (
+        <span key={(f.src || f.name) + i}>
+          {i > 0 && ", "}
+          {f.src ? <a href={f.src} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">{f.name || f.src}</a> : f.name}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 function PrintKeyValue({ value }) {

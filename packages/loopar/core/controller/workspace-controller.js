@@ -25,6 +25,7 @@ export default class WorkspaceController extends AuthController {
 
     if (workspace === "desk") {
       WORKSPACE.menu_data =  await WorkspaceController.sidebarData();
+      WORKSPACE.search_index = WorkspaceController.deskSearchIndex();
     } else if (workspace === "web" || workspace === "kiosk") {
       // Kiosk pages are web pages without the site's navigation: same app (logo, theme).
       WORKSPACE.web_app = loopar.webApp;
@@ -201,6 +202,37 @@ export default class WorkspaceController extends AuthController {
       if (modules.length) apps.push({ ...app, home, modules, dashboards: dashboards[app.name] || [] });
     }
     return apps;
+  }
+
+  /**
+   * Entries of the desk command palette (Ctrl/Cmd+K) for the current user:
+   * every entity of the installed apps the user may reach, with the route it
+   * opens. Lists get "list" + "new", singles open their form, desk pages and
+   * reports their view. Web pages, controllers, print formats and child
+   * tables are not desk destinations.
+   */
+  static deskSearchIndex(username = loopar.auth.user()) {
+    const can = (doc, action) => PermissionManager.can(doc, action, username);
+    const skipBuilders = new Set(['Page Builder', 'Controller Builder', 'Print Format Builder']);
+    const viewTypes = new Set(['Desk Page', 'Report', 'View']);
+
+    const items = [];
+    for (const ref of Object.values(loopar.getRefs() || {})) {
+      const entity = ref.__NAME__;
+      if (!entity || ref.is_child || skipBuilders.has(ref.__ENTITY__) || ref.__TYPE__ === 'Controller') continue;
+
+      const base = { entity, app: ref.__APP__ };
+      if (ref.__ENTITY__ === 'Desk Page Builder' || viewTypes.has(ref.__TYPE__)) {
+        if (can(entity, 'view')) items.push({ ...base, kind: 'page', link: `/desk/${entity}/view` });
+      } else if (ref.is_single) {
+        if (can(entity, 'update')) items.push({ ...base, kind: 'single', link: `/desk/${entity}/update` });
+      } else {
+        if (can(entity, 'list')) items.push({ ...base, kind: 'list', link: `/desk/${entity}/list` });
+        if (can(entity, 'create')) items.push({ ...base, kind: 'new', link: `/desk/${entity}/create` });
+      }
+    }
+
+    return items;
   }
 
   static async portalMenuData(username) {

@@ -31,12 +31,8 @@ export default class EntityController extends BaseController {
   }
 
   async actionList() {
-    const data = Object.entries({ ...loopar.getQ(this.document)}).reduce((acc, [key, value]) => {
-      if (value && (value.toString()).length > 0 && value !== 0) {
-        acc[key] = `${value}`;
-      }
-      return acc;
-    }, {});
+    // Filters come from the URL query (document/list-state.js), empties already dropped.
+    const data = loopar.getQ(this.document);
 
     const list = await loopar.getList(this.document, { data, q: (data && Object.keys(data).length > 0) ? data : null });
 
@@ -45,15 +41,17 @@ export default class EntityController extends BaseController {
       return {
         ...row,
         is_single: ref?.is_single || 0,
+        is_child: ref?.is_child || 0,
         type: ref?.__ENTITY__ || "Entity",
       };
     });
 
-    if(this.hasData()) {
+    if(this.preloaded == true) {
       return {
+        instance: this.getInstance(),
         rows: rows,
         pagination: list.pagination,
-        q: data,
+        q: list.q || {},
       }
     }
 

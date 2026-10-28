@@ -104,6 +104,7 @@ export default class Entity extends BaseDocument {
       this.validateUniqueEntityName();
 
       if (!loopar.installing) {
+        await this.validateStructuralFlags();
         await this.validateAppVersion();
         await this.validateLinkedDocument(SELECT);
         await this.validateLinkedDocument(FORM_TABLE);
@@ -414,6 +415,96 @@ export default class Entity extends BaseDocument {
     }
   }
 
+  /**
+   * is_child, is_single and is_virtual decide where an entity's data lives
+   * (child rows under a parent, Document Single Values, or no table at all).
+   * They can only be combined coherently, and only changed while the data
+   * that would be stranded by the change does not exist.
+   */
+  async validateStructuralFlags() {
+    const flag = (v) => (v === 1 || v === true || v === "1") ? 1 : 0;
+    const next = {
+      is_child: flag(this.is_child),
+      is_single: flag(this.entityIsSingle()),
+      is_virtual: flag(this.is_virtual),
+    };
+
+    if (next.is_child && next.is_single) loopar.throw("A child entity can not be single.");
+    if (next.is_child && next.is_virtual) loopar.throw("A child entity can not be virtual: its rows are stored in its own table.");
+
+    if (this.__IS_NEW__) return;
+
+    // Refs are built from the saved records: they hold the current flags.
+    const ref = loopar.getRef(this.name, false);
+    if (!ref) return;
+
+    const prev = {
+      is_child: flag(ref.is_child),
+      is_single: flag(ref.is_single),
+      is_virtual: flag(ref.is_virtual),
+    };
+
+    const tableHasRows = async () => {
+      if (!(await loopar.db.hasTable(this.name))) return false;
+      return !!(await loopar.db.qx()(this.name).first("id"));
+    };
+
+    const changed = (key) => prev[key] !== next[key];
+    const errors = [];
+
+    if (changed("is_child")) {
+      if (next.is_child) {
+        if (!prev.is_single && !prev.is_virtual && await tableHasRows()) {
+          errors.push(`${this.name} already has records without a parent document: it can only become a child entity while it is empty.`);
+        }
+      } else {
+        const parents = await this.formTableParents();
+        if (parents.length) {
+          errors.push(`${this.name} is used as a child table in ${parents.join(", ")}: remove it from there before making it a regular entity.`);
+        }
+      }
+    }
+
+    if (changed("is_single")) {
+      if (next.is_single) {
+        if (!prev.is_virtual && await tableHasRows()) {
+          errors.push(`${this.name} already has records: it can only become single while its table is empty.`);
+        }
+      } else if (await loopar.db.count("Document Single Values", { document: this.name }) > 0) {
+        errors.push(`${this.name} already has saved values: it can only stop being single while it has none.`);
+      }
+    }
+
+    if (changed("is_virtual") && next.is_virtual && !prev.is_single && await tableHasRows()) {
+      errors.push(`${this.name} already has records: it can only become virtual while its table is empty.`);
+    }
+
+    errors.length && loopar.throw(errors.join("<br/>"));
+  }
+
+  /** Entities with a form_table field whose options point to this entity, as "Entity (field)". */
+  async formTableParents() {
+    const parents = [];
+    const target = this.name.toLowerCase();
+
+    // All refs, not only installed apps: a parent may ship in an app that is
+    // not installed on this tenant yet (getValue then simply finds nothing).
+    for (const ref of Object.values(loopar.getRefs(null, true) ?? {})) {
+      if (!ref.__FORM_TABLE_FIELDS__?.length || ref.__NAME__ === this.name) continue;
+
+      const structure = await loopar.db.getValue(ref.__ENTITY__, "doc_structure", ref.__NAME__, { ifNotFound: null });
+      const fields = loopar.utils.fieldList(loopar.utils.JSONparse(structure, []));
+
+      for (const field of fields) {
+        if (field.element !== FORM_TABLE) continue;
+        const options = String(field.data?.options || "").split("\n")[0].split(":")[0].trim();
+        if (options.toLowerCase() === target) parents.push(`${ref.__NAME__} (${field.data.name})`);
+      }
+    }
+
+    return parents;
+  }
+
   async validateLinkedDocument(type) {
     const errors = [];
     const fields = this.clientFieldsList();
@@ -549,6 +640,14 @@ export default class Entity extends BaseDocument {
       EXTENDS: extendDocument
     });
     /*Entity Model*/
+
+    // Child entities have no controller: their rows are only reachable through
+    // the parent document (the router refuses them). Turning an existing
+    // entity into a child removes its controller.
+    if (this.is_child) {
+      await fileManage.deleteFile(documentPath, `${this.name}Controller`);
+      return;
+    }
 
     const extendController = type === "Contact Form"
       ? "BaseContactFormController"

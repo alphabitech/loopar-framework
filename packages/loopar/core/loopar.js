@@ -7,6 +7,7 @@ import * as dateUtils from "./global/date-utils.js";
 import { simpleGit } from 'simple-git';
 import Auth from './auth/Auth.js';
 import { Document } from './loopar/document.js';
+import { listFilters, listPage } from './document/list-state.js';
 import { tailwinInit } from './loopar/tailwindbase.js';
 import { Server } from './server/server.js';
 import { fileManage } from './file-manage.js';
@@ -310,16 +311,14 @@ export class Loopar extends Document {
     return getRequest()?.__WORKSPACE_NAME__;
   }
 
+  /** Page of `document`'s list, from the current request URL (see document/list-state.js). */
   getPage(document){
-    return parseInt(this.session.get(`${this.workspace}${document}page`) || 1)
+    return listPage(document);
   }
 
-  getQ(document){
-    return this.session.get(`${this.workspace}${document}q`) || {};
-  }
-
-  setPage(document, page){
-    this.session.set(`${this.workspace}${document}page`, page)
+  /** Filters of `document`'s list, from the current request URL (see document/list-state.js). */
+  getQ(document, options){
+    return listFilters(document, options);
   }
 
   get session() {

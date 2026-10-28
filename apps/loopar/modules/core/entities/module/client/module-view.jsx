@@ -1,54 +1,73 @@
-
 'use strict';
-import {useEffect, useState} from "react";
-import { useDocument } from "@loopar/document";
-import EntityList from "../../entity/client/entity-list";
+
 import { useLocation } from 'react-router';
-import {Link} from "@link"
+import { useDocument } from "@loopar/document";
+import { Link } from "@link";
+import { cn } from "@cn/lib/utils";
+import { PlusIcon } from "lucide-react";
+import EntityList from "../../entity/client/entity-list";
 
-const usePathname = () => {
-  return useLocation();
-};
+/** The module is fixed by the route (`/desk/<Module>`): no point searching by it. */
+const HIDDEN_SEARCH_FIELDS = ["module"];
 
-const ButtonType = ({action, label, actions, current}) => {
-  const pathname = usePathname();
-  const [active, setActive] = useState(false);
+export const config = { onlyGrid: true, hasSearchForm: true, hiddenSearchFields: HIDDEN_SEARCH_FIELDS };
 
-  useEffect(() => {
-    const type = pathname.search.split("=")[1];
-    setActive(decodeURIComponent(type || current));
-  } , [pathname]);
+/** Segmented tabs, one per document type present in the module, with its count. */
+function TypeTabs({ types, current }) {
+  if (types.length < 2) return null;
 
   return (
-    <Link
-      award={false}
-      variant={(active === action)? "secondary" : "ghost"}
-      className={`${active === action ? "border border-primary/60" : ""}`}
-      to={`?type=${action}`}
-    >
-      {label}
-    </Link>
+    <nav aria-label="Document types" className="mb-4 flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-muted/60 p-1">
+      {types.map((t) => {
+        const active = t.name === current;
+        return (
+          <Link
+            key={t.name}
+            award={false}
+            bare
+            to={`?type=${encodeURIComponent(t.name)}`}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {t.label}
+            <span className={cn(
+              "rounded-full px-1.5 text-xs tabular-nums",
+              active ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+            )}>
+              {t.count}
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
-const DISABLED_SEARCH_FIELDS = ["module"];
-
-export const config = { onlyGrid: true, hasSearchForm: true, disabledSearchFields: DISABLED_SEARCH_FIELDS };
-
 export default function ModuleView() {
   const { Document } = useDocument();
+  const { search } = useLocation();
   const types = Document?.__TYPES__ || [];
+  const current = new URLSearchParams(search).get("type") || Document?.__TYPE__;
+  const currentType = types.find((t) => t.name === current);
 
-  const actions = Object.fromEntries(types.map((action, index) => [
-    action.name,
-    <ButtonType
-      key={index}
-      action={action.name}
-      label={action.label}
-      actions={types}
-      current={Document.__TYPE__}
-    />,
-  ]));
+  // "New" creates a document of the active tab's type (the list itself is presented as "Module").
+  const primaryAction = currentType && (
+    <Link
+      variant="default"
+      className="text-primary-foreground hover:text-primary-foreground"
+      to={`/desk/${currentType.name}/create`}
+    >
+      <PlusIcon className="pr-1" />
+      New {currentType.singular}
+    </Link>
+  );
 
-  return <EntityList actions={actions} />;
+  return (
+    <EntityList primaryAction={primaryAction}>
+      <TypeTabs types={types} current={current} />
+    </EntityList>
+  );
 }

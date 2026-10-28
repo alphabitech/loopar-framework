@@ -5,17 +5,36 @@ import { BaseDocument, loopar, getRequest } from 'loopar';
 import mime from "mime-types";
 import fs from "fs";
 import path from 'pathe';
+import crypto from 'crypto';
 
 export default class FileManager extends BaseDocument {
   #reqUploadFile = null;
   #remoteImport = null;
   #route = null;
+  #owner = null;
   constructor(props) {
     super(props);
   }
 
   get reqUploadFile() {
     return this.#reqUploadFile;
+  }
+
+  /**
+   * The record a private file belongs to: `{ entity, name, field }`. Written
+   * to the file's sidecar; only users who may view that record can download
+   * the file (see the private asset handler in the router middleware).
+   */
+  set owner(owner) {
+    this.#owner = owner?.entity ? { entity: owner.entity, name: owner.name ?? null, field: owner.field ?? null } : null;
+  }
+
+  get owner() {
+    return this.#owner;
+  }
+
+  get isPrivate() {
+    return this.visible === 'private';
   }
 
   get remoteImport() {
@@ -179,12 +198,21 @@ export default class FileManager extends BaseDocument {
       uploadName = remote.derivedName || this.name;
     }
 
+    // Private files get an unguessable, unique stored name: two people
+    // sending "resume.pdf" must never share (or reuse) one file.
+    if (this.isPrivate) {
+      if (remote) loopar.throw('Private files can only be uploaded, not imported from a URL.');
+      uploadName = `${crypto.randomBytes(12).toString('hex')}-${uploadName}`;
+      this.#reqUploadFile.originalname = uploadName;
+      this.name = uploadName;
+    }
+
     // Collision check: same name + same app = reuse the existing asset
     // (mirrors are per-app because `getAssetPath` is app-scoped). If the
     // mirror exists, rehydrate from it and return before any driver call;
     // re-uploads under the same name are a no-op (content-based
     // replacement is a future task).
-    const existing = this.#readMirror(uploadName);
+    const existing = this.isPrivate ? null : this.#readMirror(uploadName);
     if (existing) {
       this.name = uploadName;
       this.__DOCUMENT_NAME__ = uploadName;
@@ -222,7 +250,9 @@ export default class FileManager extends BaseDocument {
         storedName: uploadName,
       };
     } else {
-      const driver = loopar.storage.active;
+      // Private files stay on this server's disk: a CDN driver would hand
+      // out a public URL, and the private handler checks access per request.
+      const driver = this.isPrivate ? loopar.storage.for('local') : loopar.storage.active;
       driverName = driver.name;
       result = file
         ? await driver.upload({
@@ -258,7 +288,7 @@ export default class FileManager extends BaseDocument {
     // be transformed, so it previews as itself.
     const previewSrc = isReference
       ? result.src
-      : loopar.storage.active.deliveryUrl({
+      : loopar.storage.for(driverName).deliveryUrl({
           src: result.src,
           externalId: result.externalId,
           transform: {
@@ -312,6 +342,7 @@ export default class FileManager extends BaseDocument {
       previewSrc,
       app: this.app || null,
       visibility: this.visible || 'public',
+      ...(this.#owner ? { owner: this.#owner } : {}),
       updated_at: new Date().toISOString(),
     };
 
@@ -545,10 +576,7 @@ export default class FileManager extends BaseDocument {
     pagination.totalRecords = filtered.length;
     pagination.totalPages = Math.max(1, Math.ceil(filtered.length / pagination.pageSize));
 
-    if (pagination.page > pagination.totalPages) {
-      pagination.page = pagination.totalPages;
-      if (!(explicitPage > 0)) loopar.setPage(this.__ENTITY__.name, pagination.totalPages);
-    }
+    if (pagination.page > pagination.totalPages) pagination.page = pagination.totalPages;
 
     const startIndex = (pagination.page - 1) * pagination.pageSize;
     const rows = filtered.slice(startIndex, startIndex + pagination.pageSize);

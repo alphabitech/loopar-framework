@@ -3,13 +3,20 @@
 import { BaseController, loopar, PermissionManager } from 'loopar';
 import { pluralize } from 'inflection';
 
-const getTypes = () => Object.values(loopar.getTypes()).reduce((acc, type) => {
-  acc.push({
-    name: type.__NAME__,
-    label: pluralize(type.__BUILD__ || type.__ENTITY__)
-  });
-  return acc;
-}, []);
+const getTypes = () => Object.values(loopar.getTypes()).map(type => {
+  const singular = type.__BUILD__ || type.__ENTITY__;
+  return { name: type.__NAME__, singular, label: pluralize(singular) };
+});
+
+/** Records in an entity's own table, or null when it has none (single, virtual, pages, views…). */
+const countRecords = async (ref) => {
+  if (!ref || ref.is_single || ref.is_virtual) return null;
+  try {
+    return await loopar.db.count(ref.__NAME__, {});
+  } catch {
+    return null;
+  }
+};
 
 export default class ModuleController extends BaseController {
   /** The module "view" is a list of its documents (cards). */
@@ -18,46 +25,46 @@ export default class ModuleController extends BaseController {
   async privateActionTest(){}
   async actionView() {
     this.entry = "list";
-    const data = this.data || {};
-    const q = data.q || data;
+    // The module comes from the route (`/desk/<Module>`); its page state from
+    // the URL: `?type=Entity&name=user&page=2` (document/list-state.js).
+    const moduleName = this.name || "core";
 
+    // Types present in the module, with how many documents of each (the tabs' counters).
     const types = (await Promise.all(
-      getTypes().map(async t => 
-        await loopar.db.count(t.name, { module: this.name || q.module || "core" }) > 0 ? t : null
-      )
+      getTypes().map(async t => {
+        const count = await loopar.db.count(t.name, { module: moduleName });
+        return count > 0 ? { ...t, count } : null;
+      })
     )).filter(Boolean);
 
     const type = ((!types.some(t => t.name == this.type)) ? (types.find(t => t.name == "Entity") || types[0])?.name : this.type) || "Entity";
-    const eType = `${type}DocumentQ`;
-    const eModule = `${eType}Module`;
-
-    if (!data.q) loopar.session.set(eModule, this.name);
 
     const queryData = {
-      ...(data.q || loopar.session.get(eType) || {}),
-      module: loopar.session.get(eModule),
+      ...loopar.getQ(this.document, { exclude: ["type"] }),
+      module: moduleName,
     };
 
-    if (queryData.module) await loopar.getDocument("Module", queryData.module);
+    await loopar.getDocument("Module", moduleName);
 
-    loopar.session.set(eType, queryData);
-    // Same key getList() reads (loopar.getPage: workspace + entity): a raw
-    // `${type}page` key was never read back, so every page came back as 1.
-    loopar.setPage(type, this.data.page || 1);
-
-    const list = await loopar.getList(type, { q: queryData, rowsOnly: this.preloaded === 'true'});
+    // Always the full payload (never data-only): `?type=` swaps the listed
+    // entity, so the cached meta of the previous type would not fit.
+    const list = await loopar.getList(type, { q: queryData, page: loopar.getPage(this.document) });
 
     const before = list.rows.length;
-    list.rows = list.rows.filter(row => {
+    list.rows = await Promise.all(list.rows.filter(row => {
       return PermissionManager.can(row.name, "view") || PermissionManager.can(row.name, "list")
-    }).map(row => {
+    }).map(async row => {
       const ref = loopar.getRef(row.name);
       return {
         ...row,
         is_single: ref?.is_single || 0,
+        is_child: ref?.is_child || 0,
+        is_virtual: ref?.is_virtual || 0,
         type: ref?.__ENTITY__ || "Entity",
+        // Card subtitle; child rows only make sense inside their parent.
+        __records__: ref?.is_child ? null : await countRecords(ref),
       };
-    });
+    }));
 
     // Cards are filtered by permission after pagination: keep the counter
     // honest for what this user actually sees.
@@ -67,11 +74,6 @@ export default class ModuleController extends BaseController {
       list.pagination.totalPages = Math.max(1, Math.ceil(list.pagination.totalRecords / (list.pagination.pageSize || 10)));
     }
 
-    if(this.preloaded == 'true') return {
-      instance: this.getInstance(),
-      rows: list.rows
-    };
-
 /*     list.Entity.name = "Module";
     list.__TYPES__ = types//.filter(t => list.rows.some(r => r.type == t.name))
     list.__TYPE__ = type;
@@ -79,7 +81,6 @@ export default class ModuleController extends BaseController {
     list.Entity.name = "Module"
 
     // The module being shown, for the AppBar title (Entity is always "Module").
-    const moduleName = queryData.module || this.name;
     // getAll, not getRow: getRow resets the shared pagination state.
     const [moduleRow = null] = moduleName
       ? await loopar.db.getAll("Module", ["name", "description", "icon", "app_name"], { name: moduleName })

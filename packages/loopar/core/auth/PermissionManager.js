@@ -128,13 +128,13 @@ class PermissionManagerClass {
    * Effective scope for (document, action, user): 'all' | 'own' | null.
    * null = not permitted. Administrator and public actions are always 'all'.
    */
-  scope(document, action, username) {
+  scope(document, action, username, { includePublic = true } = {}) {
     username = username ?? loopar.auth.user() ?? 'Guest';
     if (username === 'Administrator') return SCOPE.ALL;
 
     const key = this.#buildKey(document, action);
 
-    if (this.#public().has(key)) return SCOPE.ALL;
+    if (includePublic && this.#public().has(key)) return SCOPE.ALL;
 
     const denied = this.#denied().get(username);
     if (denied?.has(key)) return null;
@@ -155,6 +155,14 @@ class PermissionManagerClass {
       if (result === SCOPE.ALL) break;
     }
     return result;
+  }
+
+  /**
+   * Scope the user was granted through roles, ignoring public actions: what
+   * guards data a public action doesn't cover (e.g. a record's private files).
+   */
+  grantedScope(document, action, username) {
+    return this.scope(document, action, username, { includePublic: false });
   }
 
   /** Public re-read from DB (for code paths that bypass the ORM hooks). */

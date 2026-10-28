@@ -1,4 +1,5 @@
 import { SideNavItem } from "./side-nav-item";
+import { menuPath } from "./main-nav";
 import { useWorkspace } from "@workspace/workspace-provider";
 import React, {useMemo} from "react";
 import { cn } from "@cn/lib/utils";
@@ -33,7 +34,7 @@ const MenuItemTree = ({item, isChild = false}={item:Item, isChild:Boolean}) => {
 
   const getLink = (item) => {
     const parentLink = getParentLink(item.parent_menu);
-    return parentLink ? `/${parentLink}/${item.link}` : `/${item.link}`;
+    return parentLink ? `/${menuPath(parentLink)}/${menuPath(item.link)}` : `/${menuPath(item.link)}`;
   }
 
   const treeIsActive = getActive(item, activePage);

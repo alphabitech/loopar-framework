@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { LoopSocket } from "./LoopSocket.js";
+import { LoopSocket } from "@services/realtime/LoopSocket";
 
 const RealtimeContext = createContext(null);
 

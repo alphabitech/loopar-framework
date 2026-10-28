@@ -6,6 +6,8 @@ import {
   FormLabel
 } from "@cn/components/ui/form";
 
+const isPrivate = (data = {}) => [1, "1", true, "true"].includes(data.private);
+
 const FileInput = (props) => {
   return (
     <BaseInput
@@ -30,7 +32,8 @@ const FileInput = (props) => {
                   <FileDrop
                     data={data}
                     files={files}
-                    origins={props.origins}
+                    // A private file is only ever uploaded by the person sending it.
+                    origins={isPrivate(data) ? ["Local", "Trash"] : props.origins}
                     onChange={handleChange}
                     inModal={true}
                   />
@@ -51,8 +54,15 @@ FileInput.metaFields = () => {
       {
         group: "form",
         elements: {
-          accept: { element: INPUT, data: { label: "Accept", placeholder: "image/*" } },
-          multiple: { element: SWITCH }
+          accept: { element: INPUT, data: { label: "Accept", placeholder: "image/*", description: "Comma-separated types (.pdf, image/*). Checked on the server too." } },
+          multiple: { element: SWITCH },
+          private: {
+            element: SWITCH,
+            data: {
+              label: "Private",
+              description: "Files are stored privately and only users who may view this record can open them (e.g. résumés, IDs). Upload only.",
+            },
+          },
         }
       }
   ]];

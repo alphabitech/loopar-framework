@@ -49,3 +49,10 @@ test("very long values are rejected before any regex runs", () => {
 test("not_validate_type skips the format check", () => {
   assert.equal(input("email", "free text", { not_validate_type: 1 }).valid, true);
 });
+
+test("a consent checkbox the website requires must be checked", () => {
+  const consent = { name: "privacy_consent", label: "I agree", required: 1, required_on_website: 1 };
+  assert.equal(check("checkbox", consent, 0).valid, false);
+  assert.equal(check("checkbox", consent, 1).valid, true);
+  assert.equal(check("checkbox", { name: "flag", required: 1 }, 0).valid, true, "other required checkboxes keep 0 as a value");
+});

@@ -3,6 +3,38 @@ import chroma from 'chroma-js';
 
 export const NEUTRAL_THEMES = ['slate', 'gray', 'zinc', 'neutral', 'stone'];
 
+/** Theme name of a palette built from the site's own brand colors. */
+export const CUSTOM_THEME = 'custom';
+
+const validHex = (value) => {
+  if (typeof value !== 'string' || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim())) return null;
+  return value.trim().toLowerCase();
+};
+
+/**
+ * Brand colors of a custom theme: `primary` is required, `accent`,
+ * `background` and `foreground` (light mode) are optional. Null when the
+ * primary is missing or invalid.
+ */
+export function normalizeBrand(brand) {
+  const primary = validHex(brand?.primary);
+  if (!primary) return null;
+  return {
+    primary,
+    accent: validHex(brand.accent),
+    background: validHex(brand.background),
+    foreground: validHex(brand.foreground),
+  };
+}
+
+const presetColor = (themeName) => (themes.find(t => t.name === themeName) || themes.find(t => t.name === 'blue')).color;
+
+/** Base color of a theme: the brand primary for a custom theme, else the preset's. */
+export function themeBaseColor(themeName, brand = null) {
+  const custom = themeName === CUSTOM_THEME ? normalizeBrand(brand) : null;
+  return custom?.primary || presetColor(themeName);
+}
+
 export function isNeutralTheme(themeName, color = null) {
   if (NEUTRAL_THEMES.includes(themeName)) {
     return true;
@@ -23,15 +55,12 @@ export function generateThemeCSS(themeName, options = {}) {
     contrastThreshold = 4.5,
     darkMode = 'auto',
     darkIntensity = 0.95,
-    darkCustomColor = null
+    darkCustomColor = null,
+    brand = null
   } = options;
 
-  const themeColors = themes.reduce((acc, theme) => {
-    acc[theme.name] = theme.color;
-    return acc;
-  }, {});
-
-  const baseTextHex = themeColors[themeName] || themeColors.blue;
+  const custom = themeName === CUSTOM_THEME ? normalizeBrand(brand) : null;
+  const baseTextHex = themeBaseColor(themeName, custom);
 
   let darkBgColor;
   if (darkMode === 'custom' && darkCustomColor) {
@@ -41,6 +70,7 @@ export function generateThemeCSS(themeName, options = {}) {
   }
 
   const lightMode = generateLightModeColors(baseTextHex, contrastThreshold, themeName);
+  if (custom) applyBrandToLightMode(lightMode, custom, contrastThreshold);
   const darkMode_colors = generateDarkModeColors(
     darkBgColor,
     baseTextHex,
@@ -156,6 +186,7 @@ function generateLightModeColors(baseTextHex, contrastThreshold, themeName) {
 }
 
 function generateDarkModeColors(bgColor, baseTextHex, themeName, contrastThreshold) {
+  const isCustom = themeName === CUSTOM_THEME;
   const background = chroma(bgColor).alpha(1);
   const baseColor = chroma(baseTextHex);
   const isNeutral = isNeutralTheme(themeName, baseTextHex);
@@ -174,6 +205,11 @@ function generateDarkModeColors(bgColor, baseTextHex, themeName, contrastThresho
     primary = chroma('#f5f5f5').alpha(1);
   } else {
     primary = baseColor.saturate(0.5).alpha(1);
+    // A deep brand color would vanish on the dark background: lighten it
+    // (same hue) until it reads. Presets keep their tuned colors.
+    for (let i = 0; isCustom && i < 20 && chroma.contrast(primary, background) < contrastThreshold; i++) {
+      primary = primary.brighten(0.25).alpha(1);
+    }
   }
   
   const primaryLuminance = primary.luminance();
@@ -209,6 +245,41 @@ function generateDarkModeColors(bgColor, baseTextHex, themeName, contrastThresho
     input: border,
     ring: primary
   };
+}
+
+/** Light-mode tokens a custom brand sets (accent, background, text). */
+function applyBrandToLightMode(colors, brand, contrastThreshold) {
+  const readableOn = (bg) => (chroma.contrast('white', bg) >= chroma.contrast('#09090b', bg) ? chroma('white') : chroma('#09090b')).alpha(1);
+
+  if (brand.background) {
+    const background = chroma(brand.background).alpha(1);
+    colors.background = background;
+    colors.card = chroma.mix(brand.background, 'white', 0.55, 'rgb').alpha(1);
+    colors.popover = colors.card;
+    colors.border = chroma.mix(brand.background, brand.primary, 0.12, 'rgb').darken(0.2).alpha(1);
+    colors.input = colors.border;
+    colors.muted = chroma.mix(brand.background, brand.primary, 0.06, 'rgb').alpha(1);
+  }
+
+  if (brand.foreground && chroma.contrast(brand.foreground, colors.background) >= contrastThreshold) {
+    const text = chroma(brand.foreground).alpha(1);
+    colors.foreground = text;
+    colors.cardForeground = text;
+    colors.popoverForeground = text;
+    colors.mutedForeground = chroma.mix(brand.foreground, colors.background.hex(), 0.2, 'rgb').alpha(1);
+    if (chroma.contrast(colors.mutedForeground, colors.background) < contrastThreshold) colors.mutedForeground = text;
+  }
+
+  if (brand.accent) {
+    const accent = chroma(brand.accent).alpha(1);
+    const onAccent = brand.foreground && chroma.contrast(brand.foreground, accent) >= contrastThreshold
+      ? chroma(brand.foreground).alpha(1)
+      : readableOn(accent);
+    colors.secondary = accent;
+    colors.secondaryForeground = onAccent;
+    colors.accent = accent;
+    colors.accentForeground = onAccent;
+  }
 }
 
 function toHSLString(color) {
@@ -337,16 +408,10 @@ export function getContrast(color1, color2) {
   }
 }
 
-export function previewDarkBackground(themeName, intensity = 0.95, mode = 'auto', customColor = null) {
+export function previewDarkBackground(themeName, intensity = 0.95, mode = 'auto', customColor = null, brand = null) {
   if (mode === 'custom' && customColor) {
     return applyIntensityToColor(customColor, intensity);
   }
-  
-  const themeColors = themes.reduce((acc, theme) => {
-    acc[theme.name] = theme.color;
-    return acc;
-  }, {});
-  
-  const baseColor = themeColors[themeName] || themeColors.blue;
-  return deriveDarkBackground(baseColor, intensity);
+
+  return deriveDarkBackground(themeBaseColor(themeName, brand), intensity);
 }

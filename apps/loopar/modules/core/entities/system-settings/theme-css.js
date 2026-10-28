@@ -1,6 +1,6 @@
 'use strict';
 
-import { loopar, generateThemeCSS } from 'loopar';
+import { loopar, generateThemeCSS, normalizeBrand } from 'loopar';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -14,6 +14,7 @@ export function parseThemeConfig(raw) {
     darkIntensity: clamp(config.darkIntensity ?? 0.95, 0, 1),
     darkCustomColor: config.darkCustomColor || '#0a0a0a',
     includeTitles: config.includeTitles !== false,
+    brand: normalizeBrand(config.brand),
   };
 }
 
@@ -26,6 +27,7 @@ export function buildThemeCSS(raw, { fallbackTheme = null } = {}) {
     darkIntensity: config.darkIntensity,
     darkCustomColor: config.darkCustomColor,
     includeTitles: config.includeTitles,
+    brand: config.brand,
     minify: true,
     contrastThreshold: 4.5,
   });

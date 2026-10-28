@@ -52,7 +52,7 @@ import {
 } from "./core/global/element-definition.js";
 import { MetaComponents } from "./core/global/require-components.js";
 export {themes, showColors} from "./core/global/themes.js";
-export {generateThemeCSS} from "./core/global/theme-generator.js";
+export {generateThemeCSS, normalizeBrand} from "./core/global/theme-generator.js";
 import { parseDocument } from './core/document/tools.js';
 import {
   pruneDocStructure,

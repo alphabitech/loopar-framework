@@ -4,7 +4,7 @@ import { themes } from "@global/themes";
 import { titleize } from "inflection";
 import BaseInput from "@base-input";
 import { useState, useEffect, useMemo } from "react";
-import { previewDarkBackground, generateThemeCSS, isNeutralTheme } from "@global/theme-generator";
+import { previewDarkBackground, generateThemeCSS, isNeutralTheme, normalizeBrand, CUSTOM_THEME } from "@global/theme-generator";
 import {loopar} from "loopar";
 
 function getColorMetrics(hex) {
@@ -81,14 +81,71 @@ const ThemeColorSelector = ({ color, twcolor, text, onSelect, active }) => {
   );
 }
 
-const DarkBackgroundConfig = ({ theme, value, onChange }) => {
+const BRAND_FIELDS = [
+  { field: "primary", label: "Primary", hint: "Buttons, links and highlights.", fallback: "#2563eb" },
+  { field: "accent", label: "Accent", hint: "Secondary buttons and soft highlights. Optional." },
+  { field: "background", label: "Background", hint: "Page background in light mode. Optional." },
+  { field: "foreground", label: "Text", hint: "Text color in light mode. Optional." },
+];
+
+const ColorField = ({ label, hint, value, fallback, onChange }) => (
+  <div className="space-y-1">
+    <label className="text-xs text-muted-foreground">{label}</label>
+    <div className="flex gap-2 items-center">
+      <input
+        type="color"
+        value={value || fallback || "#ffffff"}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-10 h-10 rounded cursor-pointer border border-border"
+        title={label}
+      />
+      <input
+        type="text"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex-1 px-3 py-2 bg-background border border-border rounded text-sm font-mono"
+        placeholder={fallback || "Default"}
+      />
+      {value && !fallback ? (
+        <Button variant="ghost" size="sm" onClick={(e) => { e.preventDefault(); onChange(""); }}>Clear</Button>
+      ) : null}
+    </div>
+    <p className="text-xs text-muted-foreground">{hint}</p>
+  </div>
+);
+
+/** Brand colors of the custom theme (the site's own palette). */
+const BrandColorsConfig = ({ value, onChange }) => {
+  const brand = value || {};
+  const set = (key, color) => onChange({ ...brand, [key]: color });
+  const valid = !!normalizeBrand(brand);
+
+  return (
+    <div className="space-y-4 p-4 border border-border rounded-lg bg-muted/30">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Palette className="w-4 h-4" />
+        <span>Brand Colors</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {BRAND_FIELDS.map(f => (
+          <ColorField key={f.field} label={f.label} hint={f.hint} fallback={f.fallback} value={brand[f.field]} onChange={(color) => set(f.field, color)} />
+        ))}
+      </div>
+      {!valid ? (
+        <p className="text-xs text-destructive">Enter the primary color as a hex value (for example #164a36).</p>
+      ) : null}
+    </div>
+  );
+};
+
+const DarkBackgroundConfig = ({ theme, brand, value, onChange }) => {
   const [mode, setMode] = useState(value?.darkMode || 'auto');
   const [intensity, setIntensity] = useState(value?.darkIntensity || 0.15);
   const [customColor, setCustomColor] = useState(value?.darkCustomColor || '#0a0a0a');
 
-  const autoColor = previewDarkBackground(theme, intensity, 'auto', '#0a0a0a');
+  const autoColor = previewDarkBackground(theme, intensity, 'auto', '#0a0a0a', brand);
   const inputColor = mode === 'auto' ? autoColor : customColor;
-  const previewColor = previewDarkBackground(theme, intensity, mode, customColor);
+  const previewColor = previewDarkBackground(theme, intensity, mode, customColor, brand);
 
   useEffect(() => {
     onChange({
@@ -202,14 +259,17 @@ export function ThemeSelector({ value, onChange }) {
     darkCustomColor: value?.darkCustomColor || '#0a0a0a'
   });
   const [includeTitles, setIncludeTitles] = useState(value?.includeTitles !== false);
+  const [brand, setBrand] = useState(value?.brand || { primary: "#2563eb" });
+  const isCustom = selectedTheme === CUSTOM_THEME;
 
   useEffect(() => {
     onChange({
       theme: selectedTheme,
       ...darkConfig,
-      includeTitles
+      includeTitles,
+      ...(isCustom ? { brand } : {}),
     });
-  }, [selectedTheme, darkConfig, includeTitles]);
+  }, [selectedTheme, darkConfig, includeTitles, brand]);
 
   const handleThemeSelect = (themeName) => {
     setSelectedTheme(themeName);
@@ -281,11 +341,34 @@ export function ThemeSelector({ value, onChange }) {
               </div>
             )
           ))}
+          <div className="space-y-2">
+            <h3 className="text-xs uppercase tracking-wider font-semibold text-muted-foreground opacity-70">
+              Brand
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              <Button
+                variant="ghost"
+                className={`w-full inline-flex items-center justify-start gap-2 ${isCustom ? 'bg-primary/50 text-white' : 'text-primary'}`}
+                onClick={(e) => { e.preventDefault(); handleThemeSelect(CUSTOM_THEME); }}
+              >
+                <span
+                  className="w-5 h-5 rounded-full flex items-center justify-center border border-border"
+                  style={{ backgroundColor: normalizeBrand(brand)?.primary || "transparent" }}
+                >
+                  {isCustom && <CheckCircle className="w-4 h-4 text-white" />}
+                </span>
+                Custom
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
+      {isCustom ? <BrandColorsConfig value={brand} onChange={setBrand} /> : null}
+
       <DarkBackgroundConfig
         theme={selectedTheme}
+        brand={isCustom ? brand : null}
         value={darkConfig}
         onChange={handleDarkConfigChange}
       />
@@ -315,6 +398,7 @@ export default function ThemeCustomizer(props) {
       darkIntensity: themeConfig.darkIntensity,
       darkCustomColor: themeConfig.darkCustomColor,
       includeTitles: themeConfig.includeTitles,
+      brand: themeConfig.brand,
       minify: true
     });
     

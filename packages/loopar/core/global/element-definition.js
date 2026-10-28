@@ -620,6 +620,15 @@ class DataInterface {
 
   validatorRequired() {
     const required = [true, 'true', 1, '1'].includes(this.data.required);
+    // A checkbox or switch the website requires (a consent) must be on: for
+    // any other required checkbox 0 is a value, like for numbers.
+    const consent = [true, 'true', 1, '1'].includes(this.data.required_on_website);
+    if (required && consent && ['checkbox', 'switch'].includes(this.element)) {
+      return {
+        valid: [true, 'true', 1, '1'].includes(this.value),
+        message: `${this.__label()} is required`
+      }
+    }
     return {
       valid: !required || !this.isEmptyValue(),
       message: `${this.__label()} is required`

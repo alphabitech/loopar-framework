@@ -150,7 +150,6 @@ export default function BaseWorkspace(props) {
         value={{
           ...workspace,
           webApp: props.webApp || {},
-          refresh: () => props.refresh || (() => { }),
           activePage: activePage,
         }}
       >

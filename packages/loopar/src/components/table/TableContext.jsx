@@ -8,13 +8,12 @@ import {
   useRef
 } from "react";
 
-import { isEqual } from "es-toolkit/predicate";
-
 import elementManage from "@@tools/element-manage";
 import loopar, {useRealtime} from "loopar";
 import { DropdownListGridActions } from "./DropdownListGridActions";
 import { Checkbox } from "@cn/components/ui/checkbox";
 import Emitter from '@services/emitter/emitter';
+import { useWorkspace } from "@workspace/workspace-provider";
 
 const TableContext = createContext();
 
@@ -33,12 +32,34 @@ export const TableProvider = ({
   const [Document, setDocument] = useState(initialDocument || {});
   const [selectedRows, setSelectedRows] = useState([]);
   const [pagination, setPagination] = useState(initialDocument?.pagination || {});
-  const lastSearch = useRef(null);
-  
+  const { pathname: currentUrl, navigate, refresh } = useWorkspace();
+
+  useEffect(() => {
+    setPagination(initialDocument?.pagination || {});
+  }, [initialDocument?.pagination]);
+
+  /**
+   * List state lives in the URL (`?status=Open&page=2`): searching or paging
+   * navigates, and the workspace fetches the data for the new URL. Links can
+   * be shared, reloaded and walked with back/forward.
+   */
+  const urlWith = (mutate) => {
+    const [path, query = ""] = String(currentUrl || "").split("?");
+    const params = new URLSearchParams(query);
+    mutate(params);
+    const next = params.toString();
+    return next ? `${path}?${next}` : path;
+  };
+
+  const sameUrl = (a, b) => {
+    const [pa, qa = ""] = String(a || "").split("?");
+    const [pb, qb = ""] = String(b || "").split("?");
+    return pa === pb && new URLSearchParams(qa).toString() === new URLSearchParams(qb).toString();
+  };
+
   const setPage = (page) => {
-    pagination.page = page;
-    setPagination(pagination);
-    search(lastSearch.current, true);
+    const next = urlWith(params => page > 1 ? params.set("page", String(page)) : params.delete("page"));
+    if (!sameUrl(next, currentUrl)) navigate(next);
   };
 
   const [rows, setRows] = useState(props.rows || []);
@@ -49,8 +70,9 @@ export const TableProvider = ({
     setRows(props.rows || []);
   }, [props.rows]);
 
+  // Only a server list (it has pagination) reloads; a form table holds local rows.
   useRealtime(`${Document.Entity?.name}.changed`, () => {
-    search(lastSearch.current, true)
+    if (initialDocument?.pagination) refresh();
   });
 
   useEffect(() => {
@@ -99,30 +121,17 @@ export const TableProvider = ({
     setSelectedRows(checked ? allNames : []);
   };
 
-  const search = (searchData, force=false) => {
-    if(!lastSearch.current){
-      lastSearch.current = searchData;
-      return;
-    }
-
-    if(isEqual(searchData, lastSearch.current) && !force) return;
-    lastSearch.current = searchData;
-
-    loopar.call(
-      Document.Entity.name,
-      docRef.action || Document.meta.action,
-      {
-        query: { preloaded: true },
-        body: {
-          q: searchData,
-          page: (pagination && pagination.page) || 1,
-        },
-        success: r => {
-          setRows(r.rows || []);
-          setPagination(r.pagination || {});
-        },
+  /** `values`: `{ field: value }`; null/empty removes the filter. Always back to page 1. */
+  const search = (values = {}) => {
+    const next = urlWith(params => {
+      for (const [key, value] of Object.entries(values || {})) {
+        const v = value == null ? "" : String(value).trim();
+        v === "" ? params.delete(key) : params.set(key, v);
       }
-    );
+      params.delete("page");
+    });
+    // Typing refines the same search: replace, don't stack history entries.
+    if (!sameUrl(next, currentUrl)) navigate(next, { replace: true });
   };
 
   const rowsCount = useMemo(() => rows.length, [rows]);

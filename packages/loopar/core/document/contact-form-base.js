@@ -147,6 +147,24 @@ export default class ContactFormBase extends BaseDocument {
     return this.contentFields().find(f => f.format === 'email' || f.name === 'email');
   }
 
+  /**
+   * Fields flagged `required_on_website` (a consent, say) must be given by a
+   * website visitor; staff logging a record from the desk may leave them.
+   * A checkbox or switch counts only when it is on.
+   */
+  #checkRequiredOnWebsite() {
+    const on = (v) => [1, '1', true, 'true'].includes(v);
+    const missing = this.contentFields()
+      .filter(f => on(f.required_on_website ?? f.data?.required_on_website))
+      .filter(f => {
+        const element = f.element ?? f.def?.element;
+        const value = this[f.name];
+        return ['checkbox', 'switch'].includes(element) ? !on(value) : (value == null || String(value).trim() === '');
+      })
+      .map(f => `${f.label || f.data?.label || f.name} is required`);
+    if (missing.length) loopar.throw(missing.join('<br/>'));
+  }
+
   /** Optional hooks for generated subclasses. */
   async validateSubmission() { }
   async beforeSubmit() { }
@@ -161,6 +179,7 @@ export default class ContactFormBase extends BaseDocument {
     this.ip_address = context.ip || '';
     this.app = context.app || loopar.webApp?.name || '';
 
+    this.#checkRequiredOnWebsite();
     await this.validateSubmission();
     await this.checkRateLimit();
 
@@ -192,7 +211,8 @@ export default class ContactFormBase extends BaseDocument {
   async computeSpamScore(context = {}) {
     const haystack = this.contentFields()
       .map(f => f.value)
-      .filter(v => typeof v === 'string')
+      // Empty fields would join into a run of spaces (a false "char-repeat").
+      .filter(v => typeof v === 'string' && v.trim() !== '')
       .join(' ');
 
     const { score: heuristicScore, hits } = detectSpamHeuristics(haystack);

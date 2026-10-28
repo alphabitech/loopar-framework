@@ -4,6 +4,13 @@ import { useWorkspace } from "@workspace/workspace-provider";
 import { Link } from "@link";
 import { useMemo } from "react";
 
+/**
+ * URL segment of a menu link: "About Us" → "about-us". The router matches
+ * links ignoring case, spaces, dashes and underscores, so labels can be
+ * written for people and still give clean addresses.
+ */
+export const menuPath = (link) => encodeURIComponent(String(link ?? "").trim().toLowerCase().replace(/[\s_]+/g, "-"));
+
 export function MainNav() {
   const { openNav, setOpenNav } = useWorkspace();
   const Icon = openNav ? Cross1Icon : HamburgerMenuIcon;
@@ -54,7 +61,7 @@ export function MenuItems({ half = null, className = "" }) {
         className={`transition-colors px-6 py-1 ${rounded} ${!solid && 'focus:bg-transparent hover:bg-transparent bg-transparent'}`}
         active={activeParentMenu === item.page}
         key={item.id + i}
-        to={`/${item.link}`}
+        to={`/${menuPath(item.link)}`}
       >
         {item.link}
       </Link>

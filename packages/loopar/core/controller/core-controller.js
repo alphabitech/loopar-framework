@@ -18,6 +18,7 @@ export default class CoreController extends AuthController {
     loopar.server.use(express.static(loopar.makePath(loopar.pathRoot, this.controllerPath, "client")));
   }
 
+
   #actionMethod(action) {
     const name = loopar.utils.Capitalize(action);
     return this[`publicAction${name}`] && !this.isRevokedPublicAction(action)
@@ -109,8 +110,20 @@ export default class CoreController extends AuthController {
    * @param {string|null} url
    * @param {{ hard?: boolean }} [opts]
    */
-  redirect(url = null, { hard = false } = {}) {
-    return { redirect: url, hardRedirect: hard };
+  /**
+   * `notify` (string or `{ type, message }`) travels with the redirect so the
+   * client shows a toast. No `message` key on purpose: the client resolves
+   * `success` with `data.message || data`, and a message would replace the
+   * payload (redirect, name) for callers that read it.
+   */
+  redirect(url = null, { hard = false, notify = null } = {}) {
+    const response = { redirect: url, hardRedirect: hard };
+    if (notify) {
+      response.notify = typeof notify === "string"
+        ? { type: "success", message: notify }
+        : { type: notify.type || "success", message: notify.message };
+    }
+    return response;
   }
 
   /**
@@ -167,7 +180,8 @@ export default class CoreController extends AuthController {
       key: this.getKey(),
       instance: this.getInstance(),
       meta: {
-        title: titleize((meta.title || this.name || this.document || "Document").toString()),
+        // exactTitle: written by the site (an seo title, a record's title), kept as is.
+        title: meta.exactTitle || titleize((meta.title || (this.isListAction() ? null : this.name) || this.document || "Document").toString()),
         action: this.action,
       },
       entry: this.clientEntry(meta),
@@ -215,7 +229,13 @@ export default class CoreController extends AuthController {
     return `${loopar.utils.decamelize(name, { separator: '-' })}-${suffix}`
   }
 
+  /** In a list `?name=` is a search filter, not the record: lists keep one identity (key, title). */
+  isListAction() {
+    return ['list', 'index'].includes(this.action);
+  }
+
   getKey(route = this.dictUrl) {
+    if (this.isListAction()) return loopar.utils.urlHash({ pathname: route.pathname });
     return loopar.utils.urlHash(route);
   }
 

@@ -26,9 +26,11 @@ const ROW_HEIGHT = {
   100: "min-h-screen",
 };
 
-const newCol = () => ({
+// Deterministic key (row key + index) so normalizing the same stored row always
+// yields the same tree: a random key made every load produce a different design.
+const newCol = (rowKey, index) => ({
   element: "col",
-  node: elementManage.getUniqueKey(),
+  node: rowKey ? `${rowKey}_c${index}` : elementManage.getUniqueKey(),
   data: {},
 });
 
@@ -78,8 +80,10 @@ export default function Row(props) {
 
     if (cols.length < n) {
       const grown = [...cols];
-      while (grown.length < n) grown.push(newCol());
-      setElements(grown, null, false);
+      while (grown.length < n) grown.push(newCol(props.node ?? props.data?.key, grown.length));
+      // First pass (mount / document load): filling the missing cols is a
+      // normalization of the stored structure, not a user edit.
+      setElements(grown, null, false, { asBase: prevLen == null });
       return;
     }
 

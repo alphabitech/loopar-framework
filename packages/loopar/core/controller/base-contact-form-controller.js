@@ -8,11 +8,18 @@ import { PermissionManager } from '../auth/PermissionManager.js';
 
 const isTrue = v => [1, '1', true, 'true'].includes(v);
 
-/** Drops fields flagged `internal` (staff-only) from a doc structure. */
-function withoutInternal(structure = []) {
+/**
+ * The public version of a doc structure: drops the fields flagged `internal`
+ * (staff-only) and makes the `required_on_website` ones required (a consent
+ * the visitor must give, but staff don't when they log a record by hand).
+ */
+function publicStructure(structure = []) {
   return structure
     .filter(el => !isTrue(el.data?.internal))
-    .map(el => el.elements ? { ...el, elements: withoutInternal(el.elements) } : el);
+    .map(el => {
+      const data = isTrue(el.data?.required_on_website) ? { ...el.data, required: 1 } : el.data;
+      return { ...el, data, ...(el.elements ? { elements: publicStructure(el.elements) } : {}) };
+    });
 }
 
 /**
@@ -43,11 +50,11 @@ export default class BaseContactFormController extends BaseController {
       .map(f => f.data.name);
   }
 
-  /** True when the form declares at least one file/upload field. */
+  /** True when the public form shows at least one file/upload field (internal ones don't count). */
   #declaresFileField(entity) {
     const FILE_ELEMENTS = ['file_input', 'image_input', 'file_uploader'];
     return loopar.utils.fieldList(entity.doc_structure)
-      .some(f => FILE_ELEMENTS.includes(f.element));
+      .some(f => FILE_ELEMENTS.includes(f.element) && !isTrue(f.data?.internal));
   }
 
   async publicActionCreate(){
@@ -62,7 +69,7 @@ export default class BaseContactFormController extends BaseController {
 
     const meta = await document.__meta__();
     meta.Entity.doc_structure = JSON.stringify(
-      withoutInternal(loopar.utils.JSONparse(meta.Entity.doc_structure, []))
+      publicStructure(loopar.utils.JSONparse(meta.Entity.doc_structure, []))
     );
     Object.assign(this.response, meta);
     return await this.render(this.response);
@@ -97,6 +104,14 @@ export default class BaseContactFormController extends BaseController {
     if (!this.#declaresFileField(entity)) delete payload.__REQ_FILES__;
 
     const doc = await loopar.newDocument(this.document, payload);
+
+    // A binary is kept only when it belongs to a public file field of the form.
+    if (Array.isArray(doc.__DATA__?.__REQ_FILES__)) {
+      doc.__DATA__.__REQ_FILES__ = doc.__DATA__.__REQ_FILES__.filter(file => {
+        const field = doc.uploadFieldOf(file);
+        return field && !isTrue(field.data?.internal);
+      });
+    }
 
     await doc.submit({
       fastFill: bot.fastFill,
