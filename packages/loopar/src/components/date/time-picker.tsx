@@ -1,7 +1,7 @@
 import React, { useEffect, useReducer, useRef, MouseEvent } from 'react';
 import { ToggleGroup, ToggleGroupItem } from "@cn/components/ui/toggle-group";
 import { useDesigner } from "@context/designer-context";
-import dayjs from "dayjs";
+import { parseDate, isValidDate } from "@global/date-utils";
 
 interface PropsInterface {
   handleChange: Function,
@@ -19,8 +19,8 @@ const parseTime = (time: string | Date | null | undefined): { hour24: number; mi
     };
   }
 
-  const parsed = dayjs(time);
-  if (parsed.isValid()) return { hour24: parsed.hour(), minute: parsed.minute() };
+  const parsed = parseDate(time);
+  if (isValidDate(parsed)) return { hour24: parsed.getHours(), minute: parsed.getMinutes() };
 
   return { hour24: 0, minute: 0 };
 };

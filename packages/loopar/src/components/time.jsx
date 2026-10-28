@@ -1,5 +1,5 @@
 import BaseInput from "@base-input";
-import dayjs from "dayjs";
+import { parseDate, isValidDate } from "@global/date-utils";
 import loopar from "loopar";
 
 import { cn } from "@cn/lib/utils"
@@ -23,8 +23,10 @@ import { CalendarIcon } from "lucide-react";
 const toHHmm = (val) => {
   if (!val) return "00:00";
   if (typeof val === "string" && /^\d{1,2}:\d{2}/.test(val)) return val.slice(0, 5);
-  const d = dayjs(val);
-  return d.isValid() ? d.format("HH:mm") : "00:00";
+  const d = parseDate(val);
+  return isValidDate(d)
+    ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+    : "00:00";
 };
 
 export default function TimePicker(props) {

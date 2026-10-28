@@ -10,6 +10,22 @@ const localDate = (value) => {
   return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(value);
 };
 
+// Like `localDate` but keeps the time: 'YYYY-MM-DD', 'YYYY-MM-DD HH:mm[:ss[.ms]]'
+// and 'YYYY-MM-DDTHH:mm…' without a zone are local wall-clock values. Safari
+// returns Invalid Date for the space-separated form, so it is never handed to
+// `new Date()`. Anything else (Date, timestamp, ISO with zone) is a real instant.
+const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3})\d*)?)?)?$/;
+const parseDate = (value) => {
+  if (value instanceof Date) return new Date(value.getTime());
+  const m = typeof value === "string" && value.trim().match(LOCAL_DATE_TIME);
+  if (m) {
+    return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0), +(m[7] || "0").padEnd(3, "0"));
+  }
+  return new Date(value);
+};
+
+const isValidDate = (date) => date instanceof Date && !isNaN(date.getTime());
+
 const getDate = (date=new Date(), format) => {
   if(!date) return null;
 
@@ -71,6 +87,8 @@ const getTime = (date = new Date(), format) => {
 }
 
 export {
+  parseDate,
+  isValidDate,
   getDate,
   getDateTime,
   getTime

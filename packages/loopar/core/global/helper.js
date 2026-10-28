@@ -1,5 +1,4 @@
 import cookie from './cookie-manager.js';
-import dayjs from 'dayjs';
 const _text = (text) => {
   return text || "Undefined"
 }
@@ -257,21 +256,6 @@ function renderizableProps(props) {
   }, {});
 }
 
-function formatDate(date, format = "YYYY-MM-DD") {
-  date = dayjs(new Date(date)).format(format);
-  return date == "Invalid Date" ? null : date;
-}
-
-function formatTime(date, format = "HH:mm:ss") {
-  date = dayjs(new Date(date)).format(format);
-  return date == "Invalid Date" ? null : date;
-}
-
-function formatDateTime(date, format = "YYYY-MM-DD HH:mm:ss") {
-  date = dayjs(new Date(date)).format(format);
-  return date == "Invalid Date" ? null : date;
-}
-
 function compare(a, b) {
   const normalize = (str) => str
     .toLowerCase()
@@ -432,9 +416,6 @@ export {
   cookie,
   renderizableProps,
   binaryValue,
-  formatDate,
-  formatTime,
-  formatDateTime,
   compare,
   getArrayMax,
   objToRGBA,

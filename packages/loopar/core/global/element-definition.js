@@ -1,5 +1,4 @@
-import dayjs from 'dayjs';
-import {getTime} from './date-utils.js';
+import {getTime, isValidDate} from './date-utils.js';
 
 export const TYPES = Object.freeze({
   increments: 'increments',
@@ -506,14 +505,14 @@ class DataInterface {
 
   isDate() {
     return {
-      valid: dayjs(new Date(this.value)).isValid(),
+      valid: isValidDate(new Date(this.value)),
       message: 'Please enter a valid date'
     }
   }
 
   isTime() {
     return {
-      valid: dayjs(new Date(getTime(this.value))).isValid(),
+      valid: isValidDate(new Date(getTime(this.value))),
       message: 'Please enter a valid date'
     }
   }

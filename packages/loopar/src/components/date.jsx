@@ -1,7 +1,7 @@
 import BaseInput from "@base-input";
-import dayjs from "dayjs";
 import loopar from "loopar";
 import { format } from 'date-fns';
+import { parseDate, isValidDate } from "@global/date-utils";
 
 import { cn } from "@cn/lib/utils"
 import { Button } from "@cn/components/ui/button"
@@ -24,25 +24,24 @@ export default function DatePicker(props) {
   const { renderInput, data } = BaseInput(props);
 
   return renderInput(field => {
-    const parsed = dayjs(field.value);
-    const isValid = !!field.value && parsed.isValid();
-    const fieldDate = isValid ? parsed.toDate() : null;
+    const parsed = field.value ? parseDate(field.value) : null;
+    const isValid = isValidDate(parsed);
+    const fieldDate = isValid ? parsed : null;
 
     const disabledDays = [];
     if (loopar.utils.trueValue(data.disable_past_dates)) disabledDays.push({ before: new Date() });
     if (loopar.utils.trueValue(data.disable_future_dates)) disabledDays.push({ after: new Date() });
-    const minDate = data.min_date ? dayjs(data.min_date) : null;
-    const maxDate = data.max_date ? dayjs(data.max_date) : null;
-    if (minDate?.isValid()) disabledDays.push({ before: minDate.toDate() });
-    if (maxDate?.isValid()) disabledDays.push({ after: maxDate.toDate() });
+    const minDate = data.min_date ? parseDate(data.min_date) : null;
+    const maxDate = data.max_date ? parseDate(data.max_date) : null;
+    if (isValidDate(minDate)) disabledDays.push({ before: minDate });
+    if (isValidDate(maxDate)) disabledDays.push({ after: maxDate });
 
     const setDateHandler = (val) => {
       if (!val) return;
-      const newDate = dayjs(val);
+      const newDate = parseDate(val);
       const date = fieldDate ? new Date(fieldDate) : new Date();
-      date.setFullYear(newDate.year());
-      date.setMonth(newDate.month());
-      date.setDate(newDate.date());
+      // One call: separate setMonth/setDate overflow (Jan 31 → Feb → Mar 3).
+      date.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
 
       field.onChange({ target: { value: date } });
     }

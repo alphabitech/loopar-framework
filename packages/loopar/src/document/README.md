@@ -16,7 +16,7 @@ Workspace
 
 | Folder | What lives there | Public import |
 |---|---|---|
-| `Entry.jsx` | The chain above + the entry registry (`entries`: middleware, layout and what differs per kind) | — (used by `loader.jsx`) |
+| `Entry.jsx` | The chain above + the entry registry (`entries`: chunks, middleware, layout and what differs per kind). Each kind's UI is a lazy chunk resolved by `loadEntry(kind)` before the first render (awaited in `AppSourceLoader`, server and client), so `<Entry>` stays synchronous for SSR | — (used by `loader.jsx`) |
 | `base/` | Base layer: `DocumentProvider`, `useDocument`, view options, `Layout` (generic), `DefaultView`, extension hooks | `@loopar/document` |
 | `form/` | Form kind: `FormProvider`, `useForm`, `useFormEvents`, `FormLayout`, `ReportLayout`, `BareLayout` | `@loopar/form` |
 | `list/` | List kind: `ListProvider`, `useList`, `ListLayout` | `@loopar/list` |

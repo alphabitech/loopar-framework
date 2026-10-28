@@ -4,7 +4,7 @@ import { themes } from "@global/themes";
 import { titleize } from "inflection";
 import BaseInput from "@base-input";
 import { useState, useEffect, useMemo } from "react";
-import { previewDarkBackground, generateThemeCSS, isNeutralTheme, normalizeBrand, CUSTOM_THEME } from "@global/theme-generator";
+import { previewDarkBackground, generateThemeCSS, isNeutralTheme, normalizeBrand, themeBaseColor, CUSTOM_THEME } from "@global/theme-generator";
 import {loopar} from "loopar";
 
 function getColorMetrics(hex) {
@@ -82,7 +82,7 @@ const ThemeColorSelector = ({ color, twcolor, text, onSelect, active }) => {
 }
 
 const BRAND_FIELDS = [
-  { field: "primary", label: "Primary", hint: "Buttons, links and highlights.", fallback: "#2563eb" },
+  { field: "primary", label: "Primary", hint: "Buttons, links and highlights.", fallback: "#000000" },
   { field: "accent", label: "Accent", hint: "Secondary buttons and soft highlights. Optional." },
   { field: "background", label: "Background", hint: "Page background in light mode. Optional." },
   { field: "foreground", label: "Text", hint: "Text color in light mode. Optional." },
@@ -259,7 +259,8 @@ export function ThemeSelector({ value, onChange }) {
     darkCustomColor: value?.darkCustomColor || '#0a0a0a'
   });
   const [includeTitles, setIncludeTitles] = useState(value?.includeTitles !== false);
-  const [brand, setBrand] = useState(value?.brand || { primary: "#2563eb" });
+  // A new custom palette starts from the color of the theme in use, not from an arbitrary one.
+  const [brand, setBrand] = useState(value?.brand || { primary: themeBaseColor(value?.theme || 'slate') });
   const isCustom = selectedTheme === CUSTOM_THEME;
 
   useEffect(() => {
@@ -272,6 +273,9 @@ export function ThemeSelector({ value, onChange }) {
   }, [selectedTheme, darkConfig, includeTitles, brand]);
 
   const handleThemeSelect = (themeName) => {
+    if (themeName === CUSTOM_THEME && !normalizeBrand(brand)) {
+      setBrand({ ...brand, primary: themeBaseColor(selectedTheme) });
+    }
     setSelectedTheme(themeName);
   };
 

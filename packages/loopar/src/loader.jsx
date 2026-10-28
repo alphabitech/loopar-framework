@@ -1,4 +1,4 @@
-import { Entry, entries } from "./document/Entry";
+import { Entry, entries, loadEntry } from "./document/Entry";
 import { DefaultView } from "./document/base/provider";
 import { WorkspaceLoader } from "@loopar/workspace-loader";
 import { MetaComponentsLoader } from "@loopar/components-loader";
@@ -109,7 +109,11 @@ export async function AppSourceLoader(Document) {
 
   const kind = Document?.entry && entries[Document.entry] ? Document.entry : null;
   const viewImport = Document?.entryPoint && appSources[Document.entryPoint];
-  const { default: View = null, config = null } = viewImport ? await viewImport() : {};
+  // The kind's chunk resolves next to the view, before the first render (SSR + hydration).
+  const [{ default: View = null, config = null }] = await Promise.all([
+    viewImport ? viewImport() : {},
+    kind ? loadEntry(kind) : null,
+  ]);
 
   if (!kind && !View) {
     return { default: () => <ErrorMessage Document={Document} /> };

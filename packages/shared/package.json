@@ -4,7 +4,6 @@
   "type": "module",
   "dependencies": {
     "date-fns": "4.4.0",
-    "dayjs": "1.11.23",
     "inflection": "3.0.2",
     "pathe": "2.0.3"
   }

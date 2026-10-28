@@ -1,6 +1,5 @@
 import { GlobalEnvironment } from '../global/element-definition.js';
 import path from "pathe";
-import dayjs from "dayjs";
 import crypto from "crypto-js";
 import * as lucideIcons from 'lucide-react';
 import * as simpleIcons from 'simple-icons';
@@ -468,7 +467,6 @@ export class Builder {
     global.Crypto = crypto;
     global.AJAX = 'POST';
     global.env = {};
-    global.dayjs = dayjs;
 
     await this.writeDefaultSSettings();
     env.looparConfig = fileManage.getConfigFile('loopar.config', null, {});

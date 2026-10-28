@@ -6,9 +6,7 @@ import {
   type FieldValues,
 } from "react-hook-form";
 import React, {
-  createContext,
   useEffect,
-  useContext,
   useMemo,
   useCallback,
 } from "react";
@@ -18,6 +16,7 @@ import { loopar } from "loopar";
 import * as z from "zod";
 
 import { Form } from "@cn/components/ui/form";
+import { BaseFormContext, type LooparFormDocRef, type LooparBaseFormContext } from "@form-context";
 
 /** Globals defined at runtime (e.g. `element-definition.js`). */
 declare function fieldIsWritable(field: unknown): boolean | undefined;
@@ -62,13 +61,6 @@ type MappedFormField = {
   value?: unknown;
 };
 
-/** Reference to the document / screen context that receives submit. */
-export interface LooparFormDocRef {
-  save?: (values: FieldValues) => void | Promise<void>;
-  Form?: UseFormReturn<FieldValues>;
-  /** In real documents this is often a subset of `FormState` or a custom map. */
-  formFields?: unknown;
-}
 
 /** API exposed on `formRef` after `FormProvider` mounts. */
 export type LooparFormImperativeApi = {
@@ -83,14 +75,6 @@ export type LooparFormImperativeApi = {
   form: UseFormReturn<FieldValues>;
 };
 
-type LooparBaseFormContext = UseFormReturn<FieldValues> & {
-  values: FieldValues | undefined;
-  docRef?: LooparFormDocRef | null;
-};
-
-export const BaseFormContext = createContext<LooparBaseFormContext | undefined>(
-  undefined,
-);
 
 const FILE_ELEMENTS = new Set([IMAGE_INPUT, FILE_INPUT]);
 
@@ -354,20 +338,6 @@ export const FormProvider = ({
   );
 };
 
-/** Live form values, or `undefined` outside a form (safe anywhere). */
-export function useFormValues(): FieldValues | undefined {
-  return useContext(BaseFormContext)?.values;
-}
-
-export function useFormContext(): LooparBaseFormContext {
-  const ctx = useContext(BaseFormContext);
-  if (ctx === undefined) {
-    throw new Error(
-      "useFormContext must be used within FormWrapper / FormProvider.",
-    );
-  }
-  return ctx;
-}
 
 export type FormWrapperProps = {
   __DATA__?: FieldValues;
