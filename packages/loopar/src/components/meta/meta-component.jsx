@@ -1,9 +1,8 @@
-import { useState, useRef, useEffect } from "react";
-import { __META_COMPONENTS__, ComponentsLoader } from "@loopar/components-loader";
+import { Suspense, useRef } from "react";
+import { useMetaModule } from "@loopar/components-loader";
 import { useDesigner } from "@context/designer-context";
 import { DesignElement } from "./src/DesignElement.jsx";
 import { Meta } from "./src/Meta.jsx"
-import { useWorkspace } from "@workspace/workspace-provider";
 import { getNodeKey } from "@global/prune-doc-structure";
 
 import { elementsDict as baseElementsDict } from "@global/element-definition";
@@ -22,38 +21,34 @@ export default function MetaComponentBase ({ elements=[], parent, className, par
       ? `${String(nodeKey)}${isDesigner ? "-d" : ""}`
       : `${String(parentKey ?? "root")}${isDesigner ? "d" : ""}-${index}`;
 
+    // One boundary per element: SSR waits for its module, hydration keeps
+    // its server HTML until it loads, client renders fill it in when ready.
     return (
-      <Meta
-        meta={meta}
-        parent={parent}
-        className={className}
-        parentKey={parentKey}
-        key={key}
-      />
+      <Suspense key={key} fallback={null}>
+        <Meta
+          meta={meta}
+          parent={parent}
+          className={className}
+          parentKey={parentKey}
+        />
+      </Suspense>
     )
   });
 }
 
-export const MetaComponent = ({ component = "div", render, ...props }) => {
+export const MetaComponent = (props) => (
+  <Suspense fallback={null}>
+    <MetaComponentLoaded {...props} />
+  </Suspense>
+);
+
+function MetaComponentLoaded({ component = "div", render, ...props }) {
   const isDesigner = useDesigner().designerMode;
   const ref = useRef(null);
-  const { ENVIRONMENT } = useWorkspace();
-  const [loadComponent, setLoadedComponents] = useState(Object.keys(__META_COMPONENTS__).find(c => c === component));
-  const Comp = __META_COMPONENTS__[loadComponent]?.default || __META_COMPONENTS__[loadComponent];
-
   const def = baseElementsDict[component]?.def || {};
 
-  if(ENVIRONMENT === "server" && (isDesigner || def.designerOnly !== true)) {
-    global.__REQUIRE_COMPONENTS__.push(component);
-  }
-
-  useEffect(() => {
-    if (!Comp) {
-      ComponentsLoader([component], () => {
-        setLoadedComponents(Object.keys(__META_COMPONENTS__).find(c => c === component));
-      });
-    }
-  }, []);
+  const metaModule = useMetaModule(component, isDesigner || def.designerOnly !== true);
+  const Comp = metaModule?.default || metaModule;
 
   if(!Comp) return null;
 

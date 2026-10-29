@@ -116,7 +116,7 @@ export default class WorkspaceController extends AuthController {
     __META__.wsToken = signWorkspaceToken(__META__.name || this.workspace) ?? null;
     __META__.permissions = permissions
     
-    // renderToString leaves hoistables (<title>/<meta>/<link>, e.g. from SEO)
+    // The SSR render leaves hoistables (<title>/<meta>/<link>, e.g. from SEO)
     // at the start of the fragment, but hydrateRoot expects them in <head> —
     // inline they desync the whole tree. Move them to the template's <head>.
     

@@ -4,6 +4,7 @@ import { useLocation } from 'react-router';
 import { useCookies } from "@services/cookie";
 import { usePersist } from "@services/persist-state";
 import { AppSourceLoader } from "@loopar/loader";
+import { DocumentComponentsLoader } from "@loopar/components-loader";
 import {useAuth} from "@context/auth-context"
 import Emitter from "@services/emitter/emitter";
 import { LoopSocket } from "@services/realtime/LoopSocket";
@@ -290,7 +291,10 @@ export function WorkspaceProvider({
       cache[r.instance] = __META__
     }
 
-    AppSourceLoader(__META__.Document).then((Module) => {
+    Promise.all([
+      AppSourceLoader(__META__.Document),
+      DocumentComponentsLoader(__META__),
+    ]).then(([Module]) => {
       if (!isCurrentFetch(fetchId)) {
         navTrace('stale-document-dropped', { path, key: __META__.key });
         return;

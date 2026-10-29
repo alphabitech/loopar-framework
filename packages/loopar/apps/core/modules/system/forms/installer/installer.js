@@ -338,6 +338,42 @@ export default class Installer extends BaseDocument {
     return !!app && !loopar.utils.compare(app, this.app_name);
   }
 
+  /**
+   * App that owns an existing record, read from the record itself: its
+   * `app_name` / `app` column (Module, Role…) or the app of its `module`.
+   * Null when the record doesn't exist or carries no ownership. `App:<name>`
+   * records are the apps themselves and are never "owned" by another app.
+   */
+  async #recordOwner(constructor, name) {
+    if (constructor === 'App') return null;
+    const value = async (field) => {
+      try {
+        return await loopar.db.getValue(constructor, field, name, { ifNotFound: null });
+      } catch {
+        return null; // the table has no such column
+      }
+    };
+    for (const field of ['app_name', 'app']) {
+      const app = await value(field);
+      if (app) return app;
+    }
+    const module = await value('module');
+    return module ? await this.getAppFromModule(module).catch(() => null) : null;
+  }
+
+  /** True when installed app `app` still ships `entryKey` (`Constructor:Name`) as its own. */
+  async #appShips(app, entryKey) {
+    try {
+      const data = await fileManage.getConfigFile('installer', loopar.makePath('apps', app));
+      const ent = data?.documents?.[entryKey];
+      if (!ent || typeof ent !== 'object') return false;
+      const owner = entryAppOwner(ent, entryKey);
+      return !owner || loopar.utils.compare(owner, app);
+    } catch {
+      return false;
+    }
+  }
+
   async installData(reinstall = false) {
     const moduleRoute = loopar.makePath('apps', this.app_name);
     let appData = await fileManage.getConfigFile('installer', moduleRoute);
@@ -488,12 +524,30 @@ export default class Installer extends BaseDocument {
         .some(ref => loopar.utils.toEntityKey(ref.name) === loopar.utils.toEntityKey(name));
       if (stillShipped) taken.push(`${e} (owned by "${ownerApp}")`);
     }
+
+    // Same rule for inline documents (Module, Role, …): a record that already
+    // belongs to another installed app wins. Without this, a hand-written
+    // installer.json shipping e.g. "Module:mail" re-saved loopar's own module
+    // with this app's data and moved it (and every entity in it) to this app.
+    for (const e of Object.keys(appData.documents)) {
+      const ent = appData.documents[e];
+      if (!ent || typeof ent !== 'object' || entryRoot(ent, e)) continue;
+
+      const owner = entryAppOwner(ent, e);
+      if (owner && owner !== this.app_name) continue;
+
+      const [constructor, ...rest] = e.split(':');
+      const name = rest.join(':');
+      const ownerApp = await this.#recordOwner(constructor, name);
+      if (!ownerApp || loopar.utils.compare(ownerApp, this.app_name)) continue;
+      if (await this.#appShips(ownerApp, e)) taken.push(`${e} (owned by "${ownerApp}")`);
+    }
     if (taken.length) {
       loopar.throw({
         status: 409, code: 'NAME_TAKEN', title: 'Install',
         message:
           `App "${this.app_name}" ships documents whose names already belong to another app: ` +
-          `${taken.join(', ')}. Entity names are unique per tenant: rename them in "${this.app_name}".`,
+          `${taken.join(', ')}. Names are unique per tenant: rename them in "${this.app_name}".`,
       });
     }
 

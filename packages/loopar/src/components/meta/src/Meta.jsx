@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useMemo, memo } from "react";
+import React, { useMemo, memo } from "react";
 import { elementsDict as baseElementsDict } from "@global/element-definition";
-import { __META_COMPONENTS__, ComponentsLoader } from "@loopar/components-loader";
+import { useMetaModule } from "@loopar/components-loader";
 import { useDesigner } from "@context/designer-context";
 import { cn } from "@cn/lib/utils";
 import { useDocument } from "@loopar/document";
 import { useFieldMeta } from "@loopar/document";
 import { useFormValues } from "@form-context";
-import { useWorkspace } from "@workspace/workspace-provider";
 import { extractFieldNames, evaluateCondition, useBuildMetaProps } from "./meta";
 import { MetaRender } from "./MetaRender";
 import { DesignElement } from "./DesignElement";
@@ -36,11 +35,7 @@ export const Meta = memo(function Meta(props) {
   // Runtime overrides of this field (setFieldDf / on): reactive, per field.
   const fieldMeta = useFieldMeta(docRef?.fields, metaProps.data?.name);
   
-  const [loadComponent, setLoadedComponents] = useState(Object.keys(__META_COMPONENTS__).find(c => c === meta.element));
-  const Comp = __META_COMPONENTS__[loadComponent]?.default || __META_COMPONENTS__[loadComponent];
-
   const def = baseElementsDict[meta.element]?.def || {};
-  const { ENVIRONMENT } = useWorkspace();
 
   const runtimeData = fieldMeta?.data;
   const displayOn = runtimeData?.display_on ?? metaProps.data?.display_on;
@@ -58,27 +53,11 @@ export const Meta = memo(function Meta(props) {
     return ![true, "true", "1", 1].includes(hiddenFlag);
   }, [displayOn, hiddenFlag, formValues]);
 
-  /*const [display, setDisplay] = useState(isDisplay());
-
-  useEffect(() => {
-    docRef.__REFS__[el.data.name] = {
-      ...metaProps.data,
-      hidden: !display
-    }
-
-    setDisplay(isDisplay());
-  }, [formValues]);*/
-
-  if(ENVIRONMENT === "server" && (isDesigner || def.designerOnly !== true)) {
-    global.__REQUIRE_COMPONENTS__.push(meta.element);
-  }
-  useEffect(() => {
-    if (!Comp && (isDesigner || def.designerOnly !== true)) {
-      ComponentsLoader([meta.element], () => {
-        setLoadedComponents(Object.keys(__META_COMPONENTS__).find(c => c === meta.element));
-      });
-    }
-  }, []);
+  // Suspends until the element's module is loaded (the <Suspense> around each
+  // Meta in MetaComponentBase scopes the wait). Designer-only elements load
+  // only in the designer.
+  const metaModule = useMetaModule(meta.element, isDesigner || def.designerOnly !== true);
+  const Comp = metaModule?.default || metaModule;
 
   if (Comp || [HTML_BLOCK, MARKDOWN, SEO].includes(meta.element)) {
     // Hydrate metaFields defaults here — the common point for SSR, the public

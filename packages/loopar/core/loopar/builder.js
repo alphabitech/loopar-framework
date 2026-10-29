@@ -7,7 +7,7 @@ import * as simpleIcons from 'simple-icons';
 import { fileManage } from "../file-manage.js";
 import { elementsDict, elementsDefinition } from "../global/element-definition.js";
 import { formulaFields } from "../global/formula.js";
-import { deskHomes } from "../document/desk-page.js";
+import { deskHomes, listDeskPages } from "../document/desk-page.js";
 import { isAuditableEntity, AUDIT_COLUMN_NAMES, orderChildRows } from "../global/audit.js";
 import { migrateChildPositions } from "../global/child-position-migration.js";
 import {PermissionManager} from "../auth/PermissionManager.js"
@@ -295,6 +295,11 @@ export class Builder {
       const routesByModule = {};
       for (const e of entities) {
         (routesByModule[e.module] ??= []).push({ link: e.is_single ? 'update' : e.name, description: e.name });
+      }
+      // Desk pages are files, not Entity rows: listed too, so a page opened
+      // from its module still marks its own app active in the rail.
+      for (const page of listDeskPages()) {
+        if (page.module) (routesByModule[page.module] ??= []).push({ link: page.name, description: page.name });
       }
 
       const homes = deskHomes();

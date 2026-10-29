@@ -42,7 +42,7 @@ const isTrue = (v) => v === 1 || v === true || v === "1";
 /** Where the card leads: the records (list, or the single form) or the rendered page. */
 function destinationOf(row, type) {
   if (row.name === "File Manager") return "list";
-  if (["Page Builder", "View Builder"].includes(type)) return "view";
+  if (["Page Builder", "View Builder", "Desk Page Builder"].includes(type)) return "view";
   if (DATA_TYPES.includes(type) || row.build) return isTrue(row.is_single) ? "update" : "list";
   return "";
 }
