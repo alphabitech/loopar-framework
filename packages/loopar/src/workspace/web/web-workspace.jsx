@@ -5,6 +5,8 @@ import { TopNav } from "./src/top-nav";
 import { useWorkspace } from "@workspace/workspace-provider";
 import { Markdown } from "@pure-html-block";
 import TrafficTracker from "./src/traffic-tracker";
+import { ANNOUNCEMENT_HEIGHT } from "./src/announcement-bar";
+import { useState } from "react";
 
 const SEO = () => {
   return <>
@@ -18,7 +20,9 @@ const SEO = () => {
 }
 
 const Layout = (({ ...props }) => {
-  const { activeParentMenu, webApp } = useWorkspace();
+  const { activeParentMenu, webApp, __META__ } = useWorkspace();
+  // The site's announcement bar (above the navigation) until the visitor closes it.
+  const [announcement, setAnnouncement] = useState(__META__.announcement || null);
 
   function buildMenuTree(menu) {
     const menuMap = {};
@@ -51,12 +55,16 @@ const Layout = (({ ...props }) => {
     ? 'lg:grid-cols-[var(--container-2xs)_minmax(0,1fr)] xl:grid-cols-[var(--container-2xs)_minmax(0,1fr)]'
     : 'grid-cols-1 w-full';
 
-  const className = `grid min-h-dvh w-full grid-rows-[1fr_auto] pt-web-header-height ${containerClass}`;
+  // Room for the fixed header: the navigation plus the announcement bar, if any.
+  const className = `grid min-h-dvh w-full grid-rows-[1fr_auto] pt-[calc(var(--spacing-web-header-height)+var(--web-announcement-height))] ${containerClass}`;
 
   return (
-    <div className="vaul-drawer-wrapper flex flex-col min-h-screen">
+    <div
+      className="vaul-drawer-wrapper flex flex-col min-h-screen"
+      style={{ "--web-announcement-height": announcement ? ANNOUNCEMENT_HEIGHT : "0px" }}
+    >
       <SEO/>
-      <TopNav menuActions={webApp.menu_actions} />
+      <TopNav menuActions={webApp.menu_actions} announcement={announcement} onCloseAnnouncement={() => setAnnouncement(null)} />
       <main className="flex-grow flex">
         <section
           className={className}

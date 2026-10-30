@@ -1,7 +1,7 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.3.7"
+    "version": "7.3.8"
   },
   "documents": {
     "Entity:Module": {
@@ -21,7 +21,7 @@
       "has_website": 0,
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.3.7",
+      "version": "7.3.8",
       "autor": "Administrator",
       "icon": "Infinity",
       "gap": "",
@@ -356,6 +356,9 @@
     },
     "Entity:Legal Notice": {
       "__root__": "/apps/loopar/modules/web/entities/legal-notice"
+    },
+    "Entity:Announcement": {
+      "__root__": "/apps/loopar/modules/web/entities/announcement"
     },
     "Entity:Git Account": {
       "__root__": "/apps/loopar/modules/developer/entities/git-account"

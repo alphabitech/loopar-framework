@@ -6,6 +6,7 @@ import { signWorkspaceToken } from "../auth/workspace-token.js";
 import { loopar, fileManager, PermissionManager, sidebarDashboards } from "loopar";
 import { shouldServeProduction } from "../server/runtime-mode.js";
 import { kioskHeadTags } from "../global/kiosk-manifest.js";
+import { activeAnnouncement } from "../global/announcements.js";
 import fs from 'fs';
 
 export default class WorkspaceController extends AuthController {
@@ -29,6 +30,7 @@ export default class WorkspaceController extends AuthController {
     } else if (workspace === "web" || workspace === "kiosk") {
       // Kiosk pages are web pages without the site's navigation: same app (logo, theme).
       WORKSPACE.web_app = loopar.webApp;
+      if (workspace === "web") WORKSPACE.announcement = await activeAnnouncement(loopar.webApp?.name);
     } else if (workspace === "portal") {
       WORKSPACE.menu_data = await WorkspaceController.portalMenuData(loopar.auth.user());
     }

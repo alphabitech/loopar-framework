@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { buttonVariants } from "@cn/components/ui/button";
+import { cn } from "@cn/lib/utils";
 import { Profile } from "./UserSecction.jsx";
 import { Link } from "@link";
 import {
@@ -13,6 +14,7 @@ import { Logo } from "./logo";
 import { ThemeToggle } from "@workspace/theme-toggle";
 import { BaseIcon } from "@base-icons";
 import { useWorkspace } from "@workspace/workspace-provider";
+import { AnnouncementBar, useAnnouncementScroll } from "./announcement-bar";
 
 function UserMenu({ onOpenLogin, onOpenProfile }) {
   // `user` is reactive (WorkspaceProvider refreshes it on `auth:changed`), so
@@ -109,7 +111,7 @@ function MenuActions({ menuActions = [], onOpenLogin, onOpenProfile }) {
         if (action.label) {
           return (
             <span key={key} className="contents">
-              <a href={action.action} {...target} className={`${buttonVariants({ size: "sm" })} hidden lg:inline-flex mr-2`}>
+              <a href={action.action} {...target} className={cn(buttonVariants({ size: "sm" }), "hidden lg:inline-flex mr-2")}>
                 {action.label}
               </a>
               <a href={action.action} {...target} className="hover:text-primary lg:hidden" aria-label={action.label}>
@@ -141,7 +143,7 @@ function MenuActions({ menuActions = [], onOpenLogin, onOpenProfile }) {
   );
 }
 
-export function TopNav({ menuActions }) {
+export function TopNav({ menuActions, announcement = null, onCloseAnnouncement }) {
   const { webApp } = useWorkspace();
   const [updatingProfile, setUpdatingProfile] = useState(false);
   const logoPosition = ["left", "center", "right"].includes(webApp.logo_position)
@@ -153,10 +155,15 @@ export function TopNav({ menuActions }) {
     onOpenProfile: () => setUpdatingProfile(true),
   };
 
+  // Past the top of the page the header slides up by the bar's height.
+  const scrolled = useAnnouncementScroll(!!announcement);
+
   return (
     <header
-      className="fixed top-0 z-40 w-full border-b bg-background/80 backdrop-blur-sm"
+      className="fixed top-0 z-40 w-full border-b bg-background/80 backdrop-blur-sm transition-transform duration-300"
+      style={announcement && scrolled ? { transform: "translateY(calc(-1 * var(--web-announcement-height)))" } : undefined}
     >
+      {announcement && <AnnouncementBar announcement={announcement} onClose={onCloseAnnouncement} />}
       {updatingProfile && <Profile onClose={() => setUpdatingProfile(false)} />}
       <div className="flex items-center px-2 h-web-header-height">
         <div className="flex lg:hidden flex-1 items-center">
