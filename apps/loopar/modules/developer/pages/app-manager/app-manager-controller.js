@@ -107,7 +107,7 @@ export default class AppManagerController extends SystemController {
     const result = await pullApp(app_name);
 
     const restartNote = result.needs_restart
-      ? ' Restart the tenant (nodemon will reload in dev) to apply.'
+      ? ' Reload the core to apply (Deploy reloads it).'
       : '';
     const changesNote = result.files_changed
       ? ` ${result.files_changed} file(s) changed.`

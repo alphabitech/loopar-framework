@@ -8,6 +8,8 @@
 import "loopar/bin/pm2-home.js";
 import { execSync } from 'child_process';
 import path from 'path';
+import os from 'os';
+import fs from 'fs';
 import chalk from 'chalk';
 import pm2 from 'pm2';
 
@@ -71,8 +73,16 @@ export function coreConfig() {
     name: CORE_PROCESS_NAME,
     namespace: projectName,
     script: 'node_modules/loopar/bin/core.js',
+    cwd: projectPath,
     exec_mode: coreEnv() === 'production' ? 'cluster' : 'fork',
     instances: 1,
+    // Zero-downtime reload: PM2 keeps the old worker serving until the new
+    // one sends process.send('ready') — after it listens and has warmed the
+    // active tenants (see core/server/warm-boot.js). listen_timeout caps the
+    // wait if a tenant hangs; kill_timeout lets the old worker drain.
+    wait_ready: true,
+    listen_timeout: 60000,
+    kill_timeout: 10000,
     env: coreEnvVars(),
   };
 }
@@ -84,8 +94,48 @@ export const startCoreProcess = async () => {
   return await pm2Do(pm2.start, config);
 };
 
-/** Restart the core (delete + fresh start so config/core.json is re-read). */
+const describeCore = () => new Promise((res) =>
+  pm2.describe(CORE_PROCESS_NAME, (e, d) => res(e ? null : (d?.[0] || null))));
+
+/**
+ * Reload the core through a transient ecosystem file: the public PM2 path
+ * that re-applies config/core.json env on reload (updateEnv), which a reload
+ * by name cannot do.
+ */
+const reloadCoreFromConfig = (config) => {
+  const file = path.join(os.tmpdir(), `${projectName}-loopar-core.json`);
+  fs.writeFileSync(file, JSON.stringify({ apps: [config] }));
+  return new Promise((res) => pm2.reload(file, (err) => {
+    try { fs.unlinkSync(file); } catch (_) { /* already gone */ }
+    if (err) { console.error(chalk.red(`❌ ${err.message || err}`)); res(false); }
+    else res(true);
+  }));
+};
+
+/**
+ * Restart the core, re-reading config/core.json.
+ *
+ * Graceful reload (no downtime) when the running process allows it: online,
+ * same exec_mode, and started with wait_ready. Otherwise — mode switch
+ * (fork ↔ cluster), stopped, or a process started before wait_ready existed —
+ * a full delete + start, which drops connections while the core boots.
+ */
 export const restartCoreProcess = async () => {
+  const config = coreConfig();
+  const env = (await describeCore())?.pm2_env;
+
+  const reloadable = env?.status === 'online'
+    && env.exec_mode === `${config.exec_mode}_mode`
+    && env.wait_ready === true;
+
+  if (reloadable) {
+    console.log(chalk.cyan(`Reloading core "${config.name}" (zero-downtime)…`));
+    return reloadCoreFromConfig(config);
+  }
+
+  if (env?.status === 'online') {
+    console.log(chalk.yellow(`Full restart of "${config.name}" (mode change or legacy process config) — brief downtime.`));
+  }
   await new Promise((res) => pm2.delete(CORE_PROCESS_NAME, () => res()));
   return startCoreProcess();
 };

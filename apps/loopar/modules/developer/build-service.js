@@ -57,8 +57,8 @@ function runNext() {
     args = ['bin/build/activate-staging.js'];
     tag = 'activate';
   } else {
-    cmd = 'npm';
-    args = ['run', 'build'];
+    cmd = 'yarn';
+    args = ['build'];
     tag = 'build';
   }
 

@@ -10,6 +10,7 @@ import { Document } from './loopar/document.js';
 import { listFilters, listPage } from './document/list-state.js';
 import { tailwinInit } from './loopar/tailwindbase.js';
 import { Server } from './server/server.js';
+import { warmAndSignalReady } from './server/warm-boot.js';
 import { fileManage } from './file-manage.js';
 import { cookieManager, sessionManager, getTenant, getRequest, requestContext } from './server/router/request-context.js';
 import { markdownRenderer } from "markdown";
@@ -591,6 +592,14 @@ export async function startCore() {
   import("./global/scheduler.js")
     .then(({ scheduler }) => scheduler.start())
     .catch((err) => console.warn(`⚠️  Scheduler not started: ${err.message}`));
+
+  // Connect active tenants and preload their apps' server code, then tell
+  // PM2 this worker is ready (zero-downtime reload — see warm-boot.js).
+  await warmAndSignalReady({
+    server: coreInstance.server,
+    getOrCreateTenantInstance,
+    appsBasePath: coreInstance.appsBasePath,
+  });
 
   return coreInstance;
 }

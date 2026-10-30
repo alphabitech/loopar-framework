@@ -154,7 +154,9 @@ export async function pullApp(name) {
     before_sha: before,
     after_sha: after,
     files_changed: filesChanged,
-    needs_restart: isFramework && changed,
+    // The core caches server modules for its whole life (preloaded at boot),
+    // so any pulled change — framework or app — needs a core reload.
+    needs_restart: changed,
     message: pullOut.stdout || pullOut.stderr || (changed ? 'Pulled.' : 'Already up to date.'),
   };
 }
