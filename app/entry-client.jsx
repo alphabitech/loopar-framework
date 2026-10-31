@@ -3,6 +3,8 @@ import { BrowserRouter } from "react-router";
 import App from "./App.tsx";
 import { Loader } from "@loopar/loader";
 import { ErrorBoundary } from "@error-boundary";
+import { versionWatch } from "@@tools/version/version-watch";
+import { draftStore } from "@@tools/version/draft-store";
 
 (async () => {
   const __META_SCRIPT__ = document.getElementById('__loopar-meta-data__');
@@ -12,6 +14,13 @@ import { ErrorBoundary } from "@error-boundary";
   // Signed workspace identity — echoed back on every RPC as X-Workspace-Token.
   globalThis.__wsToken__ = __META__.wsToken ?? undefined;
   globalThis.__user__ = __META__.user?.name;
+  globalThis.__site__ = __META__.site ?? undefined;
+
+  // Version skew guard: compare every response's build with the one we booted
+  // with, and recover from chunks of an old bundle (see version-watch).
+  versionWatch.init(__META__.build);
+  // Drafts housekeeping: expired ones, and other users' drafts on this site.
+  draftStore.prune({ site: __META__.site, user: __META__.user?.name });
 
   const { Workspace, View } = await Loader(__META__, "client");
 

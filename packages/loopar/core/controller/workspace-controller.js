@@ -1,6 +1,7 @@
 'use strict'
 
 import { pathToFileURL } from 'node:url';
+import { buildId } from "../server/build-info.js";
 import AuthController from "../auth/AuthController.js";
 import { signWorkspaceToken } from "../auth/workspace-token.js";
 import { loopar, fileManager, PermissionManager, sidebarDashboards } from "loopar";
@@ -107,6 +108,9 @@ export default class WorkspaceController extends AuthController {
     } : null;
     __META__.userId = userData?.name;
     __META__.site = loopar.tenantId;
+    // Client bundle this page boots with; compared against X-Loopar-Build on
+    // every later response to detect a newer deploy (null in development).
+    __META__.build = buildId();
 
     HTML = await render(url, __META__, this.req, this.res, permissions);
 

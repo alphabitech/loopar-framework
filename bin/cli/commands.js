@@ -7,6 +7,7 @@ import {
   withPm2,
   startProcess,
   startCoreProcess,
+  ensureCoreProcess,
   restartCoreProcess,
   corePort,
   projectName,
@@ -30,14 +31,14 @@ export async function host() {
 
   pm2Command('node bin/setup/ensure-site.js', true);
 
-  const started = await withPm2(() => startCoreProcess());
-  if (!started) {
-    // Most common cause: the core is ALREADY running (PM2 reports "already
-    // launched"). That's NOT fatal — we still (re)apply the Caddy config
-    // below, which is the whole point of re-running `yarn start` after a
-    // config or caddy-manager change. A genuine start failure just points
-    // Caddy at a not-yet-up upstream (502 until it boots), which self-heals.
-    console.warn(yellow(`⚠️  Core not freshly started (already running, or failed) — re-applying Caddy config anyway.`));
+  // Stopped → start. Online → graceful reload (picks up a git pull or a
+  // config/core.json change without dropping requests). Never a hard
+  // restart of a live core — see startCoreProcess.
+  const ok = await withPm2(() => ensureCoreProcess());
+  if (!ok) {
+    // We still (re)apply the Caddy config below: a genuine start failure just
+    // points Caddy at a not-yet-up upstream (502 until it boots).
+    console.warn(yellow(`⚠️  Core start/reload reported a failure — re-applying Caddy config anyway.`));
   }
 
   try {

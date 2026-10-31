@@ -9,6 +9,7 @@ import {useAuth} from "@context/auth-context"
 import Emitter from "@services/emitter/emitter";
 import { LoopSocket } from "@services/realtime/LoopSocket";
 import { navTrace } from "@@tools/router/nav-trace";
+import { versionWatch } from "@@tools/version/version-watch";
 
 /** Read the current public session (JWT is httpOnly → ask the server). */
 async function fetchSession() {
@@ -320,6 +321,15 @@ export function WorkspaceProvider({
     const targetPath = rawPath || '/';
     const targetSearch = rawSearch ? `?${rawSearch}` : '';
 
+    // A newer build is live: this navigation is the safe moment to load it.
+    // Full page load (drafts are flushed first by versionWatch.reload) instead
+    // of rendering new server meta with the old client bundle. The base page
+    // only — a modal's in-memory navigation must not move the whole page.
+    if (primary && versionWatch.isOutdated) {
+      versionWatch.reload(targetPath + targetSearch, "update");
+      return new Promise(() => {}); // page is unloading
+    }
+
     const currentFetchId = ++fetchIdRef.current;
     const preloadedMeta = !forceMeta && !!metaCacheRef.current[loopar.utils.urlInstance({ pathname: targetPath })];
 
@@ -379,7 +389,7 @@ export function WorkspaceProvider({
         }
       });
     });
-  }, [setDocument, goToErrorView, __WORKSPACE_NAME__]);
+  }, [setDocument, goToErrorView, __WORKSPACE_NAME__, primary]);
 
   /**
    * Re-fetch the active document. force:true clears the meta cache so the

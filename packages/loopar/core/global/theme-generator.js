@@ -185,6 +185,15 @@ function generateLightModeColors(baseTextHex, contrastThreshold, themeName) {
   };
 }
 
+/** Same hue as `color`, `step` lighter (HSL), saturation capped so tinted
+ *  backgrounds don't turn into neon surfaces. */
+function elevate(color, step) {
+  const h = color.get('hsl.h');
+  const sat = color.get('hsl.s') || 0;
+  const l = color.get('hsl.l') || 0;
+  return chroma.hsl(isNaN(h) ? 0 : h, Math.min(sat, 0.4), Math.min(1, l + step)).alpha(1);
+}
+
 function generateDarkModeColors(bgColor, baseTextHex, themeName, contrastThreshold) {
   const isCustom = themeName === CUSTOM_THEME;
   const background = chroma(bgColor).alpha(1);
@@ -193,12 +202,10 @@ function generateDarkModeColors(bgColor, baseTextHex, themeName, contrastThresho
   
   const text = chroma('#fafafa').alpha(1);
   
-  let card;
-  if (isNeutral) {
-    card = background.darken(0.15).alpha(1);
-  } else {
-    card = chroma.mix(background.hex(), baseTextHex, 0.05, 'rgb').darken(0.1).alpha(1);
-  }
+  // Dark mode: elevation reads as lightness — surfaces above the page get
+  // lighter, never darker (Material / GitHub / Linear). Offsets are in HSL
+  // lightness so they stay visible however dark the chosen background is.
+  const card = elevate(background, 0.045);
   
   let primary;
   if (isNeutral) {
@@ -219,10 +226,11 @@ function generateDarkModeColors(bgColor, baseTextHex, themeName, contrastThresho
 
   const primaryHue = primary.get('hsl.h');
   const secondaryHue = isNaN(primaryHue) ? 0 : (primaryHue + 30) % 360;
-  const secondary = chroma.hsl(secondaryHue, 0.065, 0.151).alpha(1);
+  // Hover/muted surface: always above the card, whatever the background.
+  const secondary = chroma.hsl(secondaryHue, 0.065, Math.max(0.151, (background.get('hsl.l') || 0) + 0.09)).alpha(1);
 
-  const popover = chroma.mix(background.hex(), baseTextHex, 0.03, 'rgb').alpha(1);
-  const border = chroma.mix(background.hex(), baseTextHex, 0.1, 'rgb').brighten(0.2).alpha(1);
+  const popover = elevate(background, 0.065);
+  const border = elevate(background, 0.12);
 
   return {
     background,

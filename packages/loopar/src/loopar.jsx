@@ -5,6 +5,7 @@ import * as Helpers from "@global/helper";
 import scriptManager from "@@tools/script-manager";
 import { elementsDict, AIPrompt, AIStructureSchema, sanitizeAIStructure } from "@global/element-definition";
 import Emitter from '@services/emitter/emitter';
+import { versionWatch } from "@@tools/version/version-watch";
 import animation from "./loopar/animation.js";
 import { ClientDatabase } from "./loopar/ClientDatabase.js";
 export { useRealtime } from "./loopar/useRealtime.js";
@@ -33,6 +34,7 @@ class Loopar {
       notify: (payload) => this.notify(payload),
       refresh: () => this.refresh(),
       error: (err) => this.throw(err),
+      build: (id) => versionWatch.observe(id),
     });
   }
 

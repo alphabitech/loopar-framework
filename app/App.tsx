@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router';
 import { RealtimeProvider } from "@services/realtime/RealtimeContext";
 import { AuthProvider} from "@context/auth-context"
 import { RouterBridge } from "@@tools/router/router-bridge";
+import { UpdateBanner } from "@@tools/version/update-banner";
 
 type ViewType = "module" | "app" | "page" | "list" | "view" | "form";
 type Environment = "development" | "staging" | "production";
@@ -92,6 +93,7 @@ const Main = ({ __META__, permissions, pathname, primary = true, onClose, onSave
   const content = (
     <>
       {primary && <RouterBridge />}
+      {primary && <UpdateBanner />}
       <main
         className={cn(
           "h-full font-sans antialiased"

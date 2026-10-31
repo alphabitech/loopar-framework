@@ -349,7 +349,9 @@ export const elementsDefinition = {
     { element: "padding", icon: "Shrink", type: TYPES.text },
     { element: "margin", icon: "Expand", type: TYPES.text },
     { element: "tailwind", icon: "SiTailwindcss", type: TYPES.longtext },
-    { element: "designer", icon: "Brush", type: TYPES.longtext },
+    // ownsDraft: keeps its own unsaved-work persistence (undo history, server
+    // base hash, conflict UI) — the generic form draft must leave it alone.
+    { element: "designer", icon: "Brush", type: TYPES.longtext, ownsDraft: true },
     { element: "slot", icon: "Plug"},
     { element: "metadata", icon: "Code", type: TYPES.json}
   ],

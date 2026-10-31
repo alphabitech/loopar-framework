@@ -15,6 +15,7 @@ import { shouldServeProduction } from './runtime-mode.js';
 import http from "http";
 import { RealtimeManager } from "../realtime/RealtimeManager.js";
 import { kioskManifest } from "../global/kiosk-manifest.js";
+import { buildIdMiddleware, buildEndpoint, previousAssetsMiddleware } from "./build-info.js";
 
 const server = new express();
 
@@ -45,6 +46,10 @@ export class Server extends Router {
     // One HTTP server for Express, realtime and Vite HMR — so HMR rides it
     this.httpServer = http.createServer(server);
     this.#installSecurityHeaders();
+    // Build identity: X-Loopar-Build on every response + a tenant-less probe,
+    // so open tabs detect a newer deploy (see build-info.js / version-watch).
+    this.server.use(buildIdMiddleware);
+    this.server.get('/__loopar/build', buildEndpoint);
     this.#installTenantResolution();
 
     if (this.serveProduction) {
@@ -193,6 +198,9 @@ export class Server extends Router {
 
     if (this.serveProduction) {
       server.use(express.static(path.join(loopar.pathRoot, 'dist/client')));
+      // A tab still on the previous bundle may lazy-load a chunk the new dist
+      // no longer has: serve it from the releases kept on disk.
+      server.use(previousAssetsMiddleware());
     }
 
     // Tenant-aware static assets: handlers built from the active tenant's roots

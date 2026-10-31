@@ -238,10 +238,10 @@ export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...prop
 
   return (
     <div
-      className="flex w-full flex-row items-center gap-3 border-b pb-3"
-      // The same right gutter on every page (room for the fixed ⋮ sidebar toggle,
-      // shown or not), so the buttons keep their spot between pages (record ⇄ print).
-      style={{ paddingRight: !sidebarOpen ? "1.5rem" : undefined }}
+      className="flex w-full flex-row items-center gap-3 border-b pb-2"
+      // Right gutter for the fixed ⋮ sidebar toggle (desk-ui), so it never
+      // covers the actions; kept on every page so buttons don't jump (record ⇄ print).
+      style={{ paddingRight: !sidebarOpen ? "2rem" : undefined }}
       data-print-hide
     >
       <div className="flex min-w-0 flex-1 flex-row items-center gap-2">
@@ -252,12 +252,14 @@ export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...prop
         )}
         {/* wide: Entity (big) · record (small) — phones: record (bold) under a small Entity */}
         <h1 className="flex min-w-0 flex-row items-baseline gap-2 max-sm:flex-col-reverse max-sm:items-start max-sm:gap-0">
-          <span className={`truncate text-2xl font-bold ${subtitle ? "max-sm:text-xs max-sm:font-normal max-sm:text-muted-foreground" : "max-sm:text-lg"}`}>{title}</span>
-          {subtitle && <span className="truncate text-lg text-muted-foreground max-sm:font-bold max-sm:text-foreground">{subtitle}</span>}
+          <span className={`truncate text-xl font-semibold ${subtitle ? "max-sm:text-xs max-sm:font-normal max-sm:text-muted-foreground" : "max-sm:text-lg"}`}>{title}</span>
+          {subtitle && <span className="truncate text-base text-muted-foreground max-sm:font-bold max-sm:text-foreground">{subtitle}</span>}
         </h1>
         <span className="flex shrink-0 empty:hidden"><SaveState Document={Document} /></span>
       </div>
       <Toolbar
+        // Compact row: every action (buttons and links from any view) at h-9; icons keep their size.
+        className="[&_:is(a,button)]:h-9"
         // View actions sit in the row (⋯ on phones) unless the view opts into `actionsInMenu`.
         inline={[...(actionsInMenu ? [] : viewActions), ...defaults]}
         menu={[

@@ -241,6 +241,28 @@ export const BaseDesigner = (props) => {
     setDraftConflict(false);
   }, [draftKey]);
 
+  // The form-level "discard unsaved changes" (use-form-draft) covers this
+  // designer too: drop our draft and go back to the server base. The form has
+  // already reset the field, so no onChange here; the resulting prop update
+  // hashes to the base and is ignored by the re-sync effect below.
+  useEffect(() => {
+    const onDiscard = (evt = {}) => {
+      if (evt.entity !== entity || (evt.name || "__new__") !== (name || "__new__")) return;
+      if (commitTimerRef.current) { clearTimeout(commitTimerRef.current); commitTimerRef.current = null; }
+      discardDraft();
+      const baseJson = historyRef.current.stack[0];
+      const base = JSON.parse(baseJson);
+      storeRef.current.populate(base);
+      historyRef.current = { stack: [baseJson], index: 0 };
+      emittedHashesRef.current.clear();
+      setLocalMetaComponents(base);
+      setHasUnsavedChanges(false);
+      syncHistory();
+    };
+    Emitter.on("form-draft:discard", onDiscard);
+    return () => Emitter.off("form-draft:discard", onDiscard);
+  }, [entity, name, discardDraft, syncHistory]);
+
   // Once, on mount: decide what to do with any persisted draft.
   useEffect(() => {
     if (draftHandledRef.current) return;

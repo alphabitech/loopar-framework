@@ -7,6 +7,9 @@ export default class HTTP {
     notify: () => {},
     refresh: () => {},
     error: (err) => { throw err; },
+    // Server build id of each response (X-Loopar-Build). The transport only
+    // reports it; the app decides what an outdated client means.
+    build: () => {},
   };
 
   bindUI(adapter = {}) {
@@ -176,6 +179,7 @@ export default class HTTP {
     try {
       const fetchPromise = fetch(url, fetchOptions)
         .then(async response => {
+          this.#ui.build(response.headers.get('X-Loopar-Build'));
           // fetch() follows 3xx silently. The server never redirects the AJAX
           // channel on purpose (redirects travel inside the JSON); if one was
           // followed anyway, the body belongs to ANOTHER url and rendering it

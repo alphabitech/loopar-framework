@@ -1,5 +1,4 @@
 import {AppBar} from "./app-bar";
-import { useWorkspace } from "@workspace/workspace-provider";
 import { MoreVertical, Save } from "lucide-react";
 import {Button} from "@cn/components/ui/button";
 import { useDocument, useViewOptions } from "@loopar/document";
@@ -17,7 +16,7 @@ const InnerSidebar = ({ toggleSidebar, ...props }) => {
         "border-l border-border dark:border-border-dark",
         SIDEBAR_WIDTH,
       )}
-      style={{top: "4rem", height: "calc(100% - 4rem)", transition: "width 0.2s"}}
+      style={{top: "var(--spacing-header-height)", height: "calc(100% - var(--spacing-header-height))", transition: "width 0.2s"}}
     >
       <div className="flex flex-col w-full">
         <div>
@@ -42,7 +41,6 @@ export default function DeskUI(props) {
   const docRef = props.docRef;
   const { sidebarOpen, handleSetSidebarOpen, inModal } = useDocument();
   const options = useViewOptions();
-  const {headerHeight} = useWorkspace();
 
   // No sidebar in a modal: it is `position: fixed` and would paint over the base page.
   const hasSidebar = !inModal && options.hasSidebar !== false;
@@ -56,16 +54,17 @@ export default function DeskUI(props) {
 
   return (
     <> 
+      {/* Fixed: reachable at any scroll position (long forms, designer save in the sidebar). */}
       {hasSidebar && !sidebarOpen && <Button 
         className="fixed right-0 p-1 z-10 text-slate-500 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-300"
         variant="ghost"
-        style={{top: headerHeight + "rem"}}
+        style={{top: "calc(var(--spacing-header-height) + 0.5rem)"}}
         onClick={toggleSidebar}
       >
         <MoreVertical/>
       </Button>}
       <div 
-        className={`flex flex-col flex-1 space-y-4 ${hasSidebar && sidebarOpen ? DOCUMENT_WIDTH_WITH_SIDEBAR : "w-full"}`}
+        className={`flex flex-col flex-1 space-y-3 ${hasSidebar && sidebarOpen ? DOCUMENT_WIDTH_WITH_SIDEBAR : "w-full"}`}
       >
         {hasHeader && 
           <AppBar 

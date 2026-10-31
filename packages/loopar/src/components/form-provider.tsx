@@ -12,6 +12,7 @@ import React, {
 } from "react";
 import { dataInterface } from "@global/element-definition";
 import { useFormulas } from "@@tools/use-formulas";
+import { useFormDraft } from "@@tools/version/use-form-draft";
 import { loopar } from "loopar";
 import * as z from "zod";
 
@@ -207,6 +208,10 @@ export const FormProvider = ({
   }, [watchedValues, onChange]);
 
   useFormulas(form, STRUCTURE, watchedValues);
+
+  // Unsaved work survives reloads (new deploy, crash, closed tab): autosaved
+  // per user + document and offered back on the next mount.
+  useFormDraft({ form, docRef, STRUCTURE, watchedValues });
 
   /**
    * Assigning `docRef.Form` is an intentional synchronous side-effect during render.

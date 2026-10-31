@@ -26,7 +26,9 @@ import { ROOT, RELEASES_DIR, readTag, clearTag } from './lib/release.js';
 
 const CORE_PROCESS_NAME = 'loopar-core';
 
-const KEEP_RELEASES = 2;
+// Current + 2 previous: rollback targets AND the source of hashed chunks for
+// tabs still running an older client (core/server/build-info.js).
+const KEEP_RELEASES = 3;
 
 const tag = readTag({ requiredBy: 'activate' });
 

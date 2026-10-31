@@ -87,9 +87,21 @@ export function coreConfig() {
   };
 }
 
-/** Start the core process (the generator). No tenant is loaded. */
+/**
+ * Start the core process (the generator). No tenant is loaded.
+ *
+ * Never touches a core that is already online: pm2.start() with a config
+ * OBJECT for an app that already exists runs restartProcessId — a hard
+ * stop+start (not "already launched"), which dropped every request for the
+ * seconds the core took to boot. Callers that want new code/env live on a
+ * running core use restartCoreProcess() (graceful reload) or ensureCoreProcess().
+ */
 export const startCoreProcess = async () => {
   const config = coreConfig();
+  if ((await describeCore())?.pm2_env?.status === 'online') {
+    console.log(chalk.gray(`Core "${config.name}" already online — left untouched.`));
+    return true;
+  }
   console.log(chalk.cyan(`Starting core "${config.name}" (${config.env.NODE_ENV}) on :${config.env.PORT} — serves all tenants`));
   return await pm2Do(pm2.start, config);
 };
@@ -129,7 +141,11 @@ export const restartCoreProcess = async () => {
     && env.wait_ready === true;
 
   if (reloadable) {
-    console.log(chalk.cyan(`Reloading core "${config.name}" (zero-downtime)…`));
+    // PM2 only overlaps old/new workers in cluster mode; in fork mode (dev)
+    // a "reload" is a plain restart, so don't promise what it can't do.
+    console.log(config.exec_mode === 'cluster'
+      ? chalk.cyan(`Reloading core "${config.name}" (zero-downtime)…`)
+      : chalk.cyan(`Restarting core "${config.name}" (fork/dev mode — brief restart)…`));
     return reloadCoreFromConfig(config);
   }
 
@@ -138,6 +154,16 @@ export const restartCoreProcess = async () => {
   }
   await new Promise((res) => pm2.delete(CORE_PROCESS_NAME, () => res()));
   return startCoreProcess();
+};
+
+/**
+ * Bring the core to the current code + config/core.json with the least
+ * disruption: stopped → start; online → graceful reload (new worker warms up
+ * and signals ready before the old one is retired). Used by `yarn serve`.
+ */
+export const ensureCoreProcess = async () => {
+  const online = (await describeCore())?.pm2_env?.status === 'online';
+  return online ? restartCoreProcess() : startCoreProcess();
 };
 
 /** PM2 status of the core process: 'online' | 'stopped' | 'errored' | … */
