@@ -5,14 +5,20 @@ import path from "pathe";
 import os from "os";
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { coreEnv } from 'loopar/core/config/core-config.js';
 
 const execAsync = promisify(exec);
 
 /**
  * CaddyManager — reverse proxy manager.
  *
- * Port strategy: try :80, else first free port from 12000 + OS-level :80→port
- * redirect so domains work without a port in the URL.
+ * Port strategy:
+ *   PRODUCTION (coreEnv() === 'production'): :80/:443 or fail loudly. Never a
+ *     silent fallback — a dev-mode Caddy (high port, HTTPS off) plus an OS
+ *     :80→port redirect left the public site unreachable (Cloudflare 521)
+ *     while everything looked "up" locally. See #assertProductionPort80.
+ *   DEVELOPMENT: try :80, else first free port from 12000 + OS-level
+ *     :80→port redirect so domains work without a port in the URL.
  *
  * Config writes ALL go through _writeFullConfig() (single atomic POST /config/).
  * Partial Caddy API endpoints (POST/DELETE /routes) hot-reload and can resurrect
@@ -20,6 +26,7 @@ const execAsync = promisify(exec);
  */
 export default class CaddyManager {
   constructor() {
+    this.isProductionEnv = coreEnv() === 'production';
     this.adminUrl = 'http://localhost:2019';
     this.httpPort = 80;
     // PM2/launchd resurrect the core with a minimal PATH (no /opt/homebrew/bin,
@@ -52,19 +59,38 @@ export default class CaddyManager {
     // served through Caddy. Route changes use the admin API; no restart needed.
     // Adopt the running instance's port so _writeFullConfig preserves it.
     if (await this.isRunning()) {
+      let listens = [];
       try {
         const res = await fetch(`${this.adminUrl}/config/apps/http/servers/srv0`);
         if (res.ok) {
           const srv = await res.json();
-          const listen = Array.isArray(srv?.listen) ? srv.listen[0] : null;
-          const m = String(listen || '').match(/:(\d+)$/);
+          listens = Array.isArray(srv?.listen) ? srv.listen : [];
+          const m = String(listens[0] || '').match(/:(\d+)$/);
           if (m) this.httpPort = Number(m[1]);
         }
       } catch (_) { /* keep default port */ }
+
+      // In production, a running Caddy on a dev port (left by an earlier
+      // fallback) must not be adopted: _writeFullConfig would keep it on that
+      // port with HTTPS off. Restart it in production mode instead. An empty
+      // Caddy (no srv0 yet) is fine — the next full config write puts it on :80.
+      const onDevPort = listens.length && !listens.some(l => /:80$/.test(String(l)));
+      if (!(this.isProductionEnv && onDevPort)) {
+        if (this.isProductionEnv) await this.#clearStaleRedirects();
+        return true;
+      }
+
+      console.warn(`⚠️  Caddy is running on ${listens.join(', ')} (dev mode) in production — restarting it on :80/:443.`);
+      const routes = await this._readCurrentRoutes();
+      await this._stopCaddy();
+      this.httpPort = await this.findAvailablePort();
+      await this.#clearStaleRedirects();
+      if (!await this._startCaddy(this.httpPort, routes)) throw new Error("Failed to restart Caddy in production mode.");
       return true;
     }
 
     this.httpPort = await this.findAvailablePort();
+    if (this.isProductionEnv) await this.#clearStaleRedirects();
     const started = await this._startCaddy(this.httpPort, []);
     if (!started) throw new Error("Failed to start Caddy.");
 
@@ -168,20 +194,25 @@ export default class CaddyManager {
   async findAvailablePort() {
     const net = await import('net');
 
-    const isPortFree = (port) => new Promise((resolve) => {
+    // Resolves null when the port can be bound, else the error code
+    // (EADDRINUSE: another process has it; EACCES: no permission for <1024).
+    const probe = (port) => new Promise((resolve) => {
       const server = net.default.createServer();
-      server.once('error', () => resolve(false));
-      server.once('listening', () => { server.close(); resolve(true); });
+      server.once('error', (err) => resolve(err?.code || 'EUNKNOWN'));
+      server.once('listening', () => server.close(() => resolve(null)));
       server.listen(port, '0.0.0.0');
     });
+    const isPortFree = async (port) => (await probe(port)) === null;
 
-    // Production: try :80 first
-    if (await isPortFree(80)) {
+    const err80 = await probe(80);
+    if (!err80) {
       console.log("✅ Port 80 available — production mode");
       return 80;
     }
 
-    console.log("⚠️  Port 80 in use — falling back to dev port (12000+)");
+    if (this.isProductionEnv) this.#failProductionPort80(err80);
+
+    console.log(`⚠️  Port 80 not usable (${err80}) — falling back to dev port (12000+)`);
 
     // Dev fallback: find first free port from 12000
     for (let port = 12000; port < 12100; port++) {
@@ -189,6 +220,66 @@ export default class CaddyManager {
     }
 
     throw new Error("No available port found (tried :80 and 12000–12099)");
+  }
+
+  /**
+   * Production never falls back: explain exactly why :80 failed and how to
+   * fix it, and stop. Serving on a dev port would look healthy locally while
+   * the public site is down.
+   */
+  #failProductionPort80(code) {
+    const user = os.userInfo().username;
+    const fixes = {
+      EACCES: [
+        `User "${user}" is not allowed to bind ports below 1024.`,
+        `Fix (persistent):`,
+        `  echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/99-loopar-ports.conf`,
+        `  sudo sysctl --system`,
+      ],
+      EADDRINUSE: [
+        `Another process already listens on :80.`,
+        `Find it:  sudo ss -ltnp 'sport = :80'`,
+        `(a system caddy/nginx/apache service is the usual culprit: sudo systemctl disable --now <service>)`,
+      ],
+    }[code] || [`Unexpected error binding :80 (${code}).`];
+
+    const message = [
+      `Cannot bind :80 in production (${code}). Refusing to fall back to a dev port:`,
+      `the public site would be unreachable while Caddy looks healthy.`,
+      ...fixes,
+    ].join('\n');
+
+    console.error(`❌ ${message}`);
+    throw new Error(message);
+  }
+
+  /**
+   * Remove :80 → high-port redirects that a past dev fallback installed
+   * (_ensureIptablesRedirect). In production they send public :80 traffic to
+   * a port nothing listens on. Best-effort: sudo -n never prompts; when it
+   * can't run, print the exact commands instead.
+   */
+  async #clearStaleRedirects() {
+    if (os.platform() !== 'linux') return;
+
+    let rules = [];
+    try {
+      const { stdout } = await execAsync('sudo -n iptables -t nat -S');
+      rules = stdout.split('\n')
+        .filter(r => /^-A (PREROUTING|OUTPUT) .*--dport 80 .*-j REDIRECT --to-ports? 1[0-9]{4}\b/.test(r));
+    } catch (_) {
+      return; // can't inspect without a sudo prompt — nothing safe to do here
+    }
+
+    for (const rule of rules) {
+      const del = rule.replace(/^-A /, '-D ');
+      try {
+        await execAsync(`sudo -n iptables -t nat ${del}`);
+        console.warn(`🧹 Removed stale dev redirect: iptables -t nat ${rule}`);
+      } catch (e) {
+        console.error(`❌ Stale :80 redirect is sending public traffic to a dev port. Remove it:\n   sudo iptables -t nat ${del}`);
+      }
+    }
   }
 
   /**
@@ -200,6 +291,7 @@ export default class CaddyManager {
    *   Linux: echo "$(whoami) ALL=(ALL) NOPASSWD: /sbin/iptables" | sudo tee /etc/sudoers.d/loopar-iptables
    */
   async _ensurePort80Redirect(targetPort) {
+    if (this.isProductionEnv) return; // never rewire :80 on a production host
     const platform = os.platform();
 
     try {
