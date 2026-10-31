@@ -102,9 +102,41 @@ export default class SingleController extends BaseController {
     });
   }
 
+  /**
+   * Resolves the menu item a URL segment names, the same way the router
+   * resolves the first segment (`toEntityKey`: case, spaces, `-` and `_`
+   * don't matter), so `/doc/getting-started` and `/Doc/Getting Started`
+   * land on the same item. Descendants of the current page's root menu
+   * win over items elsewhere in the tree, so a repeated link (two
+   * "Overview" under different parents) resolves inside its own section.
+   */
+  #resolveMenu(menuItems, action) {
+    const key = loopar.utils.toEntityKey;
+    const target = key(action);
+    if (!target) return null;
+
+    const matches = (item, field) => item[field] && key(item[field]) === target;
+    const find = (items) =>
+      items.find(item => matches(item, "link")) || items.find(item => matches(item, "page"));
+
+    const roots = menuItems.filter(item => !item.parent_menu && key(item.page) === key(this.document));
+    const descendants = [];
+    const walk = (parentLink) => {
+      for (const item of menuItems) {
+        if (item.parent_menu && key(item.parent_menu) === key(parentLink) && !descendants.includes(item)) {
+          descendants.push(item);
+          walk(item.link);
+        }
+      }
+    };
+    roots.forEach(root => walk(root.link));
+
+    return find(descendants) || find(menuItems) || null;
+  }
+
   async sendDocument(action=this.document, data={}) {
     const webApp = loopar.webApp || { menu_items: [] };
-    const menu = webApp.menu_items.find(item => [item.page, item.link].includes(action));
+    const menu = this.#resolveMenu(webApp.menu_items || [], action);
 
     let pageDocName;
     let detailSlug = null;
