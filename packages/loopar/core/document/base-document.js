@@ -64,6 +64,15 @@ export default class BaseDocument extends CoreDocument {
     return fields.length === 0 ? ['name'] : fields;
   }
 
+  /**
+   * Columns every list row carries besides the visible ones: `id`, and `name`
+   * (the record's key: list links and cards open `?name=…`) even when the
+   * entity doesn't show it as a column.
+   */
+  #rowKeys(listFields) {
+    return ["id", ...(listFields.includes("name") ? [] : ["name"])];
+  }
+
   getFieldListNames() {
     const fields = this.getFieldProperties('name');
 
@@ -164,7 +173,7 @@ export default class BaseDocument extends CoreDocument {
     // decide per row whether an 'own'-scoped action applies (AuthContext.canOn).
     // Only when the table has it: child/static entities are not auditable and
     // an app not yet updated lacks the column.
-    const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, "id", ...(await this.#ownerColumn())], condition);
+    const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, ...this.#rowKeys(listFields), ...(await this.#ownerColumn())], condition);
 
     return {...(rowsOnly ? {} : await this.__meta__(false)), ...{
         labels: this.getFieldListLabels(),
@@ -213,7 +222,7 @@ export default class BaseDocument extends CoreDocument {
     // decide per row whether an 'own'-scoped action applies (AuthContext.canOn).
     // Only when the table has it: child/static entities are not auditable and
     // an app not yet updated lacks the column.
-    const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, "id", ...(await this.#ownerColumn())], condition);
+    const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, ...this.#rowKeys(listFields), ...(await this.#ownerColumn())], condition);
 
     return rows;
   }
