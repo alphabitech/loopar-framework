@@ -315,8 +315,11 @@ export class Server extends Router {
       },
     });
 
-    httpServer.listen(port, () => {
-      console.log(`Core server listening on ${port} — turn tenants On to serve them.` + installMessage);
+    // HOST comes from config/core.json `host` (core-config coreEnvVars). Behind
+    // Caddy, "127.0.0.1" keeps the core off the public interfaces.
+    const host = process.env.HOST || undefined;
+    httpServer.listen(port, host, () => {
+      console.log(`Core server listening on ${host ? `${host}:` : ''}${port} — turn tenants On to serve them.` + installMessage);
     });
   }
 }
