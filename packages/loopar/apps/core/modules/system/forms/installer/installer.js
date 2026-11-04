@@ -5,6 +5,9 @@ import BaseDocument from "../../../../../../core/document/base-document.js";
 import { readRenameRecords, applyRenameToDatabase } from "../../../../../../core/document/entity-rename.js";
 import { normalizeScope } from "../../../../../../core/auth/PermissionManager.js";
 
+/** The framework app: its document names are reserved for every tenant. */
+const FRAMEWORK_APP = "loopar";
+
 function entryAppOwner(ent, entryKey) {
   if (ent.__app__ != null) return ent.__app__;
   if (ent.app != null) return ent.app;
@@ -572,6 +575,17 @@ export default class Installer extends BaseDocument {
       const ownerApp = await this.#recordOwner(constructor, name);
       if (!ownerApp || loopar.utils.compare(ownerApp, this.app_name)) continue;
       if (await this.#appShips(ownerApp, e)) taken.push(`${e} (owned by "${ownerApp}")`);
+    }
+    // The framework always wins: its names are reserved, so an app that took
+    // one can't block installing or updating loopar. The records are reclaimed
+    // below (installEntity / installDocument) and the app that still ships
+    // them is refused on its next update until it renames them.
+    if (taken.length && this.app_name === FRAMEWORK_APP) {
+      console.warn(
+        `[installer] loopar reclaims documents that belonged to other apps: ${taken.join(', ')}. ` +
+        `Those apps must rename them before their next update.`
+      );
+      taken.length = 0;
     }
     if (taken.length) {
       loopar.throw({

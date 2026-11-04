@@ -57,3 +57,21 @@ test("the same app installs once the colliding entry is gone, and updates keep i
     assert.equal((await loopar.db.getRow("Module", "mail", ["app_name"])).app_name, "loopar");
   });
 });
+
+test("loopar always wins: an app holding one of its names can't block the framework update", async () => {
+  // The app still ships an entity named like a framework one (as control did with Customer).
+  const dir = path.join(appDir, "modules", `${APP}-own`, "entities", "customer");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "customer.json"), JSON.stringify({ name: "Customer", module: `${APP}-own`, doc_structure: "[]" }));
+  await t.run(() => loopar.db.qx()("Entity").where({ name: "Customer" }).update({ module: `${APP}-own` }));
+
+  const { default: Installer } = await import(path.join(process.cwd(), "apps", "loopar", "installer.js"));
+  await t.run(() => new Installer({ app_name: "loopar" }).install(true));
+
+  await t.run(async () => {
+    assert.equal((await loopar.db.getRow("Entity", "Customer", ["module"])).module, "crm", "reclaimed by loopar");
+  });
+  // ...and the app is the one refused until it renames it.
+  await assert.rejects(install(true), /already belong to another app.*Entity:Customer \(owned by "loopar"\)/s);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
