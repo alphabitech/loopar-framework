@@ -35,7 +35,7 @@ function DetailValue({ col, value }) {
 
 /** Default card used when the view doesn't provide its own `gridTemplate`. */
 function GridCard({ row, titleFields, detailCols, iconCol, selected, onSelect, Entity, onDelete }) {
-  const title = titleFields.map((f) => row[f]).filter((v) => !isEmpty(v)).join(" ") || row.name;
+  const title = titleFields.map((f) => row.__titles__?.[f] ?? row[f]).filter((v) => !isEmpty(v)).join(" ") || row.name;
   const showName = String(title).toLowerCase() !== String(row.name).toLowerCase();
   const icon = iconCol ? row[iconCol.data.name] : null;
   const tag = row.type || row.module;
@@ -93,7 +93,7 @@ function GridCard({ row, titleFields, detailCols, iconCol, selected, onSelect, E
             <Fragment key={col.data.name}>
               <dt className="truncate text-muted-foreground">{col.data.label || col.data.name}</dt>
               <dd className="flex min-w-0 items-center text-foreground/90">
-                <DetailValue col={col} value={row[col.data.name]} />
+                <DetailValue col={col} value={row.__titles__?.[col.data.name] ?? row[col.data.name]} />
               </dd>
             </Fragment>
           ))}

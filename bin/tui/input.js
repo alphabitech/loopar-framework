@@ -7,6 +7,11 @@ import { state } from "./state.js";
 import { render } from "./render.js";
 import { run, advanceWizard, submitModal } from "./actions.js";
 import { openLogs, closeLogs, reloadLogs } from "./logs.js";
+import {
+  openTests, closeTests, runAll, runUnit, runIntegration, runSelection, runFailed,
+  stopRun, moveCursor, togglePick, scrollDetail,
+} from "./tests.js";
+import { openBackups, closeBackups, reloadBackups, moveBackup, backupNow, restoreSelected, deleteSelected } from "./backups.js";
 
 const DOUBLE_CLICK_MS = 400;
 let lastClick = { row: -1, t: 0 };
@@ -14,17 +19,49 @@ let lastClick = { row: -1, t: 0 };
 function handleTabClick(action) {
   if (action === "tab-tenants") {
     if (state.view === "logs") { closeLogs(); render(); }
+    if (state.view === "tests") { closeTests(); render(); }
+    if (state.view === "backups") { closeBackups(); render(); }
+    return true;
+  }
+  if (action === "tab-backups") {
+    if (state.view === "logs") closeLogs();
+    const sel = state.rows[state.selected];
+    if (state.view !== "backups" && sel) openBackups(sel.name);
     return true;
   }
   if (action === "tab-logs") {
     if (state.view !== "logs") {
+      if (state.view === "tests") closeTests();
+      if (state.view === "backups") closeBackups();
       const sel = state.rows[state.selected];
       if (sel) openLogs(sel.name);
     }
     return true;
   }
+  if (action === "tab-tests") {
+    if (state.view === "logs") closeLogs();
+    if (state.view === "backups") closeBackups();
+    if (state.view !== "tests") openTests();
+    return true;
+  }
   return false;
 }
+
+const BACKUP_BUTTONS = {
+  "backups-new": backupNow,
+  "backups-restore": restoreSelected,
+  "backups-delete": deleteSelected,
+  "backups-reload": reloadBackups,
+};
+
+const TEST_BUTTONS = {
+  "tests-all": runAll,
+  "tests-unit": runUnit,
+  "tests-integration": runIntegration,
+  "tests-selected": runSelection,
+  "tests-failed": runFailed,
+  "tests-stop": stopRun,
+};
 
 function handleMouse(seq) {
   // SGR: ESC [ < b ; x ; y (M=press, m=release)
@@ -46,6 +83,40 @@ function handleMouse(seq) {
     return c?.onNo ? c.onNo() : render();
   }
   if (state.mode !== "list") return; // text modals: keyboard only
+
+  // Backups tab: wheel moves the cursor, clicks press buttons.
+  if (state.view === "backups") {
+    if (b === 64) return moveBackup(-1);
+    if (b === 65) return moveBackup(1);
+    if (!isClick || state.busy) return;
+    const btn = state.buttonRegions.find((r) => r.y === y && x >= r.x1 && x <= r.x2);
+    if (!btn) return;
+    if (handleTabClick(btn.action)) return;
+    return BACKUP_BUTTONS[btn.action]?.();
+  }
+
+  // Tests tab: wheel moves the cursor, clicks pick files / press buttons.
+  if (state.view === "tests") {
+    const T = state.tests;
+    if (b === 64) return moveCursor(-1);
+    if (b === 65) return moveCursor(1);
+    if (!isClick) return;
+    const btn = state.buttonRegions.find((r) => r.y === y && x >= r.x1 && x <= r.x2);
+    if (btn) {
+      if (handleTabClick(btn.action)) return;
+      return TEST_BUTTONS[btn.action]?.();
+    }
+    const idx = y - (state.testRowStart || 0) + (T?.scroll || 0);
+    if (T && y >= state.testRowStart && idx >= 0 && idx < T.files.length && idx - T.scroll < T.listH) {
+      const now = Date.now();
+      const isDouble = lastClick.row === idx && now - lastClick.t < DOUBLE_CLICK_MS;
+      lastClick = { row: idx, t: isDouble ? 0 : now };
+      T.cursor = idx;
+      if (isDouble) { T.picked.clear(); return runSelection(); }
+      return render();
+    }
+    return;
+  }
 
   // Logs tab: wheel scrolls, clicks only on the header tabs.
   if (state.view === "logs") {
@@ -126,6 +197,49 @@ function handleKey(ch, seq) {
     return;
   }
 
+  // Backups tab
+  if (state.view === "backups") {
+    if (seq === "\x1b" || ch === "\t") { closeBackups(); return render(); }
+    if (state.busy) return;
+    if (seq === "\x1b[A") return moveBackup(-1);
+    if (seq === "\x1b[B") return moveBackup(1);
+    if (seq === "\x1b[15~") return reloadBackups();
+    switch (ch?.toLowerCase()) {
+      case "q": return quit();
+      case "\x03": return quit();
+      case "j": return moveBackup(1);
+      case "k": return moveBackup(-1);
+      case "n": return backupNow();
+      case "r": return restoreSelected();
+      case "d": return deleteSelected();
+    }
+    return;
+  }
+
+  // Tests tab
+  if (state.view === "tests") {
+    if (seq === "\x1b" || ch === "\t") { closeTests(); return render(); }
+    if (seq === "\x1b[A") return moveCursor(-1);
+    if (seq === "\x1b[B") return moveCursor(1);
+    if (seq === "\x1b[5~") return scrollDetail(-(state.tests?.listH || 10));
+    if (seq === "\x1b[6~") return scrollDetail(state.tests?.listH || 10);
+    if (seq === "\x1b[15~") return openTests(); // F5: re-scan test files
+    if (ch === " ") return togglePick();
+    if (ch === "\r") return runSelection();
+    switch (ch?.toLowerCase()) {
+      case "q": return quit();
+      case "\x03": return quit();
+      case "j": return moveCursor(1);
+      case "k": return moveCursor(-1);
+      case "a": return runAll();
+      case "u": return runUnit();
+      case "i": return runIntegration();
+      case "f": return runFailed();
+      case "x": return stopRun();
+    }
+    return;
+  }
+
   // Logs tab
   if (state.view === "logs") {
     const L = state.logs;
@@ -163,6 +277,8 @@ function handleKey(ch, seq) {
   }
   if (ch === "\t") return run("logs");
   if (ch === "L") return run("logs-all"); // shift+L → merged stream of ALL processes
+  if (ch === "T") return openTests(); // shift+T → tests tab (t = stop)
+  if (ch === "B") { const sel = state.rows[state.selected]; return sel ? openBackups(sel.name) : undefined; } // shift+B → backups of the selected tenant
   switch (ch?.toLowerCase()) {
     case "q": return quit();
     case "\x03": return quit(); // Ctrl+C

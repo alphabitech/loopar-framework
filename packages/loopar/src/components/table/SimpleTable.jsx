@@ -51,7 +51,7 @@ export function SimpleTable(props) {
                   className="align-middle"
                   {...cellProps}
                 >
-                  {col.render ? col.render(row, index) : row[data.name]}
+                  {col.render ? col.render(row, index) : (row.__titles__?.[data.name] ?? row[data.name])}
                 </TableCell>
               );
             })

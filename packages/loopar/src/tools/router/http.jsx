@@ -38,6 +38,8 @@ export default class HTTP {
 
     const here = window.location.pathname + window.location.search;
     if (!workspaceRequiresAuth(getWorkspaceName(window.location.pathname))) return redirect;
+    // Never return to a login page: that is how a bounce nests redirect=… forever.
+    if (/\/auth\/login(\/|$)/i.test(window.location.pathname)) return redirect;
 
     return redirect + (redirect.includes('?') ? '&' : '?') + 'redirect=' + encodeURIComponent(here);
   }

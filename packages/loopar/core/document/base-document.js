@@ -121,6 +121,43 @@ export default class BaseDocument extends CoreDocument {
     return { [Op.and]: conditions };
   }
 
+  /**
+   * Lists show the linked record's title, not its code: each row gets
+   * `__titles__ = { field: title }` for its select fields that link to an
+   * entity with titles (see linkTitles). The values themselves stay codes,
+   * so links and filters keep working.
+   */
+  async #attachLinkTitles(rows) {
+    if (!rows?.length) return;
+    const links = [];
+    const walk = (structure) => {
+      for (const el of structure || []) {
+        if (el.element === SELECT && el.data?.name) {
+          const entity = linkedEntity(el.data.options);
+          if (entity) links.push([el.data.name, entity]);
+        }
+        if (el.element !== FORM_TABLE && el.elements) walk(el.elements);
+      }
+    };
+    walk(loopar.utils.JSONparse(this.__ENTITY__.doc_structure, []));
+    if (!links.length) return;
+
+    let titles;
+    try {
+      titles = await this.linkTitles(rows);
+    } catch (e) {
+      console.warn(`[list] link titles of ${this.__ENTITY__.name} failed:`, e?.message || e);
+      return;
+    }
+    for (const row of rows) {
+      for (const [field, entity] of links) {
+        const value = row[field];
+        const title = value == null || value === "" ? null : titles[entity]?.[String(value)];
+        if (title != null && title !== "") (row.__titles__ ??= {})[field] = title;
+      }
+    }
+  }
+
   async #ownerColumn() {
     if (!this.__ENTITY__.__REF__?.__FIELDS__?.includes(CREATED_BY_COLUMN)) return [];
     try {
@@ -174,6 +211,7 @@ export default class BaseDocument extends CoreDocument {
     // Only when the table has it: child/static entities are not auditable and
     // an app not yet updated lacks the column.
     const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, ...this.#rowKeys(listFields), ...(await this.#ownerColumn())], condition);
+    await this.#attachLinkTitles(rows);
 
     return {...(rowsOnly ? {} : await this.__meta__(false)), ...{
         labels: this.getFieldListLabels(),

@@ -15,6 +15,8 @@
  *   render.js  frame drawing + clickable regions (tenants + logs tabs)
  *   actions.js tenant actions, dispatcher, wizard/confirm flows
  *   logs.js    log-tail tab (fs tail of PM2_HOME/logs, no pm2 bus to read)
+ *   tests.js   tests tab (node:test in a child process, live results)
+ *   backups.js backups tab (list, back up, restore, delete — no framework needed)
  *   input.js   keyboard + SGR mouse decoding
  *
  * Usage:
@@ -119,7 +121,7 @@ async function main() {
     await loadRows();
     state.busy = false;
   } else {
-    state.message = "ready · [o] open · [l] logs · [L] all logs · [p] prod/dev";
+    state.message = "ready · [o] open · [l] logs · [L] all logs · [T] tests · [B] backups · [p] prod/dev";
     state.messageKind = "info";
   }
   render();

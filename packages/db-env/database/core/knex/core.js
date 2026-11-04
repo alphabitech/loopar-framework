@@ -21,6 +21,7 @@ import {
 const TX_STATES = Symbol("db.transactions");
 
 import { orphanManager } from "./orphan-manager.js";
+import { wireQueryProbes } from "./query-probes.js";
 
 export function resolveColumnSqlBuilder(field) {
   // data.format / data.type
@@ -113,6 +114,18 @@ function coerceValueForColumn(value, colMeta) {
 
 export default class Core {
   #tableColumnsCache = new Map();
+  #knex = null;
+
+  // Every connection the connector opens goes through this setter, so query
+  // probes (see query-probes.js) observe all of them. Replacing a connection
+  // (a re-initialize, the connector's fallback chain) closes the previous
+  // pool: it used to stay open, holding the database file for good.
+  get knex() { return this.#knex; }
+  set knex(instance) {
+    const previous = this.#knex;
+    this.#knex = wireQueryProbes(instance) ?? null;
+    if (previous && previous !== instance) previous.destroy().catch(() => {});
+  }
 
   constructor(config = null) {
     this.customConfig = config;

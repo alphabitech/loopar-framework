@@ -19,7 +19,8 @@ export function ListGrid(props) {
     const titleFields = Document.Entity.title_fields?.split(",");
 
     if(titleFields){
-      return titleFields.map((field) => row[field?.trim()]).filter(Boolean).join(" ");
+      // `__titles__`: titles of linked records, sent by the list (BaseDocument.getList).
+      return titleFields.map((field) => row.__titles__?.[field?.trim()] ?? row[field?.trim()]).filter(Boolean).join(" ");
     }
 
     return row.name;

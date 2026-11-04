@@ -1,7 +1,7 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.3.8"
+    "version": "7.4.2"
   },
   "documents": {
     "Entity:Module": {
@@ -21,7 +21,7 @@
       "has_website": 0,
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.3.8",
+      "version": "7.4.1",
       "autor": "Administrator",
       "icon": "Infinity",
       "gap": "",
@@ -53,6 +53,20 @@
     },
     "Entity:Page View": {
       "__root__": "/apps/loopar/modules/analytics/entities/page-view"
+    },
+    "Module:debug": {
+      "name": "debug",
+      "description": "Debug",
+      "app_name": "loopar",
+      "icon": "Bug",
+      "in_sidebar": 1
+    },
+    "Module:backup": {
+      "name": "backup",
+      "description": "Backup",
+      "app_name": "loopar",
+      "icon": "DatabaseBackup",
+      "in_sidebar": 1
     },
     "Entity:Resources": {
       "__root__": "/apps/loopar/modules/core/entities/resources"
@@ -139,6 +153,12 @@
     },
     "Page Builder:Analytics Dashboard": {
       "__root__": "/apps/loopar/modules/analytics/pages/analytics-dashboard"
+    },
+    "Page Builder:Debugger": {
+      "__root__": "/apps/loopar/modules/debug/pages/debugger"
+    },
+    "Page Builder:Backups": {
+      "__root__": "/apps/loopar/modules/backup/pages/backups"
     },
     "Page Builder:Desk": {
       "__root__": "/apps/loopar/modules/core/pages/desk"
@@ -363,6 +383,31 @@
     "Entity:Git Account": {
       "__root__": "/apps/loopar/modules/developer/entities/git-account"
     },
+    "Entity:Debug Token": {
+      "__root__": "/apps/loopar/modules/debug/entities/debug-token"
+    },
+    "Entity:Backup Settings": {
+      "__root__": "/apps/loopar/modules/backup/entities/backup-settings"
+    },
+    "Module:crm": {
+      "name": "crm",
+      "description": "CRM",
+      "app_name": "loopar",
+      "icon": "Contact",
+      "in_sidebar": 1
+    },
+    "Entity:Customer Contact": {
+      "__root__": "/apps/loopar/modules/crm/entities/customer-contact"
+    },
+    "Entity:Customer Contact Link": {
+      "__root__": "/apps/loopar/modules/crm/entities/customer-contact-link"
+    },
+    "Entity:Customer External ID": {
+      "__root__": "/apps/loopar/modules/crm/entities/customer-external-id"
+    },
+    "Entity:Customer": {
+      "__root__": "/apps/loopar/modules/crm/entities/customer"
+    },
     "Module:loopar": {
       "name": "loopar",
       "description": "loopar",
@@ -421,6 +466,12 @@
     "Entity:Git Account": "link",
     "Entity:Resources": "link",
     "Entity:Module": "link",
-    "Entity:Page View": "link"
+    "Entity:Page View": "link",
+    "Entity:Debug Token": "link",
+    "Entity:Customer Contact": "link",
+    "Entity:Customer Contact Link": "link",
+    "Entity:Customer External ID": "link",
+    "Entity:Customer": "link",
+    "Entity:Backup Settings": "link"
   }
 }

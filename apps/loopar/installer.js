@@ -1,5 +1,7 @@
 import { loopar, CoreInstaller, fileManage } from "loopar";
 import sha1 from "sha1";
+import { ensureCustomerContact, linkPortalUser } from "./modules/crm/portal-access.js";
+import { setExternalId } from "./modules/crm/customers.js";
 import crypto from "crypto";
 
 /**
@@ -112,6 +114,7 @@ export default class Installer extends CoreInstaller {
       await this.#migrateAppTypeToHasWebsite();
       await this.#restoreNameIdentity();
       await this.#dropModuleGroup();
+      await this.#migrateCustomers();
       return result;
     }
     await this.validate(reinstall);
@@ -199,6 +202,66 @@ export default class Installer extends CoreInstaller {
       if (meta.length) console.log("[Installer] Module Group removed");
     } catch (e) {
       console.error("[Installer] Module Group removal failed:", e.message);
+    }
+  }
+
+  /**
+   * One-time migration (7.4.x): Customer moved from the control app to the
+   * core crm module. Existing rows get a customer_name and a capitalized
+   * status, the old `portal_user` link becomes a Customer Contact whose
+   * `user` is that portal user, and `stripe_customer_id` becomes an external
+   * id (source "stripe"); then the orphan columns are dropped.
+   * Idempotent; delete once every tenant is past 7.4.1.
+   */
+  async #migrateCustomers() {
+    const q = () => loopar.db.qx();
+    const schema = () => q().schema;
+    try {
+      if (!(await schema().hasTable("Customer"))) return;
+      const has = async (column) => await schema().hasColumn("Customer", column);
+
+      await q()("Customer").where(b => b.whereNull("customer_name").orWhere("customer_name", "")).update({ customer_name: q().raw("??", ["name"]) });
+      await q()("Customer").where({ status: "active" }).update({ status: "Active" });
+      await q()("Customer").where({ status: "inactive" }).update({ status: "Inactive" });
+
+      let failed = 0;
+      if (await has("portal_user")) {
+        let query = q()("Customer").select("name", "email", "customer_name", "portal_user").whereNotNull("portal_user");
+        if (await has("__deleted_at__")) query = query.whereNull("__deleted_at__");
+        const rows = await query;
+        for (const row of rows) {
+          if (!row.portal_user) continue;
+          try {
+            const user = await loopar.db.getRow("User", row.portal_user, ["name", "email"]);
+            if (!user) continue;
+            const contact = await ensureCustomerContact(row.name, { email: row.email || user.email, full_name: row.customer_name });
+            await linkPortalUser(contact, user.name);
+          } catch (e) {
+            failed++;
+            console.error(`[Installer] Customer ${row.name}: portal user not migrated:`, e.message);
+          }
+        }
+      }
+
+      if (await has("stripe_customer_id")) {
+        const rows = await q()("Customer").select("name", "stripe_customer_id").whereNotNull("stripe_customer_id").whereNot("stripe_customer_id", "");
+        for (const row of rows) {
+          try {
+            await setExternalId(row.name, "stripe", row.stripe_customer_id);
+          } catch (e) {
+            failed++;
+            console.error(`[Installer] Customer ${row.name}: Stripe id not migrated:`, e.message);
+          }
+        }
+      }
+
+      // Keep the old columns while anything is still to migrate (the next update retries).
+      if (failed) return;
+      for (const column of ["portal_user", "portal_invited_at", "stripe_customer_id", "tax_id"]) {
+        if (await has(column)) await schema().alterTable("Customer", t => t.dropColumn(column));
+      }
+    } catch (e) {
+      console.error("[Installer] Customer migration failed:", e.message);
     }
   }
 

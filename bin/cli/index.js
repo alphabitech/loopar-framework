@@ -43,6 +43,7 @@ const registry = {
   startup: () => c.startup(),
   logs:    () => c.logs(siteName, extraArg),
   'mfa-reset': () => c.mfaReset(siteName, extraArg), // <tenant> <user>
+  backup:  async () => (await import('./backup.js')).backupCmd(process.argv.slice(3)),
   help:    () => c.help(),
 };
 

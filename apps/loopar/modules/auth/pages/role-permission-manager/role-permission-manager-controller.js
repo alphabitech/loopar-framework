@@ -1,6 +1,10 @@
 'use strict';
 
-import { PageController, loopar, BaseController, PermissionManager, ActionScanner, Op } from 'loopar';
+import { PageController, loopar, BaseController, PermissionManager, ActionScanner, Op, SCOPE, normalizeScope } from 'loopar';
+
+const SCOPE_RANK = { [SCOPE.OWN]: 1, [SCOPE.CUSTOMER]: 2, [SCOPE.ALL]: 3 };
+/** Widest of two scopes, like PermissionManager ('customer' over 'own'). */
+const widestScope = (a, b) => (SCOPE_RANK[a] >= SCOPE_RANK[b] ? a : b);
 
 const getCommonActions = () => {
   return loopar.extractControllerMethods(BaseController).map(a => a.replace(/^(public)?action/i, ''))
@@ -97,7 +101,7 @@ async function uncoverCell(mode, entity, document, action) {
     const isExact = d === lc(document) && a === lc(action);
     if (isExact) continue;
 
-    const scope = row.scope === 'own' ? 'own' : 'all';
+    const scope = normalizeScope(row.scope);
 
     if (d === '*' && a === '*') {
       loopar.throw(`${entity} has the global "*:*" grant — remove it first to narrow permissions.`);
@@ -413,7 +417,7 @@ export default class RolePermissionManagerController extends PageController {
   }
 
   /**
-   * Set the scope ('all' | 'own') of one grant. Only direct grants of the
+   * Set the scope ('all' | 'own' | 'customer') of one grant. Only direct grants of the
    * given relation are touched (a User can't narrow what a Role gives).
    * The cell may be covered by a wildcard grant; in that case the wildcard
    * row is the one that changes (and the response says which).
@@ -421,7 +425,7 @@ export default class RolePermissionManagerController extends PageController {
   async actionSetScope() {
     const { mode = "Role", entity, document, action, scope = "all" } = this.body || {};
     if (!entity || !document || !action) loopar.throw(`${mode}, document and action are required`);
-    const value = String(scope).toLowerCase() === "own" ? "own" : "all";
+    const value = normalizeScope(scope);
 
     const candidates = [
       { document, action },
@@ -563,7 +567,7 @@ export default class RolePermissionManagerController extends PageController {
       if (!(await loopar.db.count("Permission", { ...where, deny: 0 }))) {
         await loopar.db.insertRow("Permission", {
           name: loopar.getUniqueKey(), ...where, deny: 0, app,
-          scope: String(scope).toLowerCase() === "own" ? "own" : "all",
+          scope: normalizeScope(scope),
         });
       }
     } else {
@@ -583,16 +587,21 @@ export default class RolePermissionManagerController extends PageController {
    *   direct    – keys granted to the subject itself
    *   inherited – { key: [role, ...] } keys the user gets from roles (User mode only)
    *   denied    – keys the user explicitly denies (User mode only)
-   *   scopes    – { key: 'own' } for grants narrowed to own records
+   *   scopes    – { key: 'own' | 'customer' } for narrowed grants
    *   assigned  – flat union (kept for existing consumers)
    */
   async actionGetResolvedPermissions() {
     const { role = "core", user } = this.query ?? {};
     const F = ['document', 'action', 'scope', 'relation_name'];
-    const scopesOf = rows => Object.fromEntries(
-      rows.filter(r => String(r.scope).toLowerCase() === 'own')
-          .map(r => [permKey(r.document, r.action), 'own'])
-    );
+    // Widest scope per key wins (a key absent from `scopes` is 'all').
+    const scopesOf = rows => {
+      const out = {};
+      for (const r of rows) {
+        const k = permKey(r.document, r.action);
+        out[k] = k in out ? widestScope(out[k], normalizeScope(r.scope)) : normalizeScope(r.scope);
+      }
+      return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== SCOPE.ALL));
+    };
 
     if (!user) {
       const rows = await loopar.db.getAll('Permission', F, { relation: 'Role', relation_name: role, deny: { [Op.or]: [null, 0] } });
@@ -615,14 +624,7 @@ export default class RolePermissionManagerController extends PageController {
     }
     const direct = [...new Set(userPerms.map(r => permKey(r.document, r.action)))];
 
-    // Scope per key: 'own' only if every grant providing it is 'own' (widest wins).
-    const own = {};
-    for (const r of [...rolePerms, ...userPerms]) {
-      const k = permKey(r.document, r.action);
-      const isOwn = String(r.scope).toLowerCase() === 'own';
-      own[k] = k in own ? (own[k] && isOwn) : isOwn;
-    }
-    const scopes = Object.fromEntries(Object.entries(own).filter(([, v]) => v).map(([k]) => [k, 'own']));
+    const scopes = scopesOf([...rolePerms, ...userPerms]);
 
     const assigned = [...new Set([...Object.keys(inherited), ...direct])].filter(k => !denied.includes(k));
     return { assigned, direct, inherited, denied, scopes };

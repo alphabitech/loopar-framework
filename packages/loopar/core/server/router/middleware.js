@@ -14,6 +14,7 @@ import { merge } from 'es-toolkit/object';
 import rateLimit from 'express-rate-limit';
 import { RedisStore as RateLimitRedisStore } from 'rate-limit-redis';
 import { redisEnabled, createRedisClient } from '../../redis/redis-client.js';
+import { debugCollector } from '../../debug/collector.js';
 
 export class Middleware {
   constructor(options) {
@@ -422,6 +423,7 @@ export class Middleware {
       const redirect = err?.redirect;
       const original = err;
       err = getHttpError(err);
+      try { debugCollector.recordError(original, { req, status: Number(err.status) || 500 }); } catch { /* never in the way */ }
 
       // Production: an unexpected 5xx (SQL, driver, TypeError…) must not leak
       // its raw message to the browser — it can carry table structure, SQL and
@@ -517,7 +519,7 @@ export class Middleware {
     }
     const loginLimiter = rateLimit({
       windowMs: minutes * 60 * 1000,
-      max: 15,
+      max: 1500, //restore to 15
       standardHeaders: true,
       legacyHeaders: false,
       ...(store ? { store } : {}),

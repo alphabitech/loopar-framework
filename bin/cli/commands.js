@@ -317,6 +317,7 @@ export function help() {
   log(cyan('  watch             ') + gray('Warm release builder → build/staging under pm2 (stop: yarn stop build-watch)'));
   log(cyan('  startup           ') + gray('Register reboot-safe boot hook (run once after first deploy)'));
   log(cyan('  mfa-reset <tenant> <user>') + gray('  Turn 2FA off for a user who lost the phone and recovery codes'));
+  log(cyan('  backup [create|list|restore|delete]') + gray('  Tenant backups (yarn backup for details)'));
   log(cyan('  help              ') + gray('Show this message'));
   log();
   log(gray('dev/prod is a GLOBAL core switch (config/core.json → nodeEnv), toggled from'));

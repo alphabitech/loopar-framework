@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo, useEffect, useCallback } from "react";
 import loopar from "loopar";
-import { cap, getOwnActions, makeGridCols, buildPermissionsFromResolved, resolveCell, updateCell, updateColumn, updateAllDoc, permKey } from "../helper";
+import { cap, getOwnActions, makeGridCols, buildPermissionsFromResolved, resolveCell, updateCell, updateColumn, updateAllDoc, permKey, scopeOf, nextScope, SCOPE_LABEL } from "../helper";
 import { Checkbox } from "./Checkbox.jsx";
 import { OwnChip } from "./own-chip.jsx";
 import { AppTabs } from "./app-tabs.jsx";
@@ -125,9 +125,9 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
   const appActionDirect = (action) => directKeys.has(appKeyOf(action));
   const appRowScope = (action) => {
     const s = resolved.scopes ?? {};
-    const own = k => Object.entries(s).some(([sk, v]) => sk.toLowerCase() === k && v === 'own');
-    if (appActionDirect(action)) return own(appKeyOf(action)) ? 'own' : 'all';
-    if (appAll) return own(`app:${String(currentApp).toLowerCase()}:*`) ? 'own' : 'all';
+    const scopeAt = k => scopeOf(Object.entries(s).find(([sk]) => sk.toLowerCase() === k)?.[1]);
+    if (appActionDirect(action)) return scopeAt(appKeyOf(action));
+    if (appAll) return scopeAt(`app:${String(currentApp).toLowerCase()}:*`);
     return null;
   };
   // In user mode the app row may also be inherited from a role.
@@ -170,14 +170,21 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
     </div>
   );
 
-  const ScopePill = ({ own, visible, onClick, title }) => (
-    <button type="button" title={title} onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className={`absolute left-1/2 -translate-x-1/2 -bottom-2 z-10 text-[10px] font-semibold leading-none px-1.5 py-[2px] rounded-full border transition-all whitespace-nowrap
-        ${own ? "bg-amber-500 text-white border-amber-400 shadow opacity-100"
-              : `bg-background text-muted-foreground border-border ${visible ? "opacity-100" : "opacity-0 group-hover/cell:opacity-100"}`}`}>
-      {own ? "own" : "all"}
-    </button>
-  );
+  const PILL = {
+    own: "bg-amber-500 text-white border-amber-400 shadow opacity-100",
+    customer: "bg-sky-500 text-white border-sky-400 shadow opacity-100",
+  };
+  const ScopePill = ({ scope, visible, onClick }) => {
+    const current = scopeOf(scope);
+    const next = nextScope(current);
+    return (
+      <button type="button" title={`Scope: ${SCOPE_LABEL[current]} — click for ${SCOPE_LABEL[next]}`} onClick={(e) => { e.stopPropagation(); onClick(next); }}
+        className={`absolute left-1/2 -translate-x-1/2 -bottom-2 z-10 text-[10px] font-semibold leading-none px-1.5 py-[2px] rounded-full border transition-all whitespace-nowrap
+          ${PILL[current] ?? `bg-background text-muted-foreground border-border ${visible ? "opacity-100" : "opacity-0 group-hover/cell:opacity-100"}`}`}>
+        {current}
+      </button>
+    );
+  };
 
   return (
     <div className="flex flex-col overflow-hidden flex-1 min-h-0">
@@ -239,7 +246,7 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
               const covered = appAll && !direct;
               const inheritedRoles = !direct && !appAll ? appRowInherited(action) : null;
               const scope = appRowScope(action);
-              const isOwn = scope === 'own' || (inheritedRoles && (resolved.scopes?.[appKeyOf(action)] === 'own'));
+              const cellScope = scope ?? (inheritedRoles ? scopeOf(resolved.scopes?.[appKeyOf(action)]) : null);
               const isSav = saving === key;
               const title = direct ? `Direct: ${key}` : covered ? `via App:${currentApp}:*` : inheritedRoles ? `via ${inheritedRoles.join(', ')}` : `Grant ${action} on every document of ${currentApp}`;
               return (
@@ -250,14 +257,13 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
                         <Checkbox
                           checked={direct}
                           inherited={covered || !!inheritedRoles}
-                          own={!!isOwn}
+                          scope={cellScope}
                           title={title}
                           onClick={() => (covered || inheritedRoles) ? handleToggleApp(action, true) : handleToggleApp(action, !direct)}
                         />
                         {direct && (
-                          <ScopePill own={scope === 'own'} visible={false}
-                            title={scope === 'own' ? "Scope: own records only — click for all" : "Scope: all records — click to restrict to own"}
-                            onClick={() => handleSetAppScope(action, scope === 'own' ? 'all' : 'own')} />
+                          <ScopePill scope={scope} visible={false}
+                            onClick={(next) => handleSetAppScope(action, next)} />
                         )}
                       </div>}
                 </div>
@@ -329,8 +335,8 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
                     const canScope = isDirect;
                     const title = !has ? undefined
                       : isDenied ? "Denied for this user"
-                      : isDirect ? `Direct grant${cell.own ? " · own records" : ""}`
-                      : isInherited ? `${viaLabel(cell)}${cell.own ? " · own records" : ""}`
+                      : isDirect ? `Direct grant${cell.scope && cell.scope !== 'all' ? ` · ${SCOPE_LABEL[cell.scope]}` : ""}`
+                      : isInherited ? `${viaLabel(cell)}${cell.scope && cell.scope !== 'all' ? ` · ${SCOPE_LABEL[cell.scope]}` : ""}`
                       : "Not granted";
 
                     return (
@@ -342,15 +348,14 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
                                 checked={isDirect}
                                 inherited={isInherited}
                                 denied={isDenied}
-                                own={!!cell?.own}
+                                scope={cell?.scope}
                                 title={title}
                                 na={!has}
                                 onClick={() => has && handleToggle(doc, action, isDenied ? true : !checked)}
                               />
                               {canScope && (
-                                <ScopePill own={cell.own} visible={false}
-                                  title={cell.own ? "Scope: own records only — click for all records" : "Scope: all records — click to restrict to own records"}
-                                  onClick={() => handleSetScope(doc, action, cell.own ? 'all' : 'own')} />
+                                <ScopePill scope={cell.scope} visible={false}
+                                  onClick={(next) => handleSetScope(doc, action, next)} />
                               )}
                             </div>}
                       </div>
@@ -391,8 +396,9 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
       <div className="flex items-center gap-4 px-4 py-2 border-t border-border bg-secondary/60 text-[11px] text-muted-foreground flex-shrink-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         <span className="flex items-center gap-1.5"><Checkbox checked /> direct</span>
         <span className="flex items-center gap-1.5"><Checkbox inherited /> inherited (App:x · *:x · role)</span>
-        <span className="flex items-center gap-1.5"><Checkbox checked own /> own records</span>
-        <span className="flex items-center gap-1.5"><Checkbox inherited own /> inherited · own</span>
+        <span className="flex items-center gap-1.5"><Checkbox checked scope="own" /> own records</span>
+        <span className="flex items-center gap-1.5"><Checkbox inherited scope="own" /> inherited · own</span>
+        <span className="flex items-center gap-1.5"><Checkbox checked scope="customer" /> customer's records (portal)</span>
         <span className="flex items-center gap-1.5"><Checkbox denied /> denied</span>
         <span className="ml-auto whitespace-nowrap">click = toggle · pill = scope · hover = source</span>
       </div>

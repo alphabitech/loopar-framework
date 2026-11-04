@@ -37,7 +37,7 @@ export default class SingleController extends BaseController {
     await this.beforeAction();
     const selfAction = `${loopar.utils.Capitalize(action)}`;
 
-    if (typeof this[`publicAction${selfAction}`] == 'function') {
+    if (typeof this[`publicAction${selfAction}`] == 'function' && !this.isRevokedPublicAction(action)) {
       return await this[`publicAction${selfAction}`]();
     }else if(typeof this[`action${selfAction}`] == 'function'){
       return await this[`action${selfAction}`]();

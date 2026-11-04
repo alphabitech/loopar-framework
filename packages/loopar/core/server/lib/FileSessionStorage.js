@@ -118,7 +118,7 @@ export class FileSessionStore extends Store {
         }
       }
     } catch (err) {
-      console.error('Error limpiando sessions:', err);
+      console.error('err cleaning sessions:', err);
     }
   }
   

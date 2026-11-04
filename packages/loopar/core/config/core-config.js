@@ -63,6 +63,17 @@ export function coreEnv() {
   return pick(load().nodeEnv, process.env.NODE_ENV, 'development');
 }
 
+/**
+ * Debugger collector (requests, SQL, logs, errors — see core/debug). On by
+ * default in development, off in production unless `"debug": true` in
+ * config/core.json (or LOOPAR_DEBUG=1). Read at boot: restart to apply.
+ */
+export function debugEnabled() {
+  const v = pick(load().debug, process.env.LOOPAR_DEBUG);
+  if (v === undefined || v === null || v === '') return coreEnv() !== 'production';
+  return v === true || v === 'true' || v === 1 || v === '1';
+}
+
 /** Bind address. */
 export function coreHost() {
   return pick(load().host, process.env.HOST, '0.0.0.0');

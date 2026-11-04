@@ -19,6 +19,8 @@
     "sharp": "0.35.5",
     "simple-git": "4.0.2",
     "socket.io": "4.8.4",
-    "socket.io-client": "4.8.4"
+    "socket.io-client": "4.8.4",
+    "ssh2": "1.16.0",
+    "tar": "7.5.15"
   }
 }

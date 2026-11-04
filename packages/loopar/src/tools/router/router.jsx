@@ -1,5 +1,5 @@
 import HTTP from '@@tools/router/http';
-import { getWorkspaceName } from '@global/router-utils';
+import { getWorkspaceName, VALID_WORKSPACES } from '@global/router-utils';
 import { navTrace } from './nav-trace.js';
 
 export default class Router extends HTTP {
@@ -122,14 +122,16 @@ export default class Router extends HTTP {
       return parent + route;
     }
 
-    const isLoggedIn = this.isLoggedIn();
-    const isAuthRoute = route.split('/')[1] === 'auth' && !isLoggedIn;
-    const isDeskRoute = route.split('/')[1] === 'desk' && isLoggedIn;
-    const wsPrefix = isDeskRoute
-      ? ""
-      : (this.workspace === "desk" ? `/${this.workspace}` : "");
+    // A route that already names its workspace (/auth/login, /portal/…,
+    // /desk/…) is final, whatever the client thinks of the session: the
+    // server decides. Prefixing it from a stale session turned an expired
+    // session's /auth/login into /desk/auth/login, which bounced back to
+    // login with one more nested `redirect=` on every round.
+    const head = route.split(/[/?#]/)[1]?.toLowerCase();
+    if (VALID_WORKSPACES.includes(head)) return route;
 
-    return isAuthRoute ? route : wsPrefix + route;
+    // Workspace-relative routes ("/Entity/list") stay inside the desk.
+    return this.workspace === "desk" ? `/desk${route}` : route;
   }
 
   isLoggedIn() {

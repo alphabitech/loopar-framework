@@ -1,6 +1,8 @@
 'use strict';
 
-import {KnexORM} from 'db-env';
+import {KnexORM, addQueryProbe} from 'db-env';
+import { debugCollector } from './debug/collector.js';
+import { testRuns } from './debug/test-runner.js';
 import sha1 from "sha1";
 import * as Helpers from "./global/helper.js";
 import * as dateUtils from "./global/date-utils.js";
@@ -573,6 +575,21 @@ export function getTenantInstance(tenantId) {
  * active tenant simply gets nothing (the tenant must be turned On).
  */
 export async function startCore() {
+  // Debugger collector (requests, SQL, logs, errors): only the serving core
+  // records — tests and CLI scripts that import loopar never install it.
+  // Live stream to the Debugger page: the tenant's `debug` socket channel,
+  // joined only by users allowed to open the Debugger (see server.js canJoin).
+  const debugStream = {
+    wants: (tenant) => RealtimeManager.hasListeners(tenant, 'debug'),
+    publish: (tenant, action, payload) => RealtimeManager.emit(tenant, 'debug', action, payload),
+  };
+  debugCollector.install({
+    addQueryProbe,
+    resolveUser: () => loopar.auth?.user?.() ?? null,
+    stream: debugStream,
+  });
+  testRuns.stream = debugStream;
+
   await coreInstance.server.initialize();
 
   // Domains-from-boot: ensure Caddy is up and routing every tenant domain to

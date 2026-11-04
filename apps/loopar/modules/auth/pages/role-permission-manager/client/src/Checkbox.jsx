@@ -1,16 +1,23 @@
-import { Minus, X, UserRound } from "lucide-react";
+import { Minus, X, UserRound, Building2 } from "lucide-react";
 
 /**
  * One grid cell.
  *   checked    – direct grant on this subject (exact key)
  *   inherited  – granted through a wildcard (Doc:* / App:x / *:x) or, in
  *                user mode, through one of the user's roles
- *   own        – scope 'own' (records the user owns) — amber
+ *   scope      – 'all' | 'own' (records the user owns) — amber
+ *                | 'customer' (records of the user's customers, portal) — sky
  *   denied     – explicit deny (user mode)
  *   na         – the action doesn't exist for this document
  *   title      – tooltip: where the grant comes from
  */
-export function Checkbox({ checked, partial, na, inherited, denied, own, title, onClick }) {
+const NARROW = {
+  own: { Icon: UserRound, inherited: "border-amber-500/80 bg-amber-500/10", icon: "text-amber-500", solid: "bg-amber-500 ring-amber-500/30" },
+  customer: { Icon: Building2, inherited: "border-sky-500/80 bg-sky-500/10", icon: "text-sky-500", solid: "bg-sky-500 ring-sky-500/30" },
+};
+
+export function Checkbox({ checked, partial, na, inherited, denied, scope, title, onClick }) {
+  const narrow = NARROW[scope];
   if (na) return (
     <div className="inline-flex items-center justify-center w-8 h-8 cursor-default">
       <Minus size={11} className="text-border" strokeWidth={1.5} />
@@ -24,9 +31,9 @@ export function Checkbox({ checked, partial, na, inherited, denied, own, title, 
         <div className="w-4 h-4 rounded-[4px] border-[1.5px] border-destructive bg-destructive/15 flex items-center justify-center">
           <X size={9} className="text-destructive" strokeWidth={2.5} />
         </div>
-      ) : inherited && own ? (
-        <div className="w-4 h-4 rounded-[4px] border-[1.5px] border-dashed border-amber-500/80 bg-amber-500/10 flex items-center justify-center">
-          <UserRound size={9} className="text-amber-500" strokeWidth={2.5} />
+      ) : inherited && narrow ? (
+        <div className={`w-4 h-4 rounded-[4px] border-[1.5px] border-dashed ${narrow.inherited} flex items-center justify-center`}>
+          <narrow.Icon size={9} className={narrow.icon} strokeWidth={2.5} />
         </div>
       ) : inherited ? (
         <div className="w-4 h-4 rounded-[4px] border-[1.5px] border-dashed border-primary/60 bg-primary/5 flex items-center justify-center">
@@ -34,9 +41,9 @@ export function Checkbox({ checked, partial, na, inherited, denied, own, title, 
             <path d="M1 3.5L3.5 6L8 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary/60"/>
           </svg>
         </div>
-      ) : checked && own ? (
-        <div className="w-4 h-4 rounded-[4px] bg-amber-500 ring-2 ring-amber-500/30 flex items-center justify-center shadow-sm">
-          <UserRound size={10} className="text-white" strokeWidth={2.5} />
+      ) : checked && narrow ? (
+        <div className={`w-4 h-4 rounded-[4px] ${narrow.solid} ring-2 flex items-center justify-center shadow-sm`}>
+          <narrow.Icon size={10} className="text-white" strokeWidth={2.5} />
         </div>
       ) : checked ? (
         <div className="w-4 h-4 rounded-[4px] bg-primary flex items-center justify-center shadow-sm">

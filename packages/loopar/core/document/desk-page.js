@@ -97,6 +97,8 @@ export function scopedQuery(entity, filter, user) {
   if (!scope) return null;
 
   const where = parseDeskFilter(filter, ref);
+  // Desk figures are for staff: a portal ('customer') grant doesn't count here.
+  if (scope === SCOPE.CUSTOMER) return null;
   if (scope === SCOPE.OWN) where[CREATED_BY_COLUMN] = user ?? "__nobody__";
 
   let qb = loopar.db.qx()(ref.__NAME__);

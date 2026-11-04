@@ -3,6 +3,7 @@ import fs from "fs";
 import { loopar, fileManage } from "loopar";
 import BaseDocument from "../../../../../../core/document/base-document.js";
 import { readRenameRecords, applyRenameToDatabase } from "../../../../../../core/document/entity-rename.js";
+import { normalizeScope } from "../../../../../../core/auth/PermissionManager.js";
 
 function entryAppOwner(ent, entryKey) {
   if (ent.__app__ != null) return ent.__app__;
@@ -30,7 +31,7 @@ export default class Installer extends BaseDocument {
    *     { name: 'Web User', grants: [{ document: '<Page Name>, action: 'view', scope: 'own' }] },
    *   ];
    *
-   * Grant: { document, action, scope = 'all' | 'own', deny = 0 }.
+   * Grant: { document, action, scope = 'all' | 'own' | 'customer', deny = 0 }.
    * `document` may be an entity, '*', 'App:<app>' (every document of the
    * app, including ones added later) or 'Module:<module>' (sidebar).
    */
@@ -48,11 +49,29 @@ export default class Installer extends BaseDocument {
    */
   static defaultRoles = true;
 
+  /**
+   * Documents the app shows to its customers (portal users). When declared,
+   * the convention adds "<App> Portal": view/list/search on each of them with
+   * scope 'customer', so a portal user only ever reaches the records of the
+   * customers they are a contact of (auth/customer-scope.js). Each document
+   * must carry a `customer` link (or override `customerField`/`customerCondition`
+   * in its controller). Writes are granted explicitly in `static roles`.
+   */
+  static portalDocuments = [];
+
   async defaultRoles() {
     if (this.constructor.defaultRoles === false) return [];
     const label = loopar.utils.Capitalize(String(this.app_name).replace(/[-_]+/g, ' '));
     const app = `App:${this.app_name}`;
+    const portalDocuments = this.constructor.portalDocuments || [];
+    const portal = portalDocuments.length ? [{
+      name: `${label} Portal`,
+      description: `Customers of the ${label} app: see only their own records through the portal.`,
+      is_system_role: 1,
+      grants: portalDocuments.flatMap(document => ["view", "list", "search"].map(action => ({ document, action, scope: "customer" }))),
+    }] : [];
     return [
+      ...portal,
       {
         name: `${label} Manager`,
         description: `Full access to every document of the ${label} app, nothing else of the system.`,
@@ -137,7 +156,7 @@ export default class Installer extends BaseDocument {
           ...where,
           app: this.app_name,
           deny: g.deny ? 1 : 0,
-          scope: g.scope === "own" ? "own" : "all",
+          scope: normalizeScope(g.scope),
         });
       }
     }
@@ -296,6 +315,12 @@ export default class Installer extends BaseDocument {
   }
 
   async install(reinstall = false) {
+    // An installed site gets a local snapshot first: an update that breaks
+    // half-way has a point to go back to (Backups page / yarn backup restore).
+    if (loopar.__installed__ && loopar.tenantId) {
+      const { safetySnapshot } = await import("../../../../../../core/backup/core-ops.js");
+      await safetySnapshot(loopar.tenantId, `before installing ${this.app_name}`);
+    }
     try {
       return await this.#install(reinstall);
     } finally {

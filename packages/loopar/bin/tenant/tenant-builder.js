@@ -63,6 +63,9 @@ function normalize(name, c = {}) {
     installToken: c.installToken || null,
     // Cloud control-plane secrets: { customerEmail, verifierUrl, verifierToken }.
     cloud: c.cloud || {},
+    // Set when a backup was restored over this tenant: a core still holding
+    // the old instance re-initializes it (core/backup).
+    restoredAt: c.restoredAt || null,
   };
 }
 

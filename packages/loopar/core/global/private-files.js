@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'pathe';
 import { loopar } from '../loopar.js';
 import { PermissionManager } from '../auth/PermissionManager.js';
+import { portalIdentity, customerFieldOf, CONTACT_ENTITY } from '../auth/customer-scope.js';
 
 /**
  * Private files (file fields flagged `private`) and the record they belong to.
@@ -51,7 +52,8 @@ export async function purgePrivateFiles(entity, name) {
 /**
  * Whether `user` may open a private file: the record it belongs to exists,
  * the user was granted view on it (a public view doesn't count; own records
- * only, when that is the granted scope) and it is
+ * only, when that is the granted scope; the user's customers' records for
+ * scope 'customer') and it is
  * not soft-deleted — except for the Administrator, who audits deleted ones.
  * Files without an owner need File Manager access.
  */
@@ -72,5 +74,12 @@ export async function mayReadPrivateFile(meta, user) {
   if (!row) return false;
   if (row.__deleted_at__ && user !== 'Administrator') return false;
   if (scope === 'own' && row.__created_by__ !== user) return false;
+  if (scope === 'customer') {
+    const identity = await portalIdentity(user);
+    const mine = owner.entity === CONTACT_ENTITY
+      ? row.name === identity.contact
+      : identity.customers.includes(row[customerFieldOf(owner.entity)]);
+    if (!mine) return false;
+  }
   return true;
 }

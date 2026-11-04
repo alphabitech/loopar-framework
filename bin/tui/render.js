@@ -76,9 +76,15 @@ function pushHeader(lines, width) {
   lines.push(""); // breathing room so the title pill and the active tab don't stack
 
   const logsLabel = `LOGS${state.logs ? ` · ${state.logs.name || "all"}` : ""}`;
+  const run = state.tests?.handle?.run;
+  const testsLabel = !run ? "TESTS"
+    : run.status === "running" ? `TESTS · ◐ ${run.counts.pass}✓ ${run.counts.fail}✗`
+    : `TESTS · ${run.counts.fail ? `${run.counts.fail}✗` : `${run.counts.pass}✓`}`;
   const tabs = [
     { label: "TENANTS", view: "tenants", action: "tab-tenants" },
     { label: logsLabel, view: "logs", action: "tab-logs" },
+    { label: testsLabel, view: "tests", action: "tab-tests" },
+    { label: `BACKUPS${state.backups?.tenant ? ` · ${state.backups.tenant}` : ""}`, view: "backups", action: "tab-backups" },
   ];
   let x = 2; // line starts with one space; x is 1-based
   const parts = [];
@@ -320,6 +326,237 @@ function renderLogs(lines, width, height) {
   lines.push(` ${A.dim}Tab/Esc tenants · ${scopeKey} · ↑↓/wheel scroll · F5 reload · q quit${A.reset}  ${mode}  ${follow}  ${A.dim}${pos}${A.reset}`);
 }
 
+// ─── Tests tab ───────────────────────────────────────────────────────────────
+
+const FILE_GLYPH = {
+  running:   { g: "◐", c: A.yellow },
+  passed:    { g: "✓", c: A.green },
+  failed:    { g: "✗", c: A.red },
+  cancelled: { g: "■", c: A.gray },
+  none:      { g: "◌", c: A.gray },
+};
+
+const cut = (text, n) => {
+  const t = String(text ?? "");
+  if (n <= 0) return "";
+  return t.length > n ? t.slice(0, Math.max(0, n - 1)) + "…" : t;
+};
+
+function fileStatus(run, file) {
+  const f = run?.files?.[file];
+  if (!f) return run?.status === "running" && run.current?.file === file ? "running" : "none";
+  if (run.status === "running") return f.fail > 0 ? "failed" : "running";
+  return f.status || "none";
+}
+
+/** Right pane: failures with their diff, then the tail of the output. */
+function testDetailLines(run, total) {
+  const out = [];
+  const push = (text, color = "") => out.push({ text: String(text ?? ""), color });
+  if (!run) {
+    push("No run yet.", A.dim);
+    push("");
+    push("a  run every test           u  unit only", A.dim);
+    push("i  integration only         ⏎  picked files (space picks)", A.dim);
+    push("f  re-run the failed files  x  stop the run", A.dim);
+    push("");
+    push(`${total} test files under test/`, A.dim);
+    return out;
+  }
+  for (const f of run.failures) {
+    push(`✗ ${[...(f.path || []), f.name].join(" › ")}`, `${A.bold}${A.red}`);
+    push(`  ${f.file}${f.line ? `:${f.line}` : ""}${f.durationMs != null ? `  (${Math.round(f.durationMs)}ms)` : ""}`, A.dim);
+    const e = f.error || {};
+    const msg = String(e.message || "(no message)").split("\n").filter((l) => l.trim() !== "").slice(0, 8);
+    for (const l of msg) push(`  ${l}`, LOG.error);
+    if (e.actual !== undefined || e.expected !== undefined) {
+      push(`  actual:   ${String(e.actual).split("\n")[0]}`, A.yellow);
+      push(`  expected: ${String(e.expected).split("\n")[0]}`, A.green);
+    }
+    const frame = String(e.stack || "").split("\n").find((l) => /^\s+at\s/.test(l) && !/node:internal|node_modules/.test(l));
+    if (frame) push(`  ${frame.trim()}`, LOG.ownFrame);
+    push("");
+  }
+  if (!run.failures.length) {
+    if (run.status === "passed") push(`✓ all ${run.counts.tests} tests passed`, `${A.bold}${A.green}`);
+    else if (run.status === "running") push(`running… ${run.counts.tests} done`, A.yellow);
+    else push(`${run.status} (exit ${run.exitCode ?? "?"})`, A.yellow);
+    push("");
+  }
+  const tail = run.output.slice(-12);
+  if (tail.length) {
+    push("── output ──", A.dim);
+    for (const o of tail) push(`${o.file ? `[${o.file.replace(/^test\//, "")}] ` : ""}${o.text}`, o.stream === "runner" ? LOG.noise : A.dim);
+  }
+  return out;
+}
+
+function renderTests(lines, width, height) {
+  const t = state.tests;
+  const run = t.handle?.run || null;
+  const c = run?.counts;
+
+  // Info line
+  const chip = !run ? pill(" NO RUN ", "gray")
+    : run.status === "running" ? pill(" ◐ RUNNING ", "yellow")
+    : run.status === "passed" ? pill(" ✓ PASSED ", "green")
+    : pill(` ✗ ${run.status.toUpperCase()} `, "red");
+  const secs = run ? (((run.durationMs ?? (Date.now() - Date.parse(run.startedAt))) / 1000).toFixed(1) + "s") : "";
+  const counts = run
+    ? ` ${A.green}${c.pass} passed${A.reset} ${c.fail ? A.red : A.dim}${c.fail} failed${A.reset}${c.skip ? ` ${A.dim}${c.skip} skipped${A.reset}` : ""} ${A.dim}${secs}${A.reset}`
+    : ` ${A.dim}${t.files.length} files${A.reset}`;
+  const current = run?.status === "running" && run.current
+    ? `  ${A.dim}› ${cut(`${run.current.file} › ${run.current.name}`, Math.max(10, width - 50))}${A.reset}`
+    : "";
+  lines.push(` ${chip}${counts}${current}`);
+
+  // header 4 + info 1 + sep 1 + footer 1 + msg 1
+  const bodyH = Math.max(3, height - 8);
+  t.listH = bodyH;
+  const leftW = Math.min(52, Math.max(30, Math.floor(width * 0.4)));
+  const rightW = Math.max(10, width - leftW - 4);
+
+  if (t.cursor < t.scroll) t.scroll = t.cursor;
+  if (t.cursor >= t.scroll + bodyH) t.scroll = t.cursor - bodyH + 1;
+  const shown = t.files.slice(t.scroll, t.scroll + bodyH);
+  state.testRowStart = lines.length + 1; // 1-based terminal row of the first file
+
+  const detail = testDetailLines(run, t.files.length);
+  const maxScroll = Math.max(0, detail.length - bodyH);
+  t.detailScroll = Math.min(t.detailScroll, maxScroll);
+  const right = detail.slice(t.detailScroll, t.detailScroll + bodyH);
+
+  for (let i = 0; i < bodyH; i++) {
+    let left = " ".repeat(leftW);
+    const f = shown[i];
+    if (f) {
+      const idx = t.scroll + i;
+      const isCur = idx === t.cursor;
+      const st = FILE_GLYPH[fileStatus(run, f.file)];
+      const rf = run?.files?.[f.file];
+      const tally = rf ? `${rf.pass}/${rf.fail}` : "";
+      const box = t.picked.has(f.file) ? "[x]" : "[ ]";
+      const nameW = leftW - 8 - tally.length - 1;
+      const name = cut(f.file.replace(/^test\//, ""), nameW).padEnd(nameW);
+      const body = `${box} ${st.c}${st.g}${A.reset}${isCur ? A.inv : ""} ${name} ${tally}${A.reset}`;
+      left = isCur ? `${A.inv}❯ ${A.reset}${body}` : `  ${body}`;
+    }
+    const r = right[i];
+    const rText = r ? `${r.color}${cut(r.text, rightW)}${A.reset}` : "";
+    lines.push(` ${left} ${A.gray}│${A.reset} ${rText}`);
+  }
+
+  lines.push(hr(width));
+
+  const buttons = [
+    { label: ` ▶ ${U}A${UO}ll `, w: 7, color: "green", action: "tests-all" },
+    { label: ` ${U}U${UO}nit `, w: 6, color: "cyan", action: "tests-unit" },
+    { label: ` ${U}I${UO}ntegration `, w: 13, color: "cyan", action: "tests-integration" },
+    { label: ` ⏎ Picked${t.picked.size ? ` (${t.picked.size})` : ""} `, w: 10 + (t.picked.size ? String(t.picked.size).length + 3 : 0), color: "white", action: "tests-selected" },
+    { label: ` ↻ ${U}F${UO}ailed `, w: 10, color: "yellow", action: "tests-failed" },
+    { label: ` ■ Stop ${U}x${UO} `, w: 10, color: "red", action: "tests-stop" },
+    { label: ` Esc `, w: 5, color: "gray", action: "tab-tenants" },
+  ];
+  let x = 1;
+  const y = lines.length + 1;
+  const parts = [];
+  for (const b of buttons) {
+    state.buttonRegions.push({ x1: x, x2: x + b.w - 1, y, action: b.action });
+    x += b.w + 1;
+    parts.push(pill(b.label, b.color));
+  }
+  lines.push(parts.join(" ") + `  ${A.dim}↑↓ move · space pick · PgUp/PgDn results${A.reset}`);
+
+  const icon = state.messageKind === "error" ? `${A.red}✗` : state.messageKind === "ok" ? `${A.green}✓` : `${A.gray}·`;
+  const msgColor = state.messageKind === "error" ? A.red : state.messageKind === "ok" ? A.green : A.dim;
+  lines.push(` ${icon} ${msgColor}${state.message}${A.reset}`);
+}
+
+// ─── Backups tab ─────────────────────────────────────────────────────────────
+
+const KIND_COLOR = { scheduled: A.cyan, manual: MAGENTA, "pre-update": A.yellow, "pre-restore": A.yellow, uploaded: A.gray };
+const fmtBytes = (n) => (n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} MB` : `${Math.max(1, Math.round((n || 0) / 1024))} KB`);
+const fmtWhen = (d) => {
+  const x = new Date(d);
+  const p = (v) => String(v).padStart(2, "0");
+  return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())} ${p(x.getHours())}:${p(x.getMinutes())}`;
+};
+
+/** Footer for the modal modes (wizard / confirm), shared by the full-screen tabs. */
+function modalFooter(lines) {
+  if (state.mode === "create" && state.wizard) {
+    const w = state.wizard;
+    const st = w.steps[w.idx];
+    const shown = st.mask ? "*".repeat(state.input.length) : state.input;
+    lines.push(` ${pill(` ${w.title} `, "cyan")} ${A.bold}${st.label}${A.reset} ${A.gray}›${A.reset} ${shown}${A.inv} ${A.reset}  ${A.dim}Enter next · Esc cancel${A.reset}`);
+    return true;
+  }
+  if (state.mode === "confirm" && state.confirm) {
+    const y = lines.length + 1;
+    const yesLabel = ` ✓ ${U}Y${UO}es `;
+    const noLabel = ` ✗ ${U}N${UO}o `;
+    const prefix = ` ${A.yellow}◆ ${state.confirm.question}${A.reset}  `;
+    const px = stripAnsi(prefix).length;
+    const yesW = stripAnsi(yesLabel).length;
+    state.buttonRegions.push({ x1: px + 1, x2: px + yesW, y, action: "confirm-yes" });
+    state.buttonRegions.push({ x1: px + yesW + 2, x2: px + yesW + 1 + stripAnsi(noLabel).length, y, action: "confirm-no" });
+    lines.push(`${prefix}${pill(yesLabel, "green")} ${pill(noLabel, "red")}  ${A.dim}Esc cancel${A.reset}`);
+    return true;
+  }
+  return false;
+}
+
+function renderBackups(lines, width, height) {
+  const b = state.backups;
+  const where = b.destination ? `this server + ${b.destination}` : "this server only";
+  lines.push(` ${pill(` ${b.tenant} `, "cyan")} ${A.dim}${b.rows.length} backup(s) · ${where}${b.loading ? " · loading…" : ""}${A.reset}`);
+  lines.push(`  ${A.bold}${A.gray}${pad("DATE", 18)}${pad("KIND", 13)}${pad("SIZE", 10)}${pad("WHERE", 18)}FILE${A.reset}`);
+
+  // header 4 + info 2 + sep 1 + footer 1 + msg 1
+  const listH = Math.max(3, height - 9);
+  b.listH = listH;
+  if (b.cursor < b.scroll) b.scroll = b.cursor;
+  if (b.cursor >= b.scroll + listH) b.scroll = b.cursor - listH + 1;
+  const shown = b.rows.slice(b.scroll, b.scroll + listH);
+  for (let i = 0; i < listH; i++) {
+    const r = shown[i];
+    if (!r) { lines.push(i === 0 && !b.rows.length ? `   ${A.dim}No backups yet — press n to make one.${A.reset}` : ""); continue; }
+    const isCur = b.scroll + i === b.cursor;
+    const loc = [r.local ? "local" : null, r.remote ? "remote" : null].filter(Boolean).join("+") + (r.encrypted ? " ·enc" : "");
+    const fileW = Math.max(10, width - 2 - 18 - 13 - 10 - 18 - 1);
+    const fileTxt = r.file.length > fileW ? r.file.slice(0, fileW - 1) + "…" : r.file;
+    if (isCur) {
+      lines.push(`${A.inv}❯ ${pad(fmtWhen(r.date), 18)}${pad(r.kind, 13)}${pad(fmtBytes(r.size), 10)}${pad(loc, 18)}${fileTxt}${A.reset}`);
+    } else {
+      lines.push(`  ${pad(fmtWhen(r.date), 18)}${KIND_COLOR[r.kind] || ""}${pad(r.kind, 13)}${A.reset}${pad(fmtBytes(r.size), 10)}${A.dim}${pad(loc, 18)}${fileTxt}${A.reset}`);
+    }
+  }
+  lines.push(hr(width));
+
+  if (!modalFooter(lines)) {
+    const buttons = [
+      { label: ` ✚ ${U}N${UO}ew backup `, w: 14, color: "green", action: "backups-new" },
+      { label: ` ↺ ${U}R${UO}estore `, w: 11, color: "yellow", action: "backups-restore" },
+      { label: ` ✕ ${U}D${UO}elete `, w: 10, color: "red", action: "backups-delete" },
+      { label: ` F5 reload `, w: 11, color: "white", action: "backups-reload" },
+      { label: ` Esc `, w: 5, color: "gray", action: "tab-tenants" },
+    ];
+    let x = 1;
+    const y = lines.length + 1;
+    const parts = [];
+    for (const btn of buttons) {
+      state.buttonRegions.push({ x1: x, x2: x + btn.w - 1, y, action: btn.action });
+      x += btn.w + 1;
+      parts.push(pill(btn.label, btn.color));
+    }
+    lines.push(parts.join(" "));
+  }
+
+  const icon = state.messageKind === "error" ? `${A.red}✗` : state.messageKind === "ok" ? `${A.green}✓` : `${A.gray}·`;
+  const msgColor = state.messageKind === "error" ? A.red : state.messageKind === "ok" ? A.green : A.dim;
+  lines.push(state.busy ? ` ${A.yellow}◐ ${state.message || "working..."}${A.reset}` : ` ${icon} ${msgColor}${state.message}${A.reset}`);
+}
+
 export function render() {
   const width = process.stdout.columns || 100;
   const height = process.stdout.rows || 30;
@@ -328,6 +565,8 @@ export function render() {
 
   pushHeader(lines, width);
   if (state.view === "logs" && state.logs) renderLogs(lines, width, height);
+  else if (state.view === "tests" && state.tests) renderTests(lines, width, height);
+  else if (state.view === "backups" && state.backups) renderBackups(lines, width, height);
   else renderTenants(lines, width, height);
 
   process.stdout.write(A.clear + lines.slice(0, height).join("\n"));

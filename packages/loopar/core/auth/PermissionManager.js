@@ -19,15 +19,21 @@ import { ActionScanner } from "./ActionScanner.js";
  */
 /**
  * Scope of a grant: how far a permitted action reaches.
- *   all → any record of the document
- *   own → only records where the user is the owner (see AuthController /
- *         BaseController.ownerField). Ownership never grants by itself: the
- *         action grant is required first, `own` only narrows it.
- * When the same key is granted twice (user + role, two roles) the widest wins.
+ *   all      → any record of the document
+ *   own      → only records where the user is the owner (see AuthController /
+ *              BaseController.ownerField). Ownership never grants by itself:
+ *              the action grant is required first, `own` only narrows it.
+ *   customer → only records of the customers the user is a contact of
+ *              (portal users; see auth/customer-scope.js). Narrows like `own`.
+ * When the same key is granted twice (user + role, two roles) the widest wins;
+ * between the two narrowing scopes, `customer` wins over `own`.
  */
-export const SCOPE = Object.freeze({ ALL: 'all', OWN: 'own' });
-const SCOPE_RANK = { [SCOPE.OWN]: 1, [SCOPE.ALL]: 2 };
-const normalizeScope = s => (String(s ?? '').toLowerCase() === SCOPE.OWN ? SCOPE.OWN : SCOPE.ALL);
+export const SCOPE = Object.freeze({ ALL: 'all', OWN: 'own', CUSTOMER: 'customer' });
+const SCOPE_RANK = { [SCOPE.OWN]: 1, [SCOPE.CUSTOMER]: 2, [SCOPE.ALL]: 3 };
+export const normalizeScope = s => {
+  const v = String(s ?? '').toLowerCase();
+  return v === SCOPE.OWN || v === SCOPE.CUSTOMER ? v : SCOPE.ALL;
+};
 const widest = (a, b) => (!a ? b : !b ? a : (SCOPE_RANK[a] >= SCOPE_RANK[b] ? a : b));
 
 class PermissionManagerClass {
@@ -125,7 +131,7 @@ class PermissionManagerClass {
   }
 
   /**
-   * Effective scope for (document, action, user): 'all' | 'own' | null.
+   * Effective scope for (document, action, user): 'all' | 'own' | 'customer' | null.
    * null = not permitted. Administrator and public actions are always 'all'.
    */
   scope(document, action, username, { includePublic = true } = {}) {
@@ -283,7 +289,8 @@ class PermissionManagerClass {
   /**
    * Snapshot for the client. `private` keeps its shape (array of permKeys)
    * so existing consumers keep working; `scopes` adds { permKey: scope } for
-   * keys granted as 'own' only — a key absent from `scopes` is 'all'.
+   * keys granted with a narrowing scope ('own' | 'customer') — a key absent
+   * from `scopes` is 'all'.
    */
   /**
    * The client only knows literal keys (it has no document → app map), so
@@ -313,7 +320,7 @@ class PermissionManagerClass {
 
     const scopes = {};
     if (grants) {
-      for (const [k, s] of grants) if (s === SCOPE.OWN) scopes[k] = s;
+      for (const [k, s] of grants) if (s !== SCOPE.ALL) scopes[k] = s;
     }
 
     return {

@@ -16,6 +16,9 @@ import http from "http";
 import { RealtimeManager } from "../realtime/RealtimeManager.js";
 import { kioskManifest } from "../global/kiosk-manifest.js";
 import { buildIdMiddleware, buildEndpoint, previousAssetsMiddleware } from "./build-info.js";
+import { debugCollector } from "../debug/collector.js";
+import { isRestoring, unplugTenant } from "../backup/core-ops.js";
+import { PermissionManager } from "../auth/PermissionManager.js";
 
 const server = new express();
 
@@ -51,6 +54,8 @@ export class Server extends Router {
     this.server.use(buildIdMiddleware);
     this.server.get('/__loopar/build', buildEndpoint);
     this.#installTenantResolution();
+    // Debugger: one entry per request, inside the tenant's ALS store (no-op when off).
+    this.server.use(debugCollector.middleware());
 
     if (this.serveProduction) {
       server.use(compression());
@@ -101,7 +106,22 @@ export class Server extends Router {
       throw e;
     }
 
-    await getOrCreateTenantInstance(byHost.name, { appsBasePath: loopar.appsBasePath });
+    // A backup is being restored over this tenant: nothing may touch it.
+    if (isRestoring(byHost.name)) {
+      const e = new Error('restoring');
+      e.restoringTenant = byHost.name;
+      throw e;
+    }
+
+    // Restored from the terminal while this core held the old instance:
+    // drop it so the tenant initializes on the restored data.
+    const loaded = getTenantInstance(byHost.name);
+    if (loaded && (loaded.__restoredAt ?? null) !== (byHost.restoredAt ?? null)) {
+      await unplugTenant(byHost.name);
+    }
+
+    const inst = await getOrCreateTenantInstance(byHost.name, { appsBasePath: loopar.appsBasePath });
+    if (inst && inst.__restoredAt === undefined) inst.__restoredAt = byHost.restoredAt ?? null;
     return byHost;
   }
 
@@ -113,6 +133,18 @@ export class Server extends Router {
       `font-family:ui-sans-serif,system-ui">` +
       `<h1 style="font-size:64px;margin:0">Suspended</h1>` +
       `<p style="font-size:18px;opacity:.8">This workspace is temporarily unavailable.</p>` +
+      `<hr style="width:40%;opacity:.2;margin:20px 0"/>` +
+      `<span style="opacity:.6">Loopar</span></body></html>`;
+  }
+
+  #restoringPage() {
+    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="5">` +
+      `<title>Restoring backup</title></head>` +
+      `<body style="display:flex;justify-content:center;align-items:center;` +
+      `height:100vh;margin:0;flex-direction:column;background:#0b0b0f;color:#95b3d6;` +
+      `font-family:ui-sans-serif,system-ui">` +
+      `<h1 style="font-size:40px;margin:0">Restoring a backup…</h1>` +
+      `<p style="font-size:16px;opacity:.8">This site will be back in a moment. The page reloads by itself.</p>` +
       `<hr style="width:40%;opacity:.2;margin:20px 0"/>` +
       `<span style="opacity:.6">Loopar</span></body></html>`;
   }
@@ -148,6 +180,17 @@ export class Server extends Router {
         const tenant = await this.#resolveRequestTenant(req);
         requestContext.run({ req, res, tenant }, next);
       } catch (err) {
+        if (err?.restoringTenant) {
+          if (!res.headersSent) {
+            res.status(503).set('Retry-After', '5');
+            if (req.method === 'POST' || /^\/api\//.test(req.path) || req.xhr) {
+              res.json({ status: 503, success: false, code: 'RESTORING', title: 'Restoring backup', message: 'A backup is being restored on this site. Try again in a moment.', retryable: true });
+            } else {
+              res.set('Content-Type', 'text/html').send(this.#restoringPage());
+            }
+          }
+          return;
+        }
         if (err?.suspendedTenant) {
           if (!res.headersSent) {
             res.status(503)
@@ -264,6 +307,12 @@ export class Server extends Router {
         }
       },
       isKnownTenant: (siteName) => !!tenantRegistry.get(siteName),
+      // Debugger stream: the users who may open the Debugger page.
+      canJoin: (siteName, channel, userId) => {
+        if (channel !== "debug" || !getTenantInstance(siteName)) return false;
+        if (userId === "Administrator") return true;
+        return requestContext.run({ tenant: { name: siteName } }, () => PermissionManager.can("Debugger", "view", userId));
+      },
     });
 
     httpServer.listen(port, () => {

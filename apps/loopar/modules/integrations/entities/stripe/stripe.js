@@ -9,12 +9,12 @@ export default class Stripe extends BaseDocument {
   }
 
   get Stripe() {
-    return StripeClass(this.secret_key);
+    return new StripeClass(this.secret_key);
   }
 
   async onLoad() {
     await super.onLoad();
-    //this.stripe = StripeClass(this.secret_key);
+    //this.stripe = new StripeClass(this.secret_key);
   }
 
   async authorize() {
@@ -25,7 +25,7 @@ export default class Stripe extends BaseDocument {
   }
 
   async clientSecret() {
-    const paymentIntent = await this.Stripe().paymentIntents.create({
+    const paymentIntent = await this.Stripe.paymentIntents.create({
       amount: 5,
       currency: 'usd'
     });

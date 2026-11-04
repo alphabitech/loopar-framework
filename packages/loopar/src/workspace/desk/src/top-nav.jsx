@@ -3,6 +3,7 @@ import { ThemeToggle } from "@workspace/theme-toggle"
 import { AppsMenu } from "./apps-menu"
 import { UserInfo } from "./user-info"
 import { CommandPalette } from "./command-palette"
+import { DebugChip } from "./debug-chip"
 import { useWorkspace } from "@workspace/workspace-provider"
 
 /**
@@ -19,6 +20,7 @@ export function TopNav() {
         <div className="flex flex-1 items-center justify-end space-x-4">
           <CommandPalette />
           <nav className="flex items-center space-x-1">
+            <DebugChip />
             <AppsMenu />
             <ThemeToggle />
             <UserInfo />

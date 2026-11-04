@@ -1,5 +1,6 @@
 import { loopar, PermissionManager, CREATED_BY_COLUMN } from "loopar";
 import { SCOPE } from "./PermissionManager.js";
+import { portalIdentity, customerCondition, isCustomerRecord, customerFieldOf, CUSTOMER_FIELD } from "./customer-scope.js";
 import { validateCsrfToken } from './csrf.js';
 import { workspaceCapabilities, workspaceRequiresAuth, getWorkspaceName, workspaceServesWebPages } from "../global/router-utils.js";
 
@@ -105,7 +106,7 @@ export default class AuthController {
     return this.constructor.ownerField || CREATED_BY_COLUMN;
   }
 
-  /** Effective scope for this request: 'all' | 'own' | null. */
+  /** Effective scope for this request: 'all' | 'own' | 'customer' | null. */
   ownerScope(user = loopar.auth.user()) {
     return PermissionManager.scope(this.document, this.action, user);
   }
@@ -115,9 +116,40 @@ export default class AuthController {
     return { [this.ownerField]: user ?? '__nobody__' };
   }
 
-  /** `ownerCondition()` when the request's scope is 'own', else null. */
+  /**
+   * Narrowing filter for the request's scope: `ownerCondition()` for 'own',
+   * `customerCondition()` for 'customer', null for 'all'.
+   */
   async ownerFilters(user = loopar.auth.user()) {
-    return this.ownerScope(user) === SCOPE.OWN ? await this.ownerCondition(user) : null;
+    const scope = this.ownerScope(user);
+    if (scope === SCOPE.OWN) return await this.ownerCondition(user);
+    if (scope === SCOPE.CUSTOMER) return await this.customerCondition(user);
+    return null;
+  }
+
+  // ---- Customer scope (portal users) ---------------------------------------
+  // A grant with scope 'customer' reaches only the records of the customers
+  // the user is a contact of (auth/customer-scope.js). The record says whose
+  // it is through `customerField` (a link to Customer).
+
+  /** Column that links a record to its Customer. Override per entity. */
+  static customerField = CUSTOMER_FIELD;
+
+  get customerField() {
+    return this.constructor.customerField || CUSTOMER_FIELD;
+  }
+
+  /** Filter to narrow a list to the user's customers. Override for compound rules. */
+  async customerCondition(user = loopar.auth.user()) {
+    return customerCondition(this.document, await portalIdentity(user), this.customerField);
+  }
+
+  /**
+   * Does record `name` belong to one of the user's customers? Override for
+   * compound rules. Null when the record doesn't exist.
+   */
+  async isCustomerRecord(name, user = loopar.auth.user()) {
+    return await isCustomerRecord(this.document, name, await portalIdentity(user), this.customerField);
   }
 
   /**
@@ -152,6 +184,25 @@ export default class AuthController {
           message: 'You do not have permission over this record',
         });
       }
+    }
+  }
+
+  async #assertCustomer(user) {
+    for (const name of this.#targetNames()) {
+      if (await this.isCustomerRecord(name, user.name) === false) {
+        loopar.throw({ code: 403, message: 'You do not have permission over this record' });
+      }
+    }
+
+    // A write may not point a record at somebody else's customer.
+    const field = customerFieldOf(this.document, this.customerField);
+    const method = String(this.method || 'GET').toUpperCase();
+    if (field === 'name' || method === 'GET' || method === 'HEAD') return;
+    const sent = this.body?.[field] ?? this.data?.[field];
+    if (sent == null || sent === '') return;
+    const { customers } = await portalIdentity(user.name);
+    if (!customers.includes(sent)) {
+      loopar.throw({ code: 403, message: 'You do not have permission over this customer' });
     }
   }
 
@@ -203,6 +254,8 @@ export default class AuthController {
 
     if (scope === SCOPE.OWN) {
       await this.#assertOwnership(user);
+    } else if (scope === SCOPE.CUSTOMER) {
+      await this.#assertCustomer(user);
     }
 
     return true;

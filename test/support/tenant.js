@@ -61,13 +61,16 @@ export async function bootTestTenant({ name = `__loopar_test_${process.pid}__` }
     name,
     run,
     async teardown() {
-      await run(() => loopar.db.knex?.destroy?.()).catch(() => {});
+      try { await run(async () => loopar.db?.knex?.destroy?.()); } catch { /* not loaded */ }
       evictTenantInstance(name);
       // Retries: SQLite may still be releasing its journal right after destroy().
-      try {
-        fs.rmSync(site, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-      } catch (e) {
-        console.warn(`[test] could not remove ${site}: ${e.message}`);
+      // Backups the tests made (pre-update snapshots of reinstalls, restores).
+      for (const dir of [path.join(root, "backups", name), site]) {
+        try {
+          fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        } catch (e) {
+          console.warn(`[test] could not remove ${dir}: ${e.message}`);
+        }
       }
     },
   };

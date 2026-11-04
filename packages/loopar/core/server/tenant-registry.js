@@ -31,6 +31,7 @@ class TenantRegistry {
         domain,
         status: t.status,
         suspended: t.status === 'suspended',
+        restoredAt: t.restoredAt || null,
       };
 
       byName.set(name.toLowerCase(), entry);

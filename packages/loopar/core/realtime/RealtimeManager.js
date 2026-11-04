@@ -33,11 +33,14 @@ class _RealtimeManager {
    *   Per-namespace secret resolver — each `/{tenant}` signs with its OWN secret.
    * @param {(siteName: string) => boolean} [options.isKnownTenant]
    *   Namespace gate: accept only namespaces of tenants this host serves.
+   * @param {(siteName: string, channel: string, userId: string) => boolean} [options.canJoin]
+   *   Permission check for restricted channels (`debug`): synchronous, false on doubt.
    */
   attach(httpServer, options = {}) {
     if (this.io) return this;
 
-    const { tenantId, getJwtSecret, getJwtSecretFor, isKnownTenant, ...ioOptions } = options;
+    const { tenantId, getJwtSecret, getJwtSecretFor, isKnownTenant, canJoin, ...ioOptions } = options;
+    this._canJoin = typeof canJoin === "function" ? canJoin : null;
     this._tenantId = tenantId || null;
     this._getJwtSecret = typeof getJwtSecret === "function" ? getJwtSecret : null;
     this._getJwtSecretFor = typeof getJwtSecretFor === "function" ? getJwtSecretFor : null;
@@ -81,6 +84,12 @@ class _RealtimeManager {
       return;
     }
     ns.to(channel).emit(event, payload);
+  }
+
+  /** Is anyone in `channel` of this tenant? (lets producers skip work nobody watches) */
+  hasListeners(siteName, channel) {
+    const ns = this.namespace(siteName);
+    return !!ns?.adapter?.rooms?.get(channel)?.size;
   }
 
   broadcast(siteName, event, payload) {
@@ -154,6 +163,13 @@ class _RealtimeManager {
 
   _isAllowedChannel(channel, socket) {
     if (channel === "__global__") return true;
+
+    // Restricted channels: an authenticated user the tenant allows (the
+    // Debugger streams requests, SQL and logs here — never to everyone).
+    if (channel === "debug") {
+      if (!socket.data.userId || !this._canJoin) return false;
+      try { return !!this._canJoin(socket.data.siteName, channel, socket.data.userId); } catch { return false; }
+    }
 
     if (channel.startsWith("user:")) {
       const targetUserId = channel.slice("user:".length);

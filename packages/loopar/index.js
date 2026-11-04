@@ -53,6 +53,19 @@ import {
 import { MetaComponents } from "./core/global/require-components.js";
 export {themes, showColors} from "./core/global/themes.js";
 export {generateThemeCSS, normalizeBrand} from "./core/global/theme-generator.js";
+export {
+  portalIdentity,
+  requirePortalIdentity,
+  forgetPortalIdentity,
+  customerCondition,
+  customerFieldOf,
+  isCustomerRecord,
+  CUSTOMER_ENTITY,
+  CONTACT_ENTITY,
+  CONTACT_LINK_ENTITY,
+  CUSTOMER_FIELD,
+} from "./core/auth/customer-scope.js";
+export { SCOPE, normalizeScope } from "./core/auth/PermissionManager.js";
 import { parseDocument } from './core/document/tools.js';
 import {
   pruneDocStructure,
@@ -62,6 +75,9 @@ import {PermissionManager} from './core/auth/PermissionManager.js'
 import {tenant} from './bin/tenant/tenant-builder.js';
 import { ActionScanner } from "./core/auth/ActionScanner.js";
 import { Op, opByDescription, isOpSymbol } from 'db-env';
+import { debugCollector, DEBUG_LIMITS } from "./core/debug/collector.js";
+import { frameworkStatus } from "./core/debug/status.js";
+import { testRuns, listTestFiles, testsAllowed, TEST_SUITES } from "./core/debug/test-runner.js";
 
 import {
   DOC_STATUS,
@@ -162,6 +178,14 @@ export {
   addAuditColumns,
   addPrimaryKey,
   getRequest,
+  // Debugger (core/debug): collector, status snapshot, test runs.
+  debugCollector,
+  DEBUG_LIMITS,
+  frameworkStatus,
+  testRuns,
+  listTestFiles,
+  testsAllowed,
+  TEST_SUITES,
   // Run code as a tenant outside an HTTP request (tests, scripts):
   //   requestContext.run({ tenant: { name } }, fn)
   requestContext,
