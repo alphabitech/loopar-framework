@@ -193,7 +193,9 @@ sites/
 # -----------------------------------
 # 🛠️ BACKUPS FILES
 # -----------------------------------
-backups/
+# Anchored: an unanchored `backups/` also hid apps/loopar/modules/backup/pages/backups.
+/backups/
+sites/*/backups/
 
 # -----------------------------------
 # 🛠️ SH FILES

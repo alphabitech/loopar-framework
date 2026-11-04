@@ -1,0 +1,8 @@
+{
+  "name": "Backups",
+  "module": "backup",
+  "enable_history": 0,
+  "enable_comments": 0,
+  "doc_structure": "[]",
+  "__ENTITY__": "Page Builder"
+}

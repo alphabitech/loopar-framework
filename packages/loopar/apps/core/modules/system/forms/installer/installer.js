@@ -467,7 +467,9 @@ export default class Installer extends BaseDocument {
 
       if(!owner || owner == this.app_name){
         const entityData = await this.getDocumentData(name, entryRoot(ent, e));
-        if(entityData){
+        // getConfigFile answers {} for a missing file: that is "no data", not
+        // an empty document (it would insert a row with a NULL name).
+        if(entityData && Object.keys(entityData).length){
           let doc = await loopar.getDocument(constructor, name, entityData, { ifNotFound: null });
           const wasFound = !!doc;
           // A row left behind by another app that no longer ships this name
