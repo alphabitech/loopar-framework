@@ -410,9 +410,13 @@ export default class Installer extends BaseDocument {
         loopar.getEntities(this.app_name).map(e => e.name)
       );
 
+      // Every listed document counts, inline ones too: a Controller Builder
+      // shipped inline (e.g. "Controller Builder:Contact") whose .json was
+      // later written to disk is not drift, and regenerating the snapshot
+      // from a tenant DB mid-update pulls in other apps' records.
       const snapshotEntities = new Set(
         Object.entries(appData?.documents || {})
-          .filter(([, v]) => v && (v.__root__ || v.root || v.doc || v.__app__ || v.app))
+          .filter(([, v]) => v && typeof v === 'object')
           .map(([k]) => k.split(':').slice(1).join(':'))
           .filter(Boolean)
       );
