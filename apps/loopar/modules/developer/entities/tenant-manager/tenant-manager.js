@@ -6,6 +6,8 @@ import {
   tenant,
   loopar,
   evictTenantInstance,
+  getTenantInstance,
+  getOrCreateTenantInstance,
   tenantRegistry,
 } from 'loopar';
 import * as tenantOps from "loopar/bin/tenant/tenant-ops.js";
@@ -59,6 +61,30 @@ export default class TenantManager extends BaseDocument {
   #evict() {
     tenantRegistry.invalidate();
     if (!this.#isSelf()) evictTenantInstance(this.name);
+  }
+
+  /**
+   * Where the Desk should send the operator when opening this tenant:
+   *   - installed (or a local domain, where the setup gate trusts the
+   *     origin)  -> its /desk.
+   *   - not installed yet on a public domain -> the tokened install link
+   *     (token minted on demand), since the setup wizard rejects remote
+   *     clients without it.
+   * Only reachable through the control-plane controller (authenticated).
+   */
+  async openUrl() {
+    const base = tenant.tenantUrl(this.name);
+    const domain = tenant.getTenantData(this.name, null)?.domain || `${this.name}.localhost`;
+    if (tenant.isLocalDomain(domain)) return `${base}/desk`;
+
+    let inst = getTenantInstance(this.name);
+    if (!inst && tenantRegistry.get(this.name) && !tenantRegistry.get(this.name).suspended) {
+      // Online but not booted yet: connect it so we know its install state.
+      inst = await getOrCreateTenantInstance(this.name).catch(() => null);
+    }
+
+    if (inst?.__installed__) return `${base}/desk`;
+    return await tenant.installUrl(this.name);
   }
 
   async __data__() {

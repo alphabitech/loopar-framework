@@ -41,31 +41,54 @@ const TenantManagerListProvider = ({children}) => {
   )
 }
 
+const tenantBaseUrl = (row) => {
+  const domain = row.domain || `${row.name}.localhost`;
+  const isLocal = domain === 'localhost' || domain.endsWith('.localhost');
+  return `${isLocal ? 'http' : 'https'}://${domain}`;
+}
+
+/**
+ * Open a tenant in a new tab. The server decides the destination: its /desk
+ * when installed, or the tokened install link while setup is pending (the
+ * setup wizard rejects remote clients without the token). The tab is opened
+ * synchronously so popup blockers don't eat it, then pointed at the URL.
+ */
+const openTenant = (row) => {
+  const win = window.open('', '_blank');
+  loopar.call("Tenant Manager", "openUrl", {
+    query: { name: row.name },
+    freeze: false,
+    success: (res) => {
+      const url = res?.url || `${tenantBaseUrl(row)}/desk`;
+      if (win) { win.opener = null; win.location.href = url; }
+      else window.location.href = url;
+    },
+    error: (message) => {
+      win?.close();
+      loopar.throw(message);
+    },
+  });
+}
+
 const NameRender = ({row}) => {
   const {inDialog} = useDialogContext();
   const {toggleRowSelect} = useTable();
   const { __META__ } = useWorkspace();
-  const Com = inDialog ? "a" : Link;
   const disabled = tenantStatus(row, __META__?.site);
 
-  const compPropperties = inDialog ? {
-    onClick: (e) => {
-      e.preventDefault();
-      toggleRowSelect(row);
-    }
-  } : {}
-
-  const to = row.domain ? `http://${row.domain}/desk` : `http://localhost:${row.port}/desk`;
+  const to = `${tenantBaseUrl(row)}/desk`;
 
   return (
-    <Com 
+    <a 
       className={cn(
-        //"flex flex-row items-left",
         disabled && "opacity-50 "
       )}
-      to={to}
-      target="_blank"
-      {...compPropperties}
+      href={to}
+      onClick={(e) => {
+        e.preventDefault();
+        if (inDialog) return toggleRowSelect(row);
+        openTenant(row);
+      }}
     >
       <Avatar>
         <div>
@@ -73,7 +96,6 @@ const NameRender = ({row}) => {
             className={
               cn(
                 `w-8 h-8 transition-all ease-in duration-300 hover:scale-105 aspect-square`,
-                //"text-green-500/70" 
                 row.status == "online" ? "text-green-500/70" : "text-red-500/70"
               )
             }
@@ -84,7 +106,7 @@ const NameRender = ({row}) => {
         {row.name.toUpperCase()}
         <span className='text-gray-500'>{to}</span>
       </div>
-    </Com>
+    </a>
   )
 }
 

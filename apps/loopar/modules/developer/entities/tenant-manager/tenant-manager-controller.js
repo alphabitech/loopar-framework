@@ -61,6 +61,13 @@ export default class TenantManagerController extends BaseController {
     });
   }
 
+  /** Destination for opening a tenant from the list (desk or install link). */
+  async actionOpenUrl() {
+    const tenant = await this.getTenant();
+    if (!tenant) loopar.throw({ code: 404, message: `Tenant ${this.name}: not found` });
+    return { status: 200, success: true, url: await tenant.openUrl() };
+  }
+
   async actionStart(){
     return await this.makeAction("start");
   }

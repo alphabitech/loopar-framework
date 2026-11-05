@@ -1,7 +1,7 @@
 'use strict'
 
 import crypto from "node:crypto";
-import { loopar, fileManage, BaseController, PermissionManager } from "loopar";
+import { loopar, fileManage, BaseController, PermissionManager, tenant } from "loopar";
 import { safeReturnPath } from "../../../../../../core/global/router-utils.js";
 import { isPrivateIp } from "../../../../../../core/global/storage/upload-guard.js";
 
@@ -153,6 +153,22 @@ export default class SystemController extends BaseController {
     }
   }
 
+  /**
+   * Once the framework is installed the token is spent: drop it from the
+   * tenant config (and the setup cookie) so an old link can't reopen setup
+   * if the database is ever wiped. The Tenant Manager mints a fresh one on
+   * demand when a new install link is needed.
+   */
+  async #scrubSetupToken() {
+    if (!loopar.__installed__ || !loopar.installToken) return;
+    try {
+      await tenant.saveTenant({ NAME: loopar.tenantId, INSTALL_TOKEN: '' });
+      loopar.cookie.set(this.#setupCookieName(), '', { httpOnly: true, path: '/', maxAge: 0 });
+    } catch (e) {
+      console.warn(`[setup] Could not scrub install token for ${loopar.tenantId}: ${e.message}`);
+    }
+  }
+
   #assertSetupOrigin() {
     if (loopar.__installed__) return;
     if (this.#isLocalRequest()) return;
@@ -222,6 +238,7 @@ export default class SystemController extends BaseController {
       // over and this is inert.
       this.#assertSetupOrigin();
       await this.unInstallApp(this.getAppName(), this.data, reinstall);
+      await this.#scrubSetupToken();
       return this.redirect("view");
     } else {
       const model = await loopar.newDocument("Installer", this.data)
