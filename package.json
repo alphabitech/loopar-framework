@@ -40,5 +40,8 @@
     "deps": "yarn install --immutable --inline-builds",
     "test": "node --test --test-force-exit \"test/**/*.test.js\"",
     "test:unit": "node --test \"test/unit/**/*.test.js\""
+  },
+  "resolutions": {
+    "@azure/msal-node": "7.1.0"
   }
 }
