@@ -330,7 +330,13 @@ export class Builder {
 
     this.DBServerInitialized = await this.db.testServer();
     this.DBInitialized = (this.DBServerInitialized && await this.db.testDatabase());
-    this.__installed__ = (this.DBInitialized && await this.db.testFramework("loopar"));
+    // Installed = the framework schema is complete AND the Administrator
+    // exists. An install that broke after creating the tables but before the
+    // Administrator left a tenant that booted as installed with nobody able
+    // to sign in, and the wizard refused to run again ("already installed").
+    const frameworkReady = (this.DBInitialized && await this.db.testFramework("loopar"));
+    const hasAdministrator = this.DBInitialized && await this.#hasAdministrator();
+    this.__installed__ = frameworkReady && hasAdministrator;
 
     let wasInstalledHint = false;
     if (this.DBInitialized) {
@@ -344,7 +350,9 @@ export class Builder {
         );
       }
     }
-    this.__wasInstalled__ = this.DBInitialized && (this.__installed__ || wasInstalledHint);
+    // Without an Administrator the install never finished: route to the
+    // install wizard, not to /system/update (an update creates no user).
+    this.__wasInstalled__ = this.DBInitialized && hasAdministrator && (this.__installed__ || wasInstalledHint);
 
     if (!this.__wasInstalled__ && this.installedApps?.loopar) {
       await this.unsetApp("loopar");
@@ -404,6 +412,17 @@ export class Builder {
    * `retry_after`). Best-effort: errors are logged and swallowed because
    * we never want a retry-sweep glitch to block the boot.
    */
+  /** The Administrator user exists — the last step of a first install. */
+  async #hasAdministrator() {
+    try {
+      if (!(await this.db.hasTable("User"))) return false;
+      return (await this.db.count("User", "Administrator")) > 0;
+    } catch (e) {
+      console.warn(`[loopar.build] Could not probe the Administrator user: ${e.message}`);
+      return false;
+    }
+  }
+
   async resumeProvisioningRetry() {
     if (!shouldRunJobs()) return;
     if (this._provisioningRetryBooted) return;

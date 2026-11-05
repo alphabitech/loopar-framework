@@ -1,7 +1,7 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.4.2"
+    "version": "7.4.3"
   },
   "documents": {
     "Entity:Module": {
@@ -21,7 +21,7 @@
       "has_website": 0,
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.4.1",
+      "version": "7.4.3",
       "autor": "Administrator",
       "icon": "Infinity",
       "gap": "",
@@ -245,6 +245,9 @@
     "Entity:System Settings": {
       "__root__": "/apps/loopar/modules/core/entities/system-settings"
     },
+    "Entity:Company": {
+      "__root__": "/apps/loopar/modules/core/entities/company"
+    },
     "Entity:Menu Button": {
       "__root__": "/apps/loopar/modules/developer/entities/menu-button"
     },
@@ -430,6 +433,7 @@
     "Entity:User": "link",
     "Entity:Document Single Values": "link",
     "Entity:System Settings": "link",
+    "Entity:Company": "link",
     "Entity:Menu Button": "link",
     "Entity:File": "link",
     "Entity:File Manager": "link",

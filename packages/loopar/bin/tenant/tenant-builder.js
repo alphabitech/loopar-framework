@@ -132,6 +132,8 @@ function translatePatch(data) {
   if (sk !== undefined) out.secretKey = sk;
   const it = data.installToken ?? data.INSTALL_TOKEN;
   if (it !== undefined) out.installToken = it;
+  const ra = data.restoredAt ?? data.RESTORED_AT;
+  if (ra !== undefined) out.restoredAt = ra;
 
   const cloud = {};
   const ce = data.customerEmail ?? data.CUSTOMER_EMAIL;
@@ -170,12 +172,17 @@ export async function saveTenant(data = {}) {
     secretKey: patch.secretKey ?? current.secretKey ?? null,
     sites: patch.sites ?? current.sites ?? {},
     installToken: patch.installToken ?? current.installToken ?? null,
+    // Re-init marker: a core holding the old instance drops it when this
+    // changes (backup restore, reset). Kept across saves so a plain save
+    // doesn't trigger a spurious re-init.
+    restoredAt: patch.restoredAt ?? current.restoredAt ?? null,
     cloud: { ...(current.cloud || {}), ...(patch.cloud || {}) },
   };
   if (!next.jwtSecret) delete next.jwtSecret;
   if (!next.secretKey) delete next.secretKey;
   if (!Object.keys(next.sites).length) delete next.sites;
   if (!next.installToken) delete next.installToken;   // empty → scrubbed
+  if (!next.restoredAt) delete next.restoredAt;
   // Drop empty cloud fields, then the object if nothing's left.
   if (next.cloud) {
     for (const k of Object.keys(next.cloud)) {
@@ -246,7 +253,7 @@ export async function ensureInstallToken(name) {
  */
 export async function installUrl(name, override = {}) {
   const token = await ensureInstallToken(name);
-  return `${tenantUrl(name, override)}/loopar/system/connect?install_token=${token}`;
+  return `${tenantUrl(name, override)}/loopar/system/install?install_token=${token}`;
 }
 
 /**

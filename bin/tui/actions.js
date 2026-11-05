@@ -105,7 +105,12 @@ export const actions = {
 
   async destroy(name) {
     await silenced(() => tenantOps.destroyTenant(name, { removePath: true }));
-    return `${name} destroyed (sites/${name} removed)`;
+    return `${name} destroyed (database dropped, sites/${name} removed)`;
+  },
+
+  async reset(name) {
+    const dialect = await silenced(() => tenantOps.resetTenant(name));
+    return `${name} reset (${dialect} database dropped) — opens the setup wizard on next request`;
   },
 };
 
@@ -148,9 +153,11 @@ export async function run(action) {
       render();
     });
   }
-  if (action === "destroy") {
+  if (action === "destroy" || action === "reset") {
     if (!sel) return;
-    state.mode = "destroy"; state.input = ""; state.message = "";
+    try { tenantOps.assertDisposable(sel.name); }
+    catch (err) { state.message = err.message; state.messageKind = "error"; return render(); }
+    state.mode = "destroy"; state.danger = action; state.input = ""; state.message = "";
     return render();
   }
 
@@ -322,14 +329,15 @@ async function createTenant(data, startAfter) {
 export async function submitModal() {
   const name = state.input.trim();
   const target = state.rows[state.selected]?.name;
-  state.mode = "list";
-  if (name !== target) {
-    state.message = "Destroy cancelled (name did not match)"; state.messageKind = "info";
+  const action = state.danger === "reset" ? "reset" : "destroy";
+  state.mode = "list"; state.danger = null;
+  if (name !== String(target || "").toLowerCase()) {
+    state.message = `${action === "reset" ? "Reset" : "Destroy"} cancelled (name did not match)`; state.messageKind = "info";
     return render();
   }
   state.busy = true; render();
   try {
-    state.message = await actions.destroy(target);
+    state.message = await actions[action](target);
     state.messageKind = "ok";
   } catch (err) {
     state.message = err.message; state.messageKind = "error";

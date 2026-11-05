@@ -23,20 +23,34 @@ const TX_STATES = Symbol("db.transactions");
 import { orphanManager } from "./orphan-manager.js";
 import { wireQueryProbes } from "./query-probes.js";
 
-export function resolveColumnSqlBuilder(field) {
-  // data.format / data.type
+/** Format key a field's column is built with (data.format/type → element default → data). */
+function resolveColumnFormatKey(field) {
   const fmt = resolveColumnFormat(field);
-  if (fmt && COLUMN_FORMATS[fmt]) return COLUMN_FORMATS[fmt].sql;
+  if (fmt && COLUMN_FORMATS[fmt]) return fmt;
 
-  // element default → legacy tag
   const tag = elementsDict[field?.element]?.def?.type;
   if (tag && LEGACY_TAG_TO_FORMAT.has(tag)) {
     const key = LEGACY_TAG_TO_FORMAT.get(tag);
-    if (COLUMN_FORMATS[key]) return COLUMN_FORMATS[key].sql;
+    if (COLUMN_FORMATS[key]) return key;
   }
+  return "data";
+}
 
-  // default — VARCHAR(255)
-  return COLUMN_FORMATS.data.sql;
+const TEXT_FORMATS = new Set(["text", "mediumtext", "longtext"]);
+
+/**
+ * TEXT columns can't carry a UNIQUE/INDEX key without a prefix length on
+ * MySQL/MariaDB (and not at all on MSSQL). A keyed field is always built as
+ * VARCHAR (`data`, honoring data.length) so the key works on every dialect.
+ */
+function isKeyed(field) {
+  return !!(field?.data?.unique || field?.data?.index);
+}
+
+export function resolveColumnSqlBuilder(field) {
+  const key = resolveColumnFormatKey(field);
+  if (TEXT_FORMATS.has(key) && isKeyed(field)) return COLUMN_FORMATS.data.sql;
+  return COLUMN_FORMATS[key].sql;
 }
 
 function escapeId(identifier, dialect) {
@@ -527,7 +541,10 @@ export default class Core {
           const existing = existingByName.get(colName);
           if (!existing) {
             newFields.push(field);
-          } else if (this.#columnTypeFamilyChanged(field, existing)) {
+          } else if (
+            this.#columnTypeFamilyChanged(field, existing) ||
+            this.#keyedTextColumn(field, existing)
+          ) {
             changedFields.push({ field, existing });
           }
 
@@ -702,6 +719,16 @@ export default class Core {
     if (t.includes("uuid")) return "uuid";
     if (t.includes("blob") || t.includes("bytea") || t.includes("binary")) return "blob";
     return null;
+  }
+
+  /**
+   * An existing TEXT column on a field declared unique/index: MySQL/MariaDB
+   * can't key it, so it's converted to VARCHAR before the key is added
+   * (SQLite and Postgres key TEXT fine — left alone).
+   */
+  #keyedTextColumn(field, existingCol) {
+    if (!this.isMySQLLike || !isKeyed(field)) return false;
+    return /text/i.test(existingCol?.type || "");
   }
 
   #columnTypeFamilyChanged(field, existingCol) {

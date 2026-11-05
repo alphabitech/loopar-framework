@@ -1,10 +1,10 @@
 import { Button } from "@cn/components/ui/button";
-import { CheckCircle, Palette, Droplet } from "lucide-react";
+import { CheckCircle, Palette, Droplet, Building2 } from "lucide-react";
 import { themes } from "@global/themes";
 import { titleize } from "inflection";
 import BaseInput from "@base-input";
 import { useState, useEffect, useMemo } from "react";
-import { previewDarkBackground, generateThemeCSS, isNeutralTheme, normalizeBrand, themeBaseColor, CUSTOM_THEME } from "@global/theme-generator";
+import { previewDarkBackground, generateThemeCSS, isNeutralTheme, normalizeBrand, themeBaseColor, CUSTOM_THEME, COMPANY_THEME } from "@global/theme-generator";
 import {loopar} from "loopar";
 
 function getColorMetrics(hex) {
@@ -262,6 +262,16 @@ export function ThemeSelector({ value, onChange }) {
   // A new custom palette starts from the color of the theme in use, not from an arbitrary one.
   const [brand, setBrand] = useState(value?.brand || { primary: themeBaseColor(value?.theme || 'slate') });
   const isCustom = selectedTheme === CUSTOM_THEME;
+  const isCompany = selectedTheme === COMPANY_THEME;
+  // Brand colors of the Company (for the preview only: the server reads them on save).
+  const [companyBrand, setCompanyBrand] = useState(undefined);
+
+  useEffect(() => {
+    if (!isCompany || companyBrand !== undefined) return;
+    loopar.call("Company", "brand", { freeze: false, notifyError: false })
+      .then((r) => setCompanyBrand(normalizeBrand(r?.brand) || null))
+      .catch(() => setCompanyBrand(null));
+  }, [isCompany]);
 
   useEffect(() => {
     onChange({
@@ -269,8 +279,9 @@ export function ThemeSelector({ value, onChange }) {
       ...darkConfig,
       includeTitles,
       ...(isCustom ? { brand } : {}),
+      ...(isCompany && companyBrand ? { brand: companyBrand } : {}),
     });
-  }, [selectedTheme, darkConfig, includeTitles, brand]);
+  }, [selectedTheme, darkConfig, includeTitles, brand, companyBrand]);
 
   const handleThemeSelect = (themeName) => {
     if (themeName === CUSTOM_THEME && !normalizeBrand(brand)) {
@@ -363,16 +374,37 @@ export function ThemeSelector({ value, onChange }) {
                 </span>
                 Custom
               </Button>
+              <Button
+                variant="ghost"
+                title="Built from the brand color set in Company"
+                className={`w-full inline-flex items-center justify-start gap-2 ${isCompany ? 'bg-primary/50 text-white' : 'text-primary'}`}
+                onClick={(e) => { e.preventDefault(); handleThemeSelect(COMPANY_THEME); }}
+              >
+                <span
+                  className="w-5 h-5 rounded-full flex items-center justify-center border border-border"
+                  style={{ backgroundColor: companyBrand?.primary || "transparent" }}
+                >
+                  {isCompany ? <CheckCircle className="w-4 h-4 text-white" /> : <Building2 className="w-3 h-3" />}
+                </span>
+                Company brand
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
       {isCustom ? <BrandColorsConfig value={brand} onChange={setBrand} /> : null}
+      {isCompany ? (
+        <p className="text-sm text-muted-foreground border border-border rounded-md p-3">
+          {companyBrand === null
+            ? "Company has no brand color yet. Set it in Company → Brand; until then the slate palette is used."
+            : "Follows the brand color of Company. Changing it there updates this theme."}
+        </p>
+      ) : null}
 
       <DarkBackgroundConfig
-        theme={selectedTheme}
-        brand={isCustom ? brand : null}
+        theme={isCompany ? (companyBrand ? CUSTOM_THEME : 'slate') : selectedTheme}
+        brand={isCustom ? brand : isCompany ? companyBrand : null}
         value={darkConfig}
         onChange={handleDarkConfigChange}
       />
@@ -397,7 +429,11 @@ export default function ThemeCustomizer(props) {
   const { renderInput } = BaseInput(props);
 
   function applyThemeCSS(themeConfig) {
-    const css = generateThemeCSS(themeConfig.theme, {
+    // The Company brand previews as the custom palette it resolves to.
+    const previewTheme = themeConfig.theme === COMPANY_THEME
+      ? (normalizeBrand(themeConfig.brand) ? CUSTOM_THEME : 'slate')
+      : themeConfig.theme;
+    const css = generateThemeCSS(previewTheme, {
       darkMode: themeConfig.darkMode,
       darkIntensity: themeConfig.darkIntensity,
       darkCustomColor: themeConfig.darkCustomColor,

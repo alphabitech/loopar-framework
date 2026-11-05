@@ -11,14 +11,14 @@ import {
 } from "@cn/components/ui/avatar"
 
 import {Link} from "@link"
-import {Button} from "@cn/components/ui/button";
+import {Button, buttonVariants} from "@cn/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@cn/components/ui/dropdown-menu";
-import { Settings2Icon, EllipsisIcon, HardDrive, RefreshCw, Hammer, PackageIcon, RocketIcon, ChevronDown } from 'lucide-react';
+import { Settings2Icon, EllipsisIcon, HardDrive, RefreshCw, Hammer, PackageIcon, RocketIcon, ChevronDown, RotateCcw, Trash2 } from 'lucide-react';
 
 import {cn} from "@cn/lib/utils";
 
@@ -81,6 +81,10 @@ const NameRender = ({row}) => {
   return (
     <a 
       className={cn(
+        // Same look the desk Link gave this row (inline-flex + link variant).
+        "justify-normal cursor-pointer p-2",
+        buttonVariants({ variant: "link" }).replaceAll("text-primary", ""),
+        "justify-start",
         disabled && "opacity-50 "
       )}
       href={to}
@@ -138,6 +142,41 @@ const sendAction = (action, name, confirm=true, onComplete) => {
   }
 }
 
+// Tenants that run the control plane — the server refuses to reset/delete them.
+const PROTECTED_TENANTS = ["loopar", "dev", "cloud"];
+
+const DANGER = {
+  reset: {
+    title: "Reset",
+    describe: (name) => `Drops ${name}'s database and forgets its connection and installed apps. ` +
+      `The tenant (domain, websites, files) stays and opens the setup wizard again.`,
+  },
+  destroy: {
+    title: "Delete",
+    describe: (name) => `Drops ${name}'s database and deletes sites/${name} from disk. This can't be undone.`,
+  },
+};
+
+/** Destructive tenant action, confirmed by typing the tenant name. */
+const dangerAction = (action, name, setUpdateRows) => {
+  const { title, describe } = DANGER[action];
+  loopar.prompt({
+    title: `${title} ${name}?`,
+    label: `${describe(name)} Type "${name}" to confirm.`,
+    placeholder: name,
+    // The dialog runs `ok` before `validate`, so the name check lives here.
+    ok: (value) => {
+      if ((value || "").trim() !== name) {
+        return loopar.notify({ message: `${title} cancelled: the name did not match.`, type: "warning" });
+      }
+      setUpdateRows(prev => [...prev, name]);
+      sendAction(action, name, false, () => {
+        setUpdateRows(prev => prev.filter(n => n != name));
+      });
+    },
+  });
+};
+
 const Buttons = ({row}) => {
   const {inDialog} = useDialogContext();
   const {updateRows, setUpdateRows} = useContext(TenantManagerListContext);
@@ -172,10 +211,38 @@ const Buttons = ({row}) => {
           <Settings2Icon className="text-blue-500" />
         </Button>
       </Link>
+      <DangerMenu row={row} loading={loading} setUpdateRows={setUpdateRows} />
     </div>
   );
 }
 
+
+const DangerMenu = ({ row, loading, setUpdateRows }) => {
+  const { __META__ } = useWorkspace();
+  const locked = PROTECTED_TENANTS.includes(row.name.toLowerCase()) || row.name === __META__?.site;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          disabled={loading || locked}
+          title={locked ? "Control-plane / current workspace — can't be reset or deleted" : "Reset or delete"}
+        >
+          <EllipsisIcon />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuItem onClick={() => dangerAction("reset", row.name, setUpdateRows)}>
+          <RotateCcw className="mr-2 h-4 w-4 text-amber-500" /> Reset (drop database)
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => dangerAction("destroy", row.name, setUpdateRows)} className="text-red-500">
+          <Trash2 className="mr-2 h-4 w-4" /> Delete tenant
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
 
 // One deploy control. Primary click deploys the watcher's latest build (from
 // build/staging — fast). The dropdown offers the same, plus a full rebuild +

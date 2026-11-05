@@ -2,6 +2,7 @@
 
 import { loopar } from '../loopar.js';
 import { fileManage } from '../file-manage.js';
+import { getCompany } from '../global/company.js';
 
 export const STANDARD_FORMAT = "standard";
 const PRINT_FORMAT_TYPE = "Print Format";
@@ -43,20 +44,40 @@ export function resolvePrintFormat(formats, requested) {
   return formats.find(f => truthy(f.is_default)) || null;
 }
 
-const LETTERHEAD_FIELDS = [
-  "name", "company_name", "tagline", "logo", "address", "phone", "email", "website", "footer", "is_default",
-];
+/** What a Letterhead adds on top of the company: its own tagline and footer. */
+const LETTERHEAD_FIELDS = ["name", "tagline", "footer", "is_default"];
 
-export async function getLetterhead(name = null) {
+async function findLetterhead(name) {
   if (!loopar.getRef("Letterhead", false)) return null;
+  if (name) {
+    const row = await loopar.db.getRow("Letterhead", name, LETTERHEAD_FIELDS);
+    if (row) return row;
+  }
+  const [row] = await loopar.db.getAll("Letterhead", LETTERHEAD_FIELDS, { is_default: 1 });
+  return row || null;
+}
 
+/**
+ * Letterhead of a print: the company's identity (Company single) plus the
+ * letterhead's tagline and footer (the named one, else the default one).
+ * Null only when there is neither a company nor a letterhead.
+ */
+export async function getLetterhead(name = null) {
   try {
-    if (name) {
-      const row = await loopar.db.getRow("Letterhead", name, LETTERHEAD_FIELDS);
-      if (row) return row;
-    }
-    const [row] = await loopar.db.getAll("Letterhead", LETTERHEAD_FIELDS, { is_default: 1 });
-    return row || null;
+    const [company, letterhead] = await Promise.all([getCompany(), findLetterhead(name)]);
+    if (!company?.company_name && !letterhead) return null;
+    return {
+      ...(letterhead || {}),
+      company_name: company?.company_name || "",
+      legal_name: company?.legal_name || "",
+      tax_id_label: company?.tax_id_label || "",
+      tax_id: company?.tax_id || "",
+      logo: company?.logo || null,
+      address: company?.address_text || "",
+      phone: company?.phone || "",
+      email: company?.email || "",
+      website: company?.website || "",
+    };
   } catch (e) {
     console.warn("[print] letterhead unavailable:", e?.message);
     return null;

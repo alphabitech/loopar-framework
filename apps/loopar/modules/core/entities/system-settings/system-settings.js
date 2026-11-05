@@ -2,7 +2,7 @@
 'use strict';
 
 import { loopar, BaseDocument } from 'loopar';
-import { buildThemeCSS } from './theme-css.js';
+import { themeCSS } from './theme-css.js';
 import fs from 'fs'
 
 export default class SystemSettings extends BaseDocument {
@@ -23,7 +23,7 @@ export default class SystemSettings extends BaseDocument {
 
   async setTheme() {
     // The tenant theme: used by every site whose web app has no theme of its own.
-    const css = buildThemeCSS(this.theme, { fallbackTheme: 'slate' });
+    const css = await themeCSS(this.theme, { fallbackTheme: 'slate' });
     fs.writeFileSync(loopar.makePath(loopar.tenantPath, 'theme.css'), css, 'utf8');
   }
 }

@@ -6,6 +6,9 @@ export const NEUTRAL_THEMES = ['slate', 'gray', 'zinc', 'neutral', 'stone'];
 /** Theme name of a palette built from the site's own brand colors. */
 export const CUSTOM_THEME = 'custom';
 
+/** Theme name of a palette built from the Company brand colors (resolved server-side). */
+export const COMPANY_THEME = 'company';
+
 const validHex = (value) => {
   if (typeof value !== 'string' || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim())) return null;
   return value.trim().toLowerCase();

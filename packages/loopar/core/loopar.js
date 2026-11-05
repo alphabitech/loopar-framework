@@ -631,7 +631,7 @@ export async function getOrCreateTenantInstance(tenantId, { appsBasePath } = {})
   // very first line — long before initialize() finishes — so looking at
   // `instances` first handed every concurrent request a HALF-initialized
   // tenant: DB flags still undefined → the system middleware read "needs
-  // connect" → redirect to /loopar/system/connect → (by then ready, a
+  // install" → redirect to /loopar/system/install → (by then ready, a
   // "spent" page) → /desk. That is the random "landing on Desk as if after
   // a login" seen after every core restart (nodemon) or tenant re-init.
   if (initInFlight.has(tenantId)) return initInFlight.get(tenantId);

@@ -293,6 +293,7 @@ function handleKey(ch, seq) {
     case "c": return run("core");
     case "n": return run("new");
     case "d": return run("destroy");
+    case "e": return run("reset");
     case "\r": return run("refresh");
   }
 }

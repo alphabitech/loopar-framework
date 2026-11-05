@@ -52,7 +52,6 @@ export function workspaceIsUrlPrefixed(name) {
 }
 
 export const SYSTEM_PATHS = {
-  CONNECT: '/loopar/system/connect',
   UPDATE: '/loopar/system/update',
   INSTALL: '/loopar/system/install',
 };

@@ -12,14 +12,27 @@
  *
  * Each `connectXxx` method handles the same fall-back chain: try the
  * named tenant DB, then a maintenance DB if it doesn't exist yet (so we
- * can run CREATE DATABASE), then SQLite as last-resort.
+ * can run CREATE DATABASE). When the server itself can't be reached the
+ * connector stays without a connection — no silent SQLite fallback.
  */
 
 import { loopar, fileManage } from "loopar";
 import knex from "knex";
 import Core from "./core.js";
+import { serverConnectionOptions } from "./server-connection.js";
 
 export default class Connector extends Core {
+  /**
+   * The configured server can't be reached: stay without a connection. The
+   * tenant still boots (DBServerInitialized = false) so the install wizard or
+   * the outage page can answer. Falling back to SQLite used to hide the
+   * outage, or install on an engine nobody chose.
+   */
+  #serverUnreachable(engine, error) {
+    this.knex = null;
+    console.error(`[Knex Connector] ${engine} server not reachable: ${error?.message || error}`);
+  }
+
   async connectWithSqlite() {
     try {
       await fileManage.makeFolder("sites", loopar.tenantId, "database");
@@ -41,7 +54,7 @@ export default class Connector extends Core {
   /**
    * Connect to MySQL/MariaDB. Same fall-back chain:
    * if the named DB doesn't exist yet we retry against information_schema so
-   * we can run CREATE DATABASE; if even that fails we drop to SQLite.
+   * we can run CREATE DATABASE; if even that fails the server is unreachable.
    */
   async connectMySQL(database = null) {
     const dbConfig   = this.dbConfig;
@@ -68,8 +81,7 @@ export default class Connector extends Core {
       if (!database) {
         await this.connectMySQL("information_schema");
       } else {
-        await this.connectWithSqlite();
-        loopar.throw("MySQL database not possible to connect, falling back to SQLite");
+        this.#serverUnreachable("MySQL", e);
       }
     }
   }
@@ -77,7 +89,7 @@ export default class Connector extends Core {
   /**
    * Connect to PostgreSQL. Mirrors connectMySQL: when the named DB doesn't
    * exist yet we retry against the always-present `postgres` system DB so
-   * that CREATE DATABASE can run. The fallback chain ends in SQLite the
+   * that CREATE DATABASE can run. The fallback chain ends unconnected the
    * same way.
    *
    * Note PG doesn't have an equivalent of MySQL's information_schema-as-a-
@@ -110,8 +122,7 @@ export default class Connector extends Core {
       if (!database) {
         await this.connectPostgres("postgres");
       } else {
-        await this.connectWithSqlite();
-        loopar.throw("PostgreSQL database not possible to connect, falling back to SQLite");
+        this.#serverUnreachable("PostgreSQL", e);
       }
     }
   }
@@ -148,8 +159,7 @@ export default class Connector extends Core {
       if (!database) {
         await this.connectMSSQL("master");
       } else {
-        await this.connectWithSqlite();
-        loopar.throw("MSSQL database not possible to connect, falling back to SQLite");
+        this.#serverUnreachable("MSSQL", e);
       }
     }
   }
@@ -158,7 +168,7 @@ export default class Connector extends Core {
    * Connect to Oracle via oracledb. Oracle has no per-tenant CREATE
    * DATABASE concept — schemas are users — so the fallback chain is
    * different: there's no maintenance DB to retry against. If the user/
-   * schema doesn't exist, Loopar drops to SQLite.
+   * schema doesn't exist, the connector stays unconnected.
    *
    * NOTE: oracledb requires Oracle Instant Client installed on the host
    * (LD_LIBRARY_PATH / DYLD_LIBRARY_PATH set). Without it, the import
@@ -187,8 +197,7 @@ export default class Connector extends Core {
 
       await this.knex.raw("SELECT 1 FROM DUAL");
     } catch (e) {
-      await this.connectWithSqlite();
-      loopar.throw("Oracle database not possible to connect, falling back to SQLite");
+      this.#serverUnreachable("Oracle", e);
     }
   }
 
@@ -212,36 +221,7 @@ export default class Connector extends Core {
    */
   get coreConnection() {
     if (this.isSQLiteLike) return this.knex;
-
-    if (!this._coreConnection) {
-      const cfg = this.dbConfig;
-      const connection = { ...cfg.connection };
-
-      let client;
-      if (this.isMySQLLike) {
-        client = "mysql2";
-        // mysql2 doesn't require `database` for CREATE DATABASE — leave it.
-      } else if (this.isPostgresLike) {
-        client = "pg";
-        // PG always wants a DB to connect to. Use the maintenance DB so
-        // we can run CREATE DATABASE for the tenant's actual one.
-        connection.database = "postgres";
-      } else if (this.isMSSQL) {
-        client = "tedious";
-        connection.database = "master";
-      } else if (this.isOracle) {
-        client = "oracledb";
-      } else {
-        client = cfg.dialect;
-      }
-
-      this._coreConnection = knex({
-        client,
-        connection,
-        pool: { min: 0, max: 2 },
-      });
-    }
-
+    this._coreConnection ??= knex(serverConnectionOptions(this.dbConfig));
     return this._coreConnection;
   }
 

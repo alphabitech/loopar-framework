@@ -219,7 +219,10 @@ function renderTenants(lines, width, height) {
     lines.push(`${prefix}${pill(yesLabel, "green")} ${pill(noLabel, "red")}  ${A.dim}Esc cancel${A.reset}`);
   } else if (state.mode === "destroy") {
     const target = state.rows[state.selected]?.name || "";
-    lines.push(` ${pill(` ⚠ DESTROY `, "red")} ${A.red}deletes sites/${target} from disk.${A.reset} Type the tenant name to confirm ${A.gray}›${A.reset} ${state.input}${A.inv} ${A.reset} ${A.dim}Esc cancel${A.reset}`);
+    const what = state.danger === "reset"
+      ? [` ⚠ RESET `, `drops ${target}'s database; the tenant stays and reopens setup.`]
+      : [` ⚠ DESTROY `, `drops the database and deletes sites/${target} from disk.`];
+    lines.push(` ${pill(what[0], "red")} ${A.red}${what[1]}${A.reset} Type the tenant name to confirm ${A.gray}›${A.reset} ${state.input}${A.inv} ${A.reset} ${A.dim}Esc cancel${A.reset}`);
   } else {
     const buttons = [
       { label: ` ▶ ${U}S${UO}tart `, w: 9, color: "green", action: "start" },
@@ -228,6 +231,7 @@ function renderTenants(lines, width, height) {
       { label: ` ≣ ${U}L${UO}ogs `, w: 8, color: "white", action: "logs" },
       { label: ` ⇄ ${U}M${UO}ode `, w: 8, color: "magenta", action: "mode" },
       { label: ` ✚ ${U}N${UO}ew `, w: 7, color: "blue", action: "new" },
+      { label: ` ⟲ R${U}e${UO}set `, w: 9, color: "yellow", action: "reset" },
       { label: ` ✕ ${U}D${UO}estroy `, w: 11, color: "red", action: "destroy" },
       { label: ` ${U}Q${UO}uit `, w: 6, color: "gray", action: "quit" },
     ];

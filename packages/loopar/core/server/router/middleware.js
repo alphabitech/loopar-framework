@@ -69,7 +69,7 @@ export class Middleware {
       // document?" — instead of matching url prefixes. One check now
       // covers every channel, because the workspace segment (if the caller
       // sent one) was already resolved away upstream:
-      //   - client: /System/connect (loopar.call("System", …))
+      //   - client: /System/testConnection (loopar.call("System", …))
       //   - server-to-server: /api/System/install
       const isSystemRpc =
         req.__ROUTE_MODE__ === "rpc" &&
@@ -89,6 +89,15 @@ export class Middleware {
         return this.redirect(req, res, url);
       };
 
+      // A database outage blocks everything, setup RPCs included: the wizard
+      // must not offer (or run) a fresh install over a tenant whose server
+      // is merely down.
+      if (status.dbUnavailable) {
+        const err = new Error('The database server is not reachable. Please try again in a moment.');
+        Object.assign(err, { status: 503, code: 503, title: 'Service Unavailable', retryable: true });
+        return next(err);
+      }
+
       if (!isSystemRpc) {
         const requiredPath = RouterUtils.SystemValidation.getRedirectPath(loopar);
 
@@ -96,7 +105,7 @@ export class Middleware {
           if (currentUrlLower !== requiredPath.toLowerCase()) {
             if (RouterUtils.isAjaxRequest(req)) {
               // An AJAX call comes from an app that was already running, so
-              // "needs connect/install/update" is almost always TRANSIENT
+              // "needs install/update" is almost always TRANSIENT
               // (tenant re-init, an in-process loopar.build() during an app
               // install/reinstall, a busy DB). Redirecting sent the user to
               // the system page — "spent" a moment later — and from there to
@@ -120,7 +129,7 @@ export class Middleware {
             return this.redirect(req, res, back ? `${requiredPath}?redirect=${encodeURIComponent(back)}` : requiredPath);
           }
         } else {
-          const spentPages = [status.connectPath, status.installPath, status.updatePath]
+          const spentPages = [status.installPath, status.updatePath]
             .map((path) => path.toLowerCase());
           if (spentPages.includes(currentUrlLower)) {
             return sendRedirect(safeReturnPath(req.query?.redirect) || '/desk');

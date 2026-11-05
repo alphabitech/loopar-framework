@@ -5,6 +5,32 @@ import { ArrowRightIcon } from "@radix-ui/react-icons";
 import { useWorkspace } from "@workspace/workspace-provider";
 import Particles from "@particles";
 
+const PARTICLES = {
+  "particles_settings": JSON.stringify({
+    "particles.number.value":6,
+    "particles.shape.type":"square",
+    "particles.opacity.value.max":0.31,
+    "particles.size.value.min":10,
+    "particles.size.value.max":1000,
+    "particles.paint.color.value":"#433271",
+    "particles.move.enable":true,
+    "particles.move.speed.min":1,
+    "particles.move.speed.max":3,
+    "particles.move.random":true,
+    "particles.links.enable":false,
+  }),
+  key: "authparticlessettings"
+};
+
+/** The animated background of the auth and setup pages. */
+export function AuthBackdrop({ className, children }) {
+  return (
+    <Particles fullScreen={false} className={className} data={PARTICLES}>
+      {children}
+    </Particles>
+  );
+}
+
 const Layout = (({ ...props }) => {
   return (
     <div className="vaul-drawer-wrapper flex flex-col min-h-screen">
@@ -33,26 +59,7 @@ const Layout = (({ ...props }) => {
           </div>
         </div>
         <div className="w-full flex-col hidden lg:flex">
-          <Particles 
-            fullScreen={false} 
-            className="absolute w-full h-dvh bg-cover bg-center bg-no-repeat bg-fixed overflow-auto duration-100 ease-in bg-purple-900/5 z-0"
-            data={{
-              "particles_settings": JSON.stringify({
-                "particles.number.value":6,
-                "particles.shape.type":"square",
-                "particles.opacity.value.max":0.31,
-                "particles.size.value.min":10,
-                "particles.size.value.max":1000,
-                "particles.paint.color.value":"#433271",
-                "particles.move.enable":true,
-                "particles.move.speed.min":1,
-                "particles.move.speed.max":3,
-                "particles.move.random":true,
-                "particles.links.enable":false,
-              }),
-              key: "authparticlessettings"
-            }}
-          >
+          <AuthBackdrop className="absolute w-full h-dvh bg-cover bg-center bg-no-repeat bg-fixed overflow-auto duration-100 ease-in bg-purple-900/5 z-0">
             <div className="relative p-10 sm:p-20 ">
               <h2 className="text-4xl text-slate-800 dark:text-slate-100 font-bold">Building the Automated Future</h2>
               <Link variant="ghost" className="text-lg" _target="_blank" to="https://loopar.build/Doc">
@@ -60,7 +67,7 @@ const Layout = (({ ...props }) => {
                 Visit the Documentation
               </Link>
             </div>
-          </Particles>
+          </AuthBackdrop>
         </div>
       </section>
     </div>

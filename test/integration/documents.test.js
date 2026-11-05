@@ -5,7 +5,7 @@ import { bootTestTenant } from "../support/tenant.js";
 
 /**
  * Document lifecycle and the ORM read API, on a real entity (Letterhead:
- * `name` required + unique, `company_name` required, `is_default` switch).
+ * `name` required + unique, `tagline` text, `is_default` switch).
  */
 let t;
 before(async () => {
@@ -13,7 +13,7 @@ before(async () => {
   await t.run(async () => {
     for (const [name, company] of [["Alpha", "Alpha Co"], ["Beta", "Beta LLC"], ["Gamma", "Gamma Co"],
       ["Delta", "Delta Inc"], ["Epsilon", "Epsilon Co"], ["Zeta", "Zeta Co"], ["Eta", "Eta Co"]]) {
-      await (await loopar.newDocument("Letterhead", { name, company_name: company })).save();
+      await (await loopar.newDocument("Letterhead", { name, tagline: company })).save();
     }
   });
 });
@@ -22,7 +22,7 @@ after(async () => { await t?.teardown(); });
 test("save() inserts the row with its audit columns", async () => {
   await t.run(async () => {
     const row = await loopar.db.getDoc("Letterhead", "Alpha");
-    assert.equal(row.company_name, "Alpha Co");
+    assert.equal(row.tagline, "Alpha Co");
     assert.ok(row.__created_at__, "__created_at__");
     assert.equal(Number(row.__document_status__), DOC_STATUS.ACTIVE);
     assert.equal(row.__deleted_at__, null);
@@ -33,27 +33,27 @@ test("getDocument() loads a saved record as a document", async () => {
   await t.run(async () => {
     const doc = await loopar.getDocument("Letterhead", "Beta");
     assert.equal(doc.name, "Beta");
-    assert.equal(doc.company_name, "Beta LLC");
+    assert.equal(doc.tagline, "Beta LLC");
   });
 });
 
 test("getDoc() with an object filter returns the matching row, not the first one", async () => {
   await t.run(async () => {
-    const row = await loopar.db.getDoc("Letterhead", { company_name: "Delta Inc" }, ["name"]);
+    const row = await loopar.db.getDoc("Letterhead", { tagline: "Delta Inc" }, ["name"]);
     assert.equal(row?.name, "Delta");
   });
 });
 
 test("getDoc(document, filter) — two arguments — also filters", async () => {
   await t.run(async () => {
-    const row = await loopar.db.getDoc("Letterhead", { company_name: "Epsilon Co" });
+    const row = await loopar.db.getDoc("Letterhead", { tagline: "Epsilon Co" });
     assert.equal(row?.name, "Epsilon");
   });
 });
 
 test("getValue() reads one field by name", async () => {
   await t.run(async () => {
-    assert.equal(await loopar.db.getValue("Letterhead", "company_name", "Gamma"), "Gamma Co");
+    assert.equal(await loopar.db.getValue("Letterhead", "tagline", "Gamma"), "Gamma Co");
   });
 });
 
@@ -70,7 +70,7 @@ test("filters support Op.in, Op.like and Op.ne", async () => {
   await t.run(async () => {
     const names = (rows) => rows.map((r) => r.name).sort();
     assert.deepEqual(names(await loopar.db.getAll("Letterhead", ["name"], { name: { [Op.in]: ["Alpha", "Zeta"] } })), ["Alpha", "Zeta"]);
-    assert.deepEqual(names(await loopar.db.getAll("Letterhead", ["name"], { company_name: { [Op.like]: "% Co" } })),
+    assert.deepEqual(names(await loopar.db.getAll("Letterhead", ["name"], { tagline: { [Op.like]: "% Co" } })),
       ["Alpha", "Epsilon", "Eta", "Gamma", "Zeta"]);
     assert.equal((await loopar.db.getAll("Letterhead", ["name"], { name: { [Op.ne]: "Alpha" } })).length, 6);
   });
@@ -78,8 +78,8 @@ test("filters support Op.in, Op.like and Op.ne", async () => {
 
 test("count() counts rows matching a condition", async () => {
   await t.run(async () => {
-    assert.equal(await loopar.db.count("Letterhead", { company_name: "Beta LLC" }), 1);
-    assert.equal(await loopar.db.count("Letterhead", { company_name: "Nobody" }), 0);
+    assert.equal(await loopar.db.count("Letterhead", { tagline: "Beta LLC" }), 1);
+    assert.equal(await loopar.db.count("Letterhead", { tagline: "Nobody" }), 0);
   });
 });
 
@@ -93,9 +93,9 @@ test("setValue() updates one field", async () => {
 test("saving an existing document updates it", async () => {
   await t.run(async () => {
     const doc = await loopar.getDocument("Letterhead", "Gamma");
-    doc.phone = "(617) 555-0100";
+    doc.footer = "(617) 555-0100";
     await doc.save();
-    assert.equal(await loopar.db.getValue("Letterhead", "phone", "Gamma"), "(617) 555-0100");
+    assert.equal(await loopar.db.getValue("Letterhead", "footer", "Gamma"), "(617) 555-0100");
   });
 });
 
@@ -115,18 +115,18 @@ test("a model's save() hook runs (only one default Letterhead)", async () => {
 
 test("a missing required field is rejected", async () => {
   await t.run(async () => {
-    const doc = await loopar.newDocument("Letterhead", { name: "No Company" });
-    await assert.rejects(() => doc.save(), /Company name is required/);
-    assert.equal(await loopar.db.count("Letterhead", { name: "No Company" }), 0);
+    const doc = await loopar.newDocument("Legal Notice", { name: "no-title", app: "loopar" });
+    await assert.rejects(() => doc.save(), /Title is required/);
+    assert.equal(await loopar.db.count("Legal Notice", { name: "no-title" }), 0);
   });
 });
 
 // Rejected by the UNIQUE index (the message is the raw SQL error for now).
 test("a duplicate name is rejected", async () => {
   await t.run(async () => {
-    const doc = await loopar.newDocument("Letterhead", { name: "Alpha", company_name: "Again" });
+    const doc = await loopar.newDocument("Letterhead", { name: "Alpha", tagline: "Again" });
     await assert.rejects(() => doc.save());
-    assert.equal(await loopar.db.getValue("Letterhead", "company_name", "Alpha"), "Alpha Co");
+    assert.equal(await loopar.db.getValue("Letterhead", "tagline", "Alpha"), "Alpha Co");
   });
 });
 

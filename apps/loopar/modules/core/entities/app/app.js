@@ -2,7 +2,7 @@
 
 import { BaseDocument, fileManage, loopar } from 'loopar';
 import { buildInstaller } from './builder.js';
-import { buildThemeCSS } from '../system-settings/theme-css.js';
+import { themeCSS } from '../system-settings/theme-css.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -27,7 +27,7 @@ export default class App extends BaseDocument {
       : this.version;
 
     await super.save(args);
-    this.writeTheme();
+    await this.writeTheme();
 
     if (makeStructure) await this.makeAppStructure();
 
@@ -42,9 +42,9 @@ export default class App extends BaseDocument {
    * A web app may carry its own theme (served on its site domains instead of
    * the tenant theme). Stored per tenant: sites/<tenant>/themes/<app>.css.
    */
-  writeTheme() {
+  async writeTheme() {
     const file = loopar.makePath(loopar.tenantPath, 'themes', `${this.name}.css`);
-    const css = buildThemeCSS(this.theme);
+    const css = await themeCSS(this.theme);
     if (css) {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, css, 'utf8');

@@ -32,6 +32,7 @@ import DeskPageController from "./core/controller/desk-page-controller.js";
 import { listDeskPages, deskHomes } from "./core/document/desk-page.js";
 import { chartData, getChart, dashboardItems, dashboardItemData, sidebarDashboards } from "./core/document/dashboard-data.js";
 import { listPrintFormats, getPrintFormat, getLetterhead } from "./core/document/print-format.js";
+import { getCompany, companyBrand, formatAddress, colorToHex } from "./core/global/company.js";
 import SystemController from "./apps/core/modules/system/controllers/system/system-controller.js";
 import CoreInstaller from "./apps/core/modules/system/forms/installer/installer.js";
 import * as Helpers from "./core/global/helper.js";
@@ -52,7 +53,7 @@ import {
 } from "./core/global/element-definition.js";
 import { MetaComponents } from "./core/global/require-components.js";
 export {themes, showColors} from "./core/global/themes.js";
-export {generateThemeCSS, normalizeBrand} from "./core/global/theme-generator.js";
+export {generateThemeCSS, normalizeBrand, COMPANY_THEME} from "./core/global/theme-generator.js";
 export {
   portalIdentity,
   requirePortalIdentity,
@@ -66,6 +67,7 @@ export {
   CUSTOMER_FIELD,
 } from "./core/auth/customer-scope.js";
 export { SCOPE, normalizeScope } from "./core/auth/PermissionManager.js";
+export { connectionFromInstallData } from "./core/global/install-connection.js";
 import { parseDocument } from './core/document/tools.js';
 import {
   pruneDocStructure,
@@ -136,6 +138,10 @@ export {
   listPrintFormats,
   getPrintFormat,
   getLetterhead,
+  getCompany,
+  companyBrand,
+  formatAddress,
+  colorToHex,
   fileManage,
   fileManager,
   Helpers,

@@ -24,6 +24,31 @@ const execAsync = promisify(exec);
  * Partial Caddy API endpoints (POST/DELETE /routes) hot-reload and can resurrect
  * ghost :80/:443 servers from prior Homebrew/system starts → EADDRINUSE.
  */
+/**
+ * Last route: a host that matches no tenant (deleted, never created, a typo
+ * on *.localhost). Without it Caddy answers 200 with an empty body — a blank
+ * page that looks like the site still exists.
+ */
+const NO_SITE_ROUTE = {
+  "@id": "loopar_no_site",
+  handle: [{
+    handler: "static_response",
+    status_code: 404,
+    headers: { "Content-Type": ["text/html; charset=utf-8"] },
+    body:
+      `<!doctype html><html><head><meta charset="utf-8">` +
+      `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+      `<title>No workspace here</title></head>` +
+      `<body style="display:flex;justify-content:center;align-items:center;` +
+      `height:100vh;margin:0;flex-direction:column;background:#0b0b0f;color:#95b3d6;` +
+      `font-family:ui-sans-serif,system-ui;text-align:center;padding:0 16px">` +
+      `<h1 style="font-size:48px;margin:0">No workspace here</h1>` +
+      `<p style="font-size:18px;opacity:.8">There is no site at this address.</p>` +
+      `<hr style="width:40%;opacity:.2;margin:20px 0"/>` +
+      `<span style="opacity:.6">Loopar</span></body></html>`,
+  }],
+};
+
 export default class CaddyManager {
   constructor() {
     this.isProductionEnv = coreEnv() === 'production';
@@ -155,9 +180,8 @@ export default class CaddyManager {
   async registerHostCatchAll(hostPort, domains = []) {
     try {
       const hosts = [...new Set(domains.filter(Boolean))];
-      if (!hosts.length) return true;
 
-      const route = {
+      const route = hosts.length && {
         "@id": "loopar_host",
         match: [{ host: hosts }],
         handle: [{
@@ -178,7 +202,8 @@ export default class CaddyManager {
 
       const external = (await this._readCurrentRoutes())
         .filter(r => r?.["@id"] && !String(r["@id"]).startsWith("loopar_"));
-      const ok = await this._writeFullConfig([...external, route]);
+      const routes = [...external, ...(route ? [route] : []), NO_SITE_ROUTE];
+      const ok = await this._writeFullConfig(routes);
       if (ok) console.log(`✅ Caddy host route: [${hosts.join(", ")}] → localhost:${hostPort}`);
       return ok;
     } catch (e) {

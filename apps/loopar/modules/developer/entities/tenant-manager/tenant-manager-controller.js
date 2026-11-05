@@ -68,6 +68,14 @@ export default class TenantManagerController extends BaseController {
     return { status: 200, success: true, url: await tenant.openUrl() };
   }
 
+  async actionReset(){
+    return await this.makeAction("reset");
+  }
+
+  async actionDestroy(){
+    return await this.makeAction("destroy");
+  }
+
   async actionStart(){
     return await this.makeAction("start");
   }
@@ -175,7 +183,7 @@ export default class TenantManagerController extends BaseController {
         `${this.name}.${action} failed`,
       { 
         notify: { 
-          type: r ? ["stop", "restart"].includes(action) ? "warning" : "success" : "error" 
+          type: r ? ["stop", "restart", "reset", "destroy"].includes(action) ? "warning" : "success" : "error" 
         }
       }
     )

@@ -11,6 +11,7 @@ export const state = {
   scroll: 0,
   view: "tenants", // tenants | logs | tests | backups (full-screen tabs)
   mode: "list", // list | create (wizard) | destroy | confirm
+  danger: null, // "destroy" | "reset" while the name-confirm modal is open
   input: "",
   wizard: null, // { title, steps: [{ key, label, value, validate, default, mask }], idx, onDone }
   confirm: null, // { question, onYes, onNo? }

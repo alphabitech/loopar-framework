@@ -2,7 +2,7 @@
 
 import { BaseDocument, loopar } from 'loopar';
 
-/** Company data printed on documents. One can be the default (see print formats). */
+/** Tagline and footer printed with the Company identity. One can be the default (see print formats). */
 export default class Letterhead extends BaseDocument {
   constructor(props) {
     super(props);

@@ -176,11 +176,9 @@ export class KnexORM extends Connector {
       if (!Number.isFinite(value)) return null;
       return Number.isInteger(value) ? String(value) : String(value);
     }
+    // Strings are stored as typed: digit-only text (postal codes, tax ids,
+    // phone numbers) keeps its leading zeros and every digit.
     if (typeof value === "string") {
-      if (/^-?\d+(\.\d+)?$/.test(value)) {
-        const num = Number(value);
-        if (Number.isFinite(num) && Number.isInteger(num)) return String(num);
-      }
       return value;
     }
     if (typeof value === "object") return JSON.stringify(value);

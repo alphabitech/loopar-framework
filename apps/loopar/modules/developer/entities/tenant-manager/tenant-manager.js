@@ -11,6 +11,7 @@ import {
   tenantRegistry,
 } from 'loopar';
 import * as tenantOps from "loopar/bin/tenant/tenant-ops.js";
+import { unplugTenant } from "loopar/core/backup/core-ops.js";
 
 
 export default class TenantManager extends BaseDocument {
@@ -232,15 +233,31 @@ export default class TenantManager extends BaseDocument {
     return { url: tenant.tenantUrl(this.name, { domain: this.domain, port: this.port }), dbName };
   }
 
-  /**
-   * Teardown — evict the in-process instance, then delegate the on-disk
-   * removal + Caddy refresh to the shared ops. Idempotent.
-   */
-  async destroy({ removePath = true } = {}) {
+  /** Reset/destroy guards: not the workspace serving this request, not the control plane. */
+  #assertDisposable(verb) {
     if (this.#isSelf()) {
-      return loopar.throw("You can't destroy the workspace you're currently using.");
+      return loopar.throw(`You can't ${verb} the workspace you're currently using.`);
     }
-    evictTenantInstance(this.name);
+    try { tenantOps.assertDisposable(this.name); }
+    catch (e) { loopar.throw({ code: 403, title: 'Forbidden', message: e.message }); }
+  }
+
+  /**
+   * Disconnect the tenant from its data: drop its database and forget the
+   * connection/install state. The tenant stays and opens the setup wizard.
+   */
+  async reset() {
+    this.#assertDisposable('reset');
+    await unplugTenant(this.name);   // close its pool before dropping the DB
+    await tenantOps.resetTenant(this.name);
+    tenantRegistry.invalidate();
+    return true;
+  }
+
+  /** Teardown — drop the database, remove the site, refresh Caddy. */
+  async destroy({ removePath = true } = {}) {
+    this.#assertDisposable('destroy');
+    await unplugTenant(this.name);
     await tenantOps.destroyTenant(this.name, { removePath });
     tenantRegistry.invalidate();
     return true;

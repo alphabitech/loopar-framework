@@ -4,14 +4,16 @@ import crypto from "node:crypto";
 import { loopar, fileManage, BaseController, PermissionManager, tenant } from "loopar";
 import { safeReturnPath } from "../../../../../../core/global/router-utils.js";
 import { isPrivateIp } from "../../../../../../core/global/storage/upload-guard.js";
+import { testServerConnection } from "db-env";
+import { connectionFromInstallData } from "../../../../../../core/global/install-connection.js";
 
 /**
- * Setup actions. They are `publicAction*` so the bootstrap pages (connect /
- * install / update) work before any user exists. Once the system is
+ * Setup actions. They are `publicAction*` so the bootstrap pages (the install
+ * wizard and update) work before any user exists. Once the system is
  * installed they are revoked (see `revokedPublicActions`) — for System and
  * every subclass (App Manager).
  */
-const SETUP_ACTIONS = ['connect', 'install', 'update'];
+const SETUP_ACTIONS = ['testConnection', 'install', 'update'];
 
 /** App folder names only: no path separators, no `..`. */
 const APP_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
@@ -19,7 +21,7 @@ const APP_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 export default class SystemController extends BaseController {
   client = "form";
   entry = "installer";
-  static publicActions = ['connect', 'install', 'update', 'reinstall'];
+  static publicActions = ['testConnection', 'install', 'update', 'reinstall'];
 
   constructor(props) {
     super(props);
@@ -46,12 +48,11 @@ export default class SystemController extends BaseController {
   /**
    * Before installation the setup actions are public (the installer has no
    * user yet; INSTALL_TOKEN still gates the first install). After it they
-   * used to stay reachable by ANYONE over RPC — `POST /System/connect`
-   * rewrote db.config, `/System/update` reinstalled the framework,
+   * used to stay reachable by ANYONE over RPC — `/System/update` reinstalled the framework,
    * `/System/install` installed any app: the "spent page" redirect only
    * covers GET pages and `isSystemRpc` lets System RPCs through the system
    * middleware. Revoked once installed:
-   *   - connect → no `actionConnect` exists → 404, like any missing action.
+   *   - testConnection → no `actionTestConnection` exists → 404, like any missing action.
    *   - install / update → `actionInstall` / `actionUpdate` below: normal
    *     auth + CSRF, plus an explicit install-manager check.
    */
@@ -180,43 +181,37 @@ export default class SystemController extends BaseController {
     });
   }
 
-  async publicActionConnect() {
-    this.#captureSetupToken();
-    const model = await loopar.newDocument("Connector", this.data);
-
-    if (this.hasData()) {
-      this.#assertSetupOrigin();
-      if (await model.connect()) {
-        return this.redirect('/desk');
-      }
-    } else {
-      const response = await model.__meta__();
-      
-      response.data = {
-        dialect: "mysql",
-        host: "localhost",
-        port: "3306",
-        user: "root",
-        password: "root",
-        time_zone: "+00:00",
-      }
-
-      return await this.render(response);
+  /**
+   * Install wizard, step "Database": can these credentials reach the server?
+   * Nothing is written — the connection is saved only by the install itself,
+   * so the engine can be changed freely until then.
+   */
+  async publicActionTestConnection() {
+    this.#assertSetupOrigin();
+    const result = await testServerConnection(connectionFromInstallData(this.data) || {});
+    if (!result.ok) {
+      loopar.throw({
+        status: 503,
+        code: 'DB_UNREACHABLE',
+        title: 'Database connection',
+        message: `Could not connect to the database server: ${result.error}`,
+      });
     }
+    return this.success('Connection successful');
   }
 
   getAppName() {
     return this.#safeAppName(this.query.app_name || "loopar");
   }
 
-  async getInstallerModel(appName, data = {}) {
+  async getInstallerModel(appName, data = this.data) {
     appName = this.#safeAppName(appName || this.getAppName());
     const installerRoute = loopar.makePath('apps', appName, 'installer.js')
 
     const Installer = await fileManage.importClass(installerRoute, false);
 
-    if (Installer) return new Installer(this.data);
-    return await loopar.newDocument("Installer", { ...(data || this.data), app_name: appName || this.app_name });
+    if (Installer) return new Installer(data);
+    return await loopar.newDocument("Installer", { ...data, app_name: appName || this.app_name });
   }
 
   async unInstallApp(appName, data = {}, reinstall = false) {
@@ -237,15 +232,39 @@ export default class SystemController extends BaseController {
       // Once installed, unInstallApp's "already installed / role" guard takes
       // over and this is inert.
       this.#assertSetupOrigin();
-      await this.unInstallApp(this.getAppName(), this.data, reinstall);
+      // `connection=current`: the wizard kept the connection already saved
+      // for this tenant (provisioned / pre-seeded db.config), so its db_*
+      // fields are not a new connection to apply.
+      const data = this.query?.connection === 'current'
+        ? Object.fromEntries(Object.entries(this.data).filter(([k]) => !k.startsWith('db_')))
+        : this.data;
+      await this.unInstallApp(this.getAppName(), data, reinstall);
       await this.#scrubSetupToken();
       return this.redirect("view");
     } else {
       const model = await loopar.newDocument("Installer", this.data)
       const response = await model.__meta__();
+      response.data = { ...(response.data || {}), ...this.#connectionDefaults() };
 
       return await this.render(response);
     }
+  }
+
+  /**
+   * The wizard's "Database" step, prefilled from the saved db.config: engine,
+   * host and port, never credentials. `connection_ready` = that config already
+   * reaches its server, so the step can be kept as is.
+   */
+  #connectionDefaults() {
+    const current = loopar.getDbConfig() || {};
+    return {
+      db_dialect: current.dialect || "mysql",
+      db_host: current.connection?.host || "localhost",
+      db_port: current.connection?.port || "",
+      db_user: "",
+      db_password: "",
+      connection_ready: current.dialect && loopar.DBServerInitialized ? 1 : 0,
+    };
   }
 
   async publicActionUpdate() {

@@ -10,6 +10,8 @@ import path from 'pathe';
 import { tenant, getTenantData } from './tenant-builder.js';
 import CaddyManager from './caddy-manager.js';
 import { corePort } from '../../core/config/core-config.js';
+import knexFactory from 'knex';
+import { readDbConfig, dialectOf } from '../../core/backup/database.js';
 
 const SITES_DIR = path.join(process.cwd(), 'sites');
 
@@ -28,7 +30,8 @@ export async function refreshCaddy() {
       t.domain,
       ...Object.keys(t.sites || {}).flatMap((d) => [d, `${d}.localhost`]),
     ]).filter(Boolean);
-    if (!domains.length) return '';
+    // Even with no domains left the route is rewritten: the last deleted
+    // tenant must stop being proxied.
     const caddy = new CaddyManager();
     await caddy.ensureReady();
     const ok = await caddy.registerHostCatchAll(corePort(), domains);
@@ -89,11 +92,132 @@ export async function createTenant(data, { activate: doActivate = false } = {}) 
   return { name, activated: doActivate, installUrl };
 }
 
-/** Full teardown: remove the on-disk site and drop its domain from the route. */
-export async function destroyTenant(name, { removePath = true } = {}) {
+/**
+ * Tenants that run the control plane (Tenant Manager, cloud). Reset/destroy
+ * refuse them so the workspace operating the server can't wipe itself.
+ */
+export const PROTECTED_TENANTS = new Set(['loopar', 'dev', 'cloud']);
+
+/** Server databases that must never be dropped, whatever a config says. */
+const PROTECTED_DATABASES = new Set([
+  'information_schema', 'mysql', 'performance_schema', 'sys',
+  'postgres', 'template0', 'template1',
+]);
+
+/** Throws unless `name` is a tenant that may be reset or destroyed. */
+export function assertDisposable(name) {
+  if (!name || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name)) {
+    throw new Error(`Invalid tenant name "${name}"`);
+  }
+  if (PROTECTED_TENANTS.has(String(name).toLowerCase())) {
+    throw new Error(`"${name}" runs the control plane; it can't be reset or destroyed from here.`);
+  }
+}
+
+const dbConfigPath = (name) => path.join(SITES_DIR, name, 'config', 'db.config.json');
+
+/** Identity of a tenant's server database, to detect two tenants sharing one. */
+function serverDbKey(cfg) {
+  const c = cfg.connection || {};
+  return [dialectOf(cfg), c.host || cfg.host || 'localhost', c.port || cfg.port || '', cfg.database].join('|');
+}
+
+/**
+ * Drop a tenant's database. SQLite lives in sites/<name>/database (removed
+ * here); MySQL/MariaDB and PostgreSQL get a DROP DATABASE on their server,
+ * using the tenant's own db.config.json. Refuses when another tenant points
+ * at the same server database. Works without the framework (CLI/TUI too);
+ * in the core, unplug the tenant first so its pool is closed.
+ *
+ * @returns {Promise<string>} the dialect dropped ('none' when unconfigured)
+ */
+export async function dropTenantDatabase(name) {
+  const dbDir = path.join(SITES_DIR, name, 'database');
+  const removeLocal = () => fs.rmSync(dbDir, { recursive: true, force: true });
+
+  if (!fs.existsSync(dbConfigPath(name))) { removeLocal(); return 'none'; }
+
+  const root = path.dirname(SITES_DIR);
+  const cfg = readDbConfig(root, name);
+  const dialect = dialectOf(cfg);
+  if (dialect === 'sqlite') { removeLocal(); return 'sqlite'; }
+
+  const database = String(cfg.database || '');
+  if (!/^[A-Za-z0-9_$-]+$/.test(database) || PROTECTED_DATABASES.has(database.toLowerCase())) {
+    throw new Error(`Refusing to drop database "${database}".`);
+  }
+
+  const key = serverDbKey(cfg);
+  for (const other of fs.readdirSync(SITES_DIR)) {
+    if (other === name || !fs.existsSync(dbConfigPath(other))) continue;
+    if (serverDbKey(readDbConfig(root, other)) === key) {
+      throw new Error(`Database "${database}" is also used by tenant "${other}"; not dropped.`);
+    }
+  }
+
+  const c = { ...(cfg.connection || {}) };
+  const host = c.host || cfg.host || 'localhost';
+  const user = c.user || cfg.user;
+  const password = c.password ?? cfg.password;
+
+  let knex;
+  try {
+    if (dialect === 'mysql') {
+      knex = knexFactory({ client: 'mysql2', connection: { host, port: c.port || 3306, user, password }, pool: { min: 0, max: 1 } });
+      await knex.raw(`DROP DATABASE IF EXISTS \`${database}\``);
+    } else if (dialect === 'postgres') {
+      knex = knexFactory({ client: 'pg', connection: { host, port: c.port || 5432, user, password, database: 'postgres' }, pool: { min: 0, max: 1 } });
+      // Postgres refuses to drop a database with open sessions.
+      await knex.raw('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ? AND pid <> pg_backend_pid()', [database]);
+      await knex.raw(`DROP DATABASE IF EXISTS "${database}"`);
+    } else {
+      throw new Error(`Dropping a "${cfg.dialect}" database isn't supported; drop "${database}" by hand.`);
+    }
+  } finally {
+    await knex?.destroy().catch(() => {});
+  }
+
+  removeLocal();
+  return dialect;
+}
+
+/**
+ * Disconnect a tenant from its data so it can be set up from scratch: drop
+ * its database, forget the connection and install state, clear sessions.
+ * The tenant itself stays (domain, websites, secrets, status, uploaded files)
+ * and lands on the setup wizard on its next request.
+ */
+export async function resetTenant(name) {
+  assertDisposable(name);
+  const site = path.join(SITES_DIR, name);
+  if (!fs.existsSync(site)) throw new Error(`Tenant "${name}" not found`);
+
+  const dialect = await dropTenantDatabase(name);
+
+  for (const file of ['db.config.json', 'installed-apps.json', 'loopar.config.json']) {
+    fs.rmSync(path.join(site, 'config', file), { force: true });
+  }
+  for (const dir of ['database', 'sessions']) {
+    fs.rmSync(path.join(site, dir), { recursive: true, force: true });
+    fs.mkdirSync(path.join(site, dir), { recursive: true });
+  }
+
+  // Tell a core still holding the old instance to drop it (it compares this
+  // marker on the next request — same path a terminal restore uses).
+  await tenant.saveTenant({ NAME: name, RESTORED_AT: new Date().toISOString() });
+  return dialect;
+}
+
+/**
+ * Full teardown: drop the tenant's database, remove the on-disk site and
+ * drop its domain from the route.
+ */
+export async function destroyTenant(name, { removePath = true, dropDatabase = true } = {}) {
+  assertDisposable(name);
   if (removePath) {
     const sitePath = path.join(SITES_DIR, name);
     if (fs.existsSync(sitePath)) {
+      if (dropDatabase) await dropTenantDatabase(name);
       try { fs.rmSync(sitePath, { recursive: true, force: true }); }
       catch (err) { console.error(`[tenant-ops] rm ${sitePath}: ${err.message}`); }
     }

@@ -15,6 +15,7 @@ export function LetterheadBlock({ letterhead: explicit, aside = null }) {
         {logo && <img className="lp-letterhead-logo" src={logo.src} alt={lh.company_name || ""} />}
         <div>
           <div className="lp-letterhead-name">{lh.company_name}</div>
+          {lh.legal_name && lh.legal_name !== lh.company_name && <div className="lp-letterhead-muted">{lh.legal_name}</div>}
           {lh.tagline && <div className="lp-letterhead-muted">{lh.tagline}</div>}
         </div>
       </div>
@@ -22,6 +23,7 @@ export function LetterheadBlock({ letterhead: explicit, aside = null }) {
         {aside}
         {lh.address && <div className="lp-multiline">{lh.address}</div>}
         {contact.length > 0 && <div>{contact.join(" · ")}</div>}
+        {lh.tax_id && <div>{lh.tax_id_label || "Tax ID"}: {lh.tax_id}</div>}
       </div>
     </header>
   );

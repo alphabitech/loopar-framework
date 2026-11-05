@@ -34,7 +34,7 @@ before(async () => {
   await t.run(async () => {
     await (await loopar.newDocument("Workflow", {
       document: "Letterhead",
-      state_field: "company_name",
+      state_field: "tagline",
       states: [{ state: "A", is_initial: 1 }, { state: "B" }],
       transitions: Array.from({ length: ROWS }, (_, i) => ({
         action: `Move ${i}`, from_state: "A", to_state: "B", confirm: `Sure ${i}?`,

@@ -117,15 +117,27 @@ export function parseQuery(query = {}) {
 }
 
 export const SystemValidation = {
+  /**
+   * One setup state: a tenant is installed, needs the update of an existing
+   * install, or goes through the install wizard (which also asks for the
+   * database connection). The exception is `dbUnavailable`: a tenant whose
+   * db.config names a database but whose server can't be reached is having
+   * an outage — it is answered 503, never offered a fresh install.
+   */
   getStatus(loopar) {
     const { DBServerInitialized, DBInitialized, __installed__, __wasInstalled__ } = loopar;
+    const hasDatabase = !!loopar.getDbConfig?.()?.database;
+
+    const isFullyInstalled = !!(DBServerInitialized && DBInitialized && __installed__);
+    const dbUnavailable = !DBServerInitialized && hasDatabase;
+    const needsUpdate = !isFullyInstalled && !!DBInitialized && !!__wasInstalled__;
+    const needsInstall = !isFullyInstalled && !dbUnavailable && !needsUpdate;
 
     return {
-      needsConnect: !DBServerInitialized,
-      needsInstallOrUpdate: DBServerInitialized && (!DBInitialized || !__installed__),
-      needsUpdate: !!DBInitialized && !!__wasInstalled__,
-      isFullyInstalled: DBServerInitialized && DBInitialized && __installed__,
-      connectPath: SYSTEM_PATHS.CONNECT,
+      isFullyInstalled,
+      dbUnavailable,
+      needsUpdate,
+      needsInstall,
       updatePath: SYSTEM_PATHS.UPDATE,
       installPath: SYSTEM_PATHS.INSTALL,
     };
@@ -133,12 +145,8 @@ export const SystemValidation = {
 
   getRedirectPath(loopar) {
     const status = this.getStatus(loopar);
-
-    if (status.needsConnect) return status.connectPath;
-    if (status.needsInstallOrUpdate) {
-      return status.needsUpdate ? status.updatePath : status.installPath;
-    }
-
+    if (status.needsUpdate) return status.updatePath;
+    if (status.needsInstall) return status.installPath;
     return null;
   },
 };

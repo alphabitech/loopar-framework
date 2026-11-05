@@ -3,7 +3,7 @@
 import { BaseController, getLetterhead } from 'loopar';
 
 export default class LetterheadController extends BaseController {
-  // Company data, not a secret: any signed-in desk user may read the default
+  // Company identity + letterhead, not a secret: any signed-in desk user may read the default
   // one (print views outside the print entry, e.g. a form preview).
   static freeActions = ["current"];
 
