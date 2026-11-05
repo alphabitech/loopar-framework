@@ -41,6 +41,7 @@ const COLS = [
   { key: "name", label: "TENANT", w: 24 },
   { key: "url", label: "URL", w: 48 },
   { key: "status", label: "ST", w: 4 },
+  { key: "controlPlane", label: "CP", w: 4 },
 ];
 
 // Media-style state glyphs: compact, readable by shape even without color.
@@ -168,6 +169,10 @@ function renderTenants(lines, width, height) {
         if (isSel) return pad(txt, c.w); // uniform selection bar — no colors inside
         return pad(u ? `${A.cyan}${txt}${A.reset}` : "", c.w);
       }
+      if (c.key === "controlPlane") {
+        if (!row.controlPlane) return pad("", c.w);
+        return pad(isSel ? "◆" : `${A.magenta}◆${A.reset}`, c.w);
+      }
       if (c.key === "status") {
         const m = statusMeta(row.status);
         if (isSel) return pad(m.dot, c.w);
@@ -189,7 +194,7 @@ function renderTenants(lines, width, height) {
   }
 
   // Scroll indicator when the list overflows; state-glyph legend otherwise.
-  const legend = `  ${A.green}▶${A.reset}${A.dim} online · ${A.reset}${A.red}■${A.reset}${A.dim} stopped · ${A.reset}${A.red}✖${A.reset}${A.dim} errored${A.reset}`;
+  const legend = `  ${A.green}▶${A.reset}${A.dim} online · ${A.reset}${A.red}■${A.reset}${A.dim} stopped · ${A.reset}${A.red}✖${A.reset}${A.dim} errored · ${A.reset}${A.magenta}◆${A.reset}${A.dim} control plane (p)${A.reset}`;
   const colHint = (moreLeft || moreRight) ? `${A.dim} · ←→ columns${A.reset}` : "";
   const scrollInfo = state.rows.length > tableHeight
     ? `${A.dim}  ${state.scroll + 1}–${Math.min(state.scroll + tableHeight, state.rows.length)} of ${state.rows.length} · PgUp/PgDn page · Home/End jump${A.reset}${legend}`

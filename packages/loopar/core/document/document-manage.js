@@ -12,7 +12,8 @@ class DocumentManage {
     // Without a name a record can't be found: looking it up would return the
     // first row (opened as a new record, then saved as a duplicate).
     const missingName = !ENTITY.is_single && (name === undefined || name === null || name === '');
-    const databaseData = missingName ? null : await loopar.db.getDoc(ENTITY, name, ENTITY.__REF__.__FIELDS__);
+    // Virtual entities have no table: their document loads its own data.
+    const databaseData = (missingName || ENTITY.is_virtual) ? null : await loopar.db.getDoc(ENTITY, name, ENTITY.__REF__.__FIELDS__);
 
     if (databaseData) {
       // Pass the pre-parsed ENTITY through so newDocument doesn't trigger

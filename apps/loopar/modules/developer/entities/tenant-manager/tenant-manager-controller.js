@@ -2,7 +2,7 @@
 'use strict';
 
 import 'loopar/bin/pm2-home.js';
-import {BaseController, loopar} from 'loopar';
+import {BaseController, loopar, tenant} from 'loopar';
 import pm2 from 'pm2';
 import { coreEnv, setCoreMode } from 'loopar/core/config/core-config.js';
 import { distIsReady } from 'loopar/core/server/runtime-mode.js';
@@ -21,10 +21,7 @@ export default class TenantManagerController extends BaseController {
   async beforeAction(){
     const test = await super.beforeAction();
 
-    const isControlPlane = ["1", "true"].includes(String(process.env.CONTROL_PLANE))
-      || ["loopar", "dev", "cloud"].includes(loopar.tenantId);
-
-    if(!test || !isControlPlane) loopar.throw({ status: 403, title: 'Forbidden', message: 'Access restricted' })
+    if(!test || !tenant.isControlPlane(loopar.tenantId)) loopar.throw({ status: 403, title: 'Forbidden', message: 'Access restricted' })
   }
 
   async getTenant(name = this.name) {

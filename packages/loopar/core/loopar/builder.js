@@ -403,7 +403,7 @@ export class Builder {
   }
 
   _isControlPlane() {
-    return ["1", "true"].includes(String(process.env.CONTROL_PLANE || ""));
+    return tenant.isControlPlane(this.tenantId);
   }
 
   /**

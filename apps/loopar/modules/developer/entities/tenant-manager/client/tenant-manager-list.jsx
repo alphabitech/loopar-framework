@@ -107,7 +107,14 @@ const NameRender = ({row}) => {
         </div>
       </Avatar>
       <div className='flex flex-col items-start p-0 pl-3'>
-        {row.name.toUpperCase()}
+        <span className='flex items-center gap-2'>
+          {row.name.toUpperCase()}
+          {!!Number(row.control_plane) && (
+            <span className='rounded border border-primary/40 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary'>
+              Control plane
+            </span>
+          )}
+        </span>
         <span className='text-gray-500'>{to}</span>
       </div>
     </a>
@@ -141,9 +148,6 @@ const sendAction = (action, name, confirm=true, onComplete) => {
     doAction();
   }
 }
-
-// Tenants that run the control plane — the server refuses to reset/delete them.
-const PROTECTED_TENANTS = ["loopar", "dev", "cloud"];
 
 const DANGER = {
   reset: {
@@ -219,7 +223,8 @@ const Buttons = ({row}) => {
 
 const DangerMenu = ({ row, loading, setUpdateRows }) => {
   const { __META__ } = useWorkspace();
-  const locked = PROTECTED_TENANTS.includes(row.name.toLowerCase()) || row.name === __META__?.site;
+  // Control-plane tenants and the current workspace: the server refuses to reset/delete them.
+  const locked = !!Number(row.control_plane) || row.name === __META__?.site;
 
   return (
     <DropdownMenu>

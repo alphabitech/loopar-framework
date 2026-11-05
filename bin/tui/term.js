@@ -15,6 +15,7 @@ export const A = {
   red: `${ESC}[31m`,
   yellow: `${ESC}[33m`,
   cyan: `${ESC}[36m`,
+  magenta: `${ESC}[35m`,
   gray: `${ESC}[90m`,
   altOn: `${ESC}[?1049h`,
   altOff: `${ESC}[?1049l`,

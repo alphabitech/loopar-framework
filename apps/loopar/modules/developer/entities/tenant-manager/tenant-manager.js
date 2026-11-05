@@ -28,6 +28,7 @@ export default class TenantManager extends BaseDocument {
         this.__DATA__ = {
           id: app?.name,
           domain: app?.domain,
+          control_plane: app?.controlPlane ? 1 : 0,
           sites: Object.entries(app?.sites || {}).map(([d, a]) => `${d} = ${a}`).join('\n'),
           ...Object.fromEntries(Object.entries(this.__DATA__ || {}).filter(([, v]) => v != null)),
         };
@@ -90,8 +91,8 @@ export default class TenantManager extends BaseDocument {
 
   async __data__() {
     // Never hand tenant secrets to the form; saveTenant keeps them when absent.
-    const { jwtSecret, secretKey, installToken, sites, ...data } = tenant.getTenantData(this.name);
-    return { ...data, sites: Object.entries(sites || {}).map(([d, a]) => `${d} = ${a}`).join('\n') };
+    const { jwtSecret, secretKey, installToken, sites, controlPlane, ...data } = tenant.getTenantData(this.name);
+    return { ...data, control_plane: controlPlane ? 1 : 0, sites: Object.entries(sites || {}).map(([d, a]) => `${d} = ${a}`).join('\n') };
   }
 
   async save() {
@@ -149,6 +150,7 @@ export default class TenantManager extends BaseDocument {
   }
 
   async validate() {
+    this.#validateControlPlane();
     if (this.domain?.trim()) {
       if (!this.validateDomain(this.domain)) {
         return loopar.throw("Invalid domain");
@@ -176,6 +178,18 @@ export default class TenantManager extends BaseDocument {
       }
     }
     await super.validate();
+  }
+
+  /**
+   * Granting/revoking the control plane from the Desk: only reachable from a
+   * control-plane tenant (controller gate); it can't revoke itself nor the
+   * last one, so the server never loses its operator.
+   */
+  #validateControlPlane() {
+    if (this.__IS_NEW__ || this.control_plane === undefined || this.control_plane === null || this.control_plane === '') return;
+    const on = [true, 1, '1', 'true'].includes(this.control_plane);
+    try { tenantOps.assertControlPlaneChange(this.name, on, { actor: loopar.tenantId }); }
+    catch (e) { loopar.throw({ code: 403, title: 'Forbidden', message: e.message }); }
   }
 
   #hasDomain() { return !!this.domain?.trim(); }
@@ -268,6 +282,7 @@ export default class TenantManager extends BaseDocument {
       name: t.name,
       domain: t.domain,
       status: t.online ? "online" : "stopped",
+      control_plane: t.controlPlane ? 1 : 0,
     }));
   }
 

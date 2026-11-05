@@ -92,12 +92,6 @@ export async function createTenant(data, { activate: doActivate = false } = {}) 
   return { name, activated: doActivate, installUrl };
 }
 
-/**
- * Tenants that run the control plane (Tenant Manager, cloud). Reset/destroy
- * refuse them so the workspace operating the server can't wipe itself.
- */
-export const PROTECTED_TENANTS = new Set(['loopar', 'dev', 'cloud']);
-
 /** Server databases that must never be dropped, whatever a config says. */
 const PROTECTED_DATABASES = new Set([
   'information_schema', 'mysql', 'performance_schema', 'sys',
@@ -109,9 +103,34 @@ export function assertDisposable(name) {
   if (!name || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name)) {
     throw new Error(`Invalid tenant name "${name}"`);
   }
-  if (PROTECTED_TENANTS.has(String(name).toLowerCase())) {
-    throw new Error(`"${name}" runs the control plane; it can't be reset or destroyed from here.`);
+  if (tenant.isControlPlane(name)) {
+    throw new Error(`"${name}" runs the control plane; it can't be reset or destroyed. Revoke its control plane first.`);
   }
+}
+
+/**
+ * Throws unless the control-plane flag of `name` may change to `on`.
+ * `actor` is the tenant asking (the Desk); null for the TUI/CLI, which run
+ * on the server itself.
+ */
+export function assertControlPlaneChange(name, on, { actor = null } = {}) {
+  const current = tenant.readTenant(name);
+  if (!current) throw new Error(`Tenant "${name}" not found`);
+  if (current.controlPlane === on) return;
+  if (on) return;
+  if (actor && actor === name) {
+    throw new Error(`You can't revoke the control plane of the workspace you're using.`);
+  }
+  if (tenant.controlPlaneTenants().length <= 1) {
+    throw new Error(`"${name}" is the last control-plane tenant; grant another one first.`);
+  }
+}
+
+/** Grant or revoke the control plane of a tenant (TUI/CLI). */
+export async function setControlPlane(name, on) {
+  assertControlPlaneChange(name, on);
+  await tenant.saveTenant({ name, controlPlane: on });
+  return on;
 }
 
 const dbConfigPath = (name) => path.join(SITES_DIR, name, 'config', 'db.config.json');

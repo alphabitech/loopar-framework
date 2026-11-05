@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * Core config — server-global settings (port, mode, shared cache, Caddy,
- * control-plane; nothing per-tenant), read from config/core.json at the
+ * Core config — server-global settings (port, mode, shared cache, Caddy;
+ * nothing per-tenant — the control plane is a tenant flag, see tenant-builder), read from config/core.json at the
  * project root. Bare-mode safe (fs + JSON only) so CLI/PM2 can read it
  * pre-framework; every getter falls back to process.env and then a sane
  * default, so a missing core.json never breaks boot.
@@ -99,13 +99,6 @@ export function socketCorsOrigin() {
   return pick(load().socketCorsOrigin, process.env.SOCKET_CORS_ORIGIN, null);
 }
 
-/** Is THIS deployment a control plane (can the Tenant Manager operate)? */
-export function isControlPlane() {
-  const c = load().controlPlane;
-  if (c !== undefined && c !== null) return c === true || c === 'true' || c === 1 || c === '1';
-  return ['1', 'true'].includes(String(process.env.CONTROL_PLANE));
-}
-
 export function cloudConfig() {
   const c = load().cloud || {};
   return {
@@ -136,7 +129,6 @@ export function coreEnvVars() {
   if (acme) env.CADDY_ACME_EMAIL = acme;
   const cors = socketCorsOrigin();
   if (cors) env.SOCKET_CORS_ORIGIN = cors;
-  if (isControlPlane()) env.CONTROL_PLANE = '1';
   const cloud = cloudConfig();
   if (cloud.verifierUrl) env.CLOUD_VERIFIER_URL = cloud.verifierUrl;
   if (cloud.claimSecret) env.CLOUD_CLAIM_SECRET = cloud.claimSecret;

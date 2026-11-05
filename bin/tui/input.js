@@ -294,6 +294,7 @@ function handleKey(ch, seq) {
     case "n": return run("new");
     case "d": return run("destroy");
     case "e": return run("reset");
+    case "p": return run("control-plane");
     case "\r": return run("refresh");
   }
 }

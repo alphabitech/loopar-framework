@@ -57,6 +57,7 @@ export async function loadRows(withStatus = true) {
         domain: t.domain,
         url: viaCaddy,
         status: t.online ? "online" : "stopped",
+        controlPlane: t.controlPlane,
       };
     })
     .sort((a, b) => (b.name === "dev") - (a.name === "dev") || a.name.localeCompare(b.name));
@@ -108,16 +109,23 @@ export const actions = {
     return `${name} destroyed (database dropped, sites/${name} removed)`;
   },
 
+  async controlPlane(name, on) {
+    await tenantOps.setControlPlane(name, on);
+    return on
+      ? `${name} is now a control plane (applies on its next request)`
+      : `${name} is no longer a control plane`;
+  },
+
   async reset(name) {
     const dialect = await silenced(() => tenantOps.resetTenant(name));
     return `${name} reset (${dialect} database dropped) — opens the setup wizard on next request`;
   },
 };
 
-async function execute(action, name) {
+async function execute(action, name, ...args) {
   state.busy = true; render();
   try {
-    const msg = await actions[action](name);
+    const msg = await actions[action](name, ...args);
     state.message = msg;
     state.messageKind = /fail|not found/i.test(msg) ? "error" : "ok";
   } catch (err) {
@@ -162,6 +170,24 @@ export async function run(action) {
   }
 
   if (action === "logs-all") return openLogs(null);
+
+  // Grant/revoke the control plane (Tenant Manager access + reset/destroy
+  // protection). The server-side shell is the only place that can grant the
+  // first one; the Desk can't touch its own flag.
+  if (action === "control-plane") {
+    if (!sel) return;
+    const on = !sel.controlPlane;
+    try { tenantOps.assertControlPlaneChange(sel.name, on); }
+    catch (err) { state.message = err.message; state.messageKind = "error"; return render(); }
+    state.mode = "confirm";
+    state.confirm = {
+      question: on
+        ? `Grant the control plane to "${sel.name}"? It will manage every tenant.`
+        : `Revoke the control plane from "${sel.name}"?`,
+      onYes: () => execute("controlPlane", sel.name, on),
+    };
+    return render();
+  }
 
   // GLOBAL: bring the core (generator) up / restart it — the header's "press c".
   // Not tied to a selected tenant; the core serves them all.

@@ -101,12 +101,15 @@ export async function prod() {
  * TTL and serves (or stops serving) the tenant on the next request — no
  * process to start or stop.
  *
- *   on   → STATUS=active   (tenant plugs into the core on next request)
- *   off  → STATUS=suspended (core serves a "suspended" page)
- *   list → show every tenant and its logical state
+ *   on     → STATUS=active   (tenant plugs into the core on next request)
+ *   off    → STATUS=suspended (core serves a "suspended" page)
+ *   grant  → make the tenant a control plane (operates every tenant)
+ *   revoke → remove its control plane (never the last one)
+ *   list   → show every tenant, its logical state and control plane
  */
 export async function tenantCmd(sub, name) {
   const { tenant, tenants } = await import('loopar/bin/tenant/tenant-builder.js');
+  const tenantOps = await import('loopar/bin/tenant/tenant-ops.js');
   const action = (sub || 'list').toLowerCase();
 
   if (action === 'list') {
@@ -114,12 +117,14 @@ export async function tenantCmd(sub, name) {
       name: t.name,
       status: String(t.status || 'suspended').toLowerCase(),
       domain: t.domain || `${t.name}.localhost`,
+      controlPlane: t.controlPlane,
     }));
     if (!rows.length) { log(yellow('No tenants in sites/.')); return; }
     log(chalk.bold('\nTenants:\n'));
     for (const r of rows) {
       const dot = r.status === 'suspended' ? red('●') : green('●');
-      log(`  ${dot} ${r.name.padEnd(20)} ${gray(r.status.padEnd(10))} ${gray(r.domain)}`);
+      const cp = r.controlPlane ? cyan(' ◆ control plane') : '';
+      log(`  ${dot} ${r.name.padEnd(20)} ${gray(r.status.padEnd(10))} ${gray(r.domain)}${cp}`);
     }
     log('');
     return;
@@ -146,7 +151,17 @@ export async function tenantCmd(sub, name) {
     return;
   }
 
-  console.error(red(`Unknown tenant action "${action}". Use: on | off | list.`));
+  if (action === 'grant' || action === 'revoke') {
+    const on = action === 'grant';
+    try { await tenantOps.setControlPlane(name, on); }
+    catch (err) { console.error(red(`❌ ${err.message}`)); process.exit(1); }
+    log(on
+      ? green(`✅ ${name} → control plane. It can operate every tenant (applies on its next request).`)
+      : yellow(`⏸  ${name} → no longer a control plane.`));
+    return;
+  }
+
+  console.error(red(`Unknown tenant action "${action}". Use: on | off | grant | revoke | list.`));
   process.exit(1);
 }
 
@@ -362,6 +377,7 @@ export function help() {
   log(cyan('  serve             ') + gray('Headless boot of the core in the mode config/core.json says'));
   log(cyan('  prod              ') + gray('Set the core to production (guards a build exists) and boot'));
   log(cyan('  tenant <on|off|list> [name]') + gray('  Turn a tenant on/off or list them'));
+  log(cyan('  tenant <grant|revoke> <name>') + gray('  Grant/revoke the control plane (Tenant Manager)'));
   log(cyan('  stop [proc]       ') + gray('Stop the core (or a named pm2 process, e.g. build-watch)'));
   log(cyan('  restart           ') + gray('Restart the core (re-reads config/core.json)'));
   log(cyan('  delete [proc]     ') + gray('Remove the core (or a named process) from pm2'));

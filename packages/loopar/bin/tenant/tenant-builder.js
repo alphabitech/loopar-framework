@@ -9,7 +9,8 @@ const SITES_DIR = path.join(process.cwd(), 'sites');
  * Tenant catalog — sites/<name>/.
  *
  * A tenant's identity IS the folder name (no ID/NAME fields); tenant-specific
- * config lives in sites/<name>/config.json ({ domain, status, jwtSecret, cloud }).
+ * config lives in sites/<name>/config.json ({ domain, status, jwtSecret,
+ * controlPlane, cloud }).
  * Server-wide keys (PORT, NODE_ENV, REDIS_*, SHARED_TENANTS…) live in
  * config/core.json.
  *
@@ -54,6 +55,10 @@ function normalize(name, c = {}) {
     sites: normalizeSites(c.sites),
     status,
     online: status === 'active',
+    // Control plane: this tenant may operate every other tenant (Tenant
+    // Manager, provisioning) and can't be reset or destroyed. Granted from the
+    // TUI/CLI or by another control-plane tenant — never by the tenant itself.
+    controlPlane: c.controlPlane === true,
     jwtSecret: c.jwtSecret || null,
     // Key for reversible field secrets (password fields in `encrypt` mode).
     // Independent of jwtSecret: rotating sessions must not brick secrets.
@@ -113,8 +118,21 @@ export function tenantList() {
     domain: t.domain,
     status: t.status,
     online: t.online,
+    controlPlane: t.controlPlane,
   }));
 }
+
+/** Does `name` run the control plane? Unknown tenants never do. */
+export function isControlPlane(name) {
+  return readTenant(name)?.controlPlane === true;
+}
+
+/** Names of every control-plane tenant. */
+export function controlPlaneTenants() {
+  return tenants().filter((t) => t.controlPlane).map((t) => t.name);
+}
+
+const truthy = (v) => v === true || v === 1 || v === '1' || v === 'true';
 
 /** Translate an incoming patch (legacy UPPERCASE or lowercase) to config keys. */
 function translatePatch(data) {
@@ -132,6 +150,8 @@ function translatePatch(data) {
   if (sk !== undefined) out.secretKey = sk;
   const it = data.installToken ?? data.INSTALL_TOKEN;
   if (it !== undefined) out.installToken = it;
+  const cp = data.controlPlane ?? data.control_plane;
+  if (cp !== undefined && cp !== null && cp !== '') out.controlPlane = truthy(cp);
   const ra = data.restoredAt ?? data.RESTORED_AT;
   if (ra !== undefined) out.restoredAt = ra;
 
@@ -168,6 +188,7 @@ export async function saveTenant(data = {}) {
   const next = {
     domain: ('domain' in patch ? patch.domain : current.domain) || `${name}.localhost`,
     status: patch.status ?? current.status ?? 'suspended',
+    controlPlane: patch.controlPlane ?? current.controlPlane ?? false,
     jwtSecret: patch.jwtSecret ?? current.jwtSecret ?? null,
     secretKey: patch.secretKey ?? current.secretKey ?? null,
     sites: patch.sites ?? current.sites ?? {},
@@ -178,6 +199,7 @@ export async function saveTenant(data = {}) {
     restoredAt: patch.restoredAt ?? current.restoredAt ?? null,
     cloud: { ...(current.cloud || {}), ...(patch.cloud || {}) },
   };
+  if (!next.controlPlane) delete next.controlPlane;
   if (!next.jwtSecret) delete next.jwtSecret;
   if (!next.secretKey) delete next.secretKey;
   if (!Object.keys(next.sites).length) delete next.sites;
@@ -290,6 +312,8 @@ export const tenant = {
   tenantNames,
   tenantList,
   tenantStatusOf,
+  isControlPlane,
+  controlPlaneTenants,
   readTenant,
   getTenantData,
   saveTenant,
