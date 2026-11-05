@@ -24,7 +24,7 @@ const log = console.log;
  *
  */
 export async function host() {
-  const [{ tenants }, { default: CaddyManager }] = await Promise.all([
+  const [{ routingTable }, { default: CaddyManager }] = await Promise.all([
     import('loopar/bin/tenant/tenant-builder.js'),
     import('loopar/bin/tenant/caddy-manager.js'),
   ]);
@@ -43,14 +43,12 @@ export async function host() {
 
   try {
     const port = corePort();
-    const domains = tenants()
-      .map(t => t.domain || `${t.name}.localhost`)
-      .filter(Boolean);
+    const { domains, redirects } = routingTable();
 
     if (port && domains.length) {
       const caddy = new CaddyManager();
       await caddy.ensureReady();
-      await caddy.registerHostCatchAll(port, domains);
+      await caddy.registerHostCatchAll(port, domains, redirects);
     }
   } catch (err) {
     console.warn(yellow(`⚠️  Caddy host route not configured: ${err.message}`));

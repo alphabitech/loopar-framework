@@ -45,6 +45,22 @@ function normalizeSites(sites) {
   return out;
 }
 
+/**
+ * { "/old/*": "https://new.example.com/" } → path prefix → target origin.
+ * Paths must be absolute; targets must be http(s) URLs (no trailing slash,
+ * the request URI is appended). Invalid entries are dropped.
+ */
+export function normalizeRedirects(redirects) {
+  const out = {};
+  for (const [from, to] of Object.entries(redirects || {})) {
+    const p = String(from || '').trim();
+    const t = String(to || '').trim().replace(/\/+$/, '');
+    if (!p.startsWith('/') || !/^https?:\/\/[^\s/]+(\/\S*)?$/i.test(t)) continue;
+    out[p] = t;
+  }
+  return out;
+}
+
 function normalize(name, c = {}) {
   const status = String(c.status || 'suspended').toLowerCase() === 'active' ? 'active' : 'suspended';
   return {
@@ -53,6 +69,9 @@ function normalize(name, c = {}) {
     // Extra websites served by this tenant: each domain renders its own web
     // app (the primary `domain` keeps System Settings' active web app).
     sites: normalizeSites(c.sites),
+    // Paths of the primary domain answered with a permanent redirect at the
+    // proxy (e.g. an app moved to another tenant): { "/path/*": "https://…" }.
+    redirects: normalizeRedirects(c.redirects),
     status,
     online: status === 'active',
     // Control plane: this tenant may operate every other tenant (Tenant
@@ -122,6 +141,24 @@ export function tenantList() {
   }));
 }
 
+/**
+ * What the proxy must route, from the catalog: every domain served by the core
+ * (primary, websites and their local <domain>.localhost aliases) and the
+ * redirects declared on primary domains.
+ * @returns {{ domains: string[], redirects: Array<{host,path,to}> }}
+ */
+export function routingTable() {
+  const all = tenants();
+  const domains = [...new Set(all.flatMap((t) => [
+    t.domain,
+    ...Object.keys(t.sites || {}).flatMap((d) => [d, `${d}.localhost`]),
+  ]).filter(Boolean))];
+  const redirects = all.flatMap((t) =>
+    Object.entries(t.redirects || {}).map(([p, to]) => ({ host: t.domain, path: p, to }))
+  );
+  return { domains, redirects };
+}
+
 /** Does `name` run the control plane? Unknown tenants never do. */
 export function isControlPlane(name) {
   return readTenant(name)?.controlPlane === true;
@@ -146,6 +183,7 @@ function translatePatch(data) {
   const jwt = data.jwtSecret ?? data.JWT_SECRET;
   if (jwt !== undefined) out.jwtSecret = jwt;
   if (data.sites !== undefined) out.sites = normalizeSites(data.sites);
+  if (data.redirects !== undefined) out.redirects = normalizeRedirects(data.redirects);
   const sk = data.secretKey ?? data.SECRET_KEY;
   if (sk !== undefined) out.secretKey = sk;
   const it = data.installToken ?? data.INSTALL_TOKEN;
@@ -192,6 +230,7 @@ export async function saveTenant(data = {}) {
     jwtSecret: patch.jwtSecret ?? current.jwtSecret ?? null,
     secretKey: patch.secretKey ?? current.secretKey ?? null,
     sites: patch.sites ?? current.sites ?? {},
+    redirects: patch.redirects ?? current.redirects ?? {},
     installToken: patch.installToken ?? current.installToken ?? null,
     // Re-init marker: a core holding the old instance drops it when this
     // changes (backup restore, reset). Kept across saves so a plain save
@@ -203,6 +242,7 @@ export async function saveTenant(data = {}) {
   if (!next.jwtSecret) delete next.jwtSecret;
   if (!next.secretKey) delete next.secretKey;
   if (!Object.keys(next.sites).length) delete next.sites;
+  if (!Object.keys(next.redirects).length) delete next.redirects;
   if (!next.installToken) delete next.installToken;   // empty → scrubbed
   if (!next.restoredAt) delete next.restoredAt;
   // Drop empty cloud fields, then the object if nothing's left.
@@ -314,6 +354,7 @@ export const tenant = {
   tenantStatusOf,
   isControlPlane,
   controlPlaneTenants,
+  routingTable,
   readTenant,
   getTenantData,
   saveTenant,

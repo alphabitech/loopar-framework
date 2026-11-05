@@ -24,17 +24,12 @@ export { corePort };
  */
 export async function refreshCaddy() {
   try {
-    // Primary domains plus every website domain and its local
-    // <domain>.localhost alias — see tenant config `sites`.
-    const domains = tenant.tenants().flatMap((t) => [
-      t.domain,
-      ...Object.keys(t.sites || {}).flatMap((d) => [d, `${d}.localhost`]),
-    ]).filter(Boolean);
     // Even with no domains left the route is rewritten: the last deleted
     // tenant must stop being proxied.
+    const { domains, redirects } = tenant.routingTable();
     const caddy = new CaddyManager();
     await caddy.ensureReady();
-    const ok = await caddy.registerHostCatchAll(corePort(), domains);
+    const ok = await caddy.registerHostCatchAll(corePort(), domains, redirects);
     return ok ? '' : ' · caddy route not updated';
   } catch (err) {
     return ` · caddy: ${err.message}`;

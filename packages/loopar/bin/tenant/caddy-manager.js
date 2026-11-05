@@ -49,6 +49,51 @@ const NO_SITE_ROUTE = {
   }],
 };
 
+/**
+ * Loopar-owned routes, in match order: redirects first (they win over the
+ * proxy for their paths), then the catch-all proxy to the core.
+ * @param {number} hostPort
+ * @param {string[]} domains
+ * @param {Array<{host,path,to}>} redirects  `to` is an origin/base URL; the
+ *   original request URI (path + query) is appended.
+ */
+export function buildHostRoutes(hostPort, domains = [], redirects = []) {
+  const hosts = [...new Set(domains.filter(Boolean))];
+  const redirectRoutes = redirects
+    .filter((r) => r?.host && r?.path && r?.to)
+    .map((r, i) => ({
+      "@id": `loopar_redirect_${i}`,
+      match: [{ host: [r.host], path: [r.path] }],
+      handle: [{
+        handler: "static_response",
+        status_code: 308,
+        headers: { Location: [`${r.to}{http.request.uri}`] },
+      }],
+      terminal: true,
+    }));
+
+  const proxy = hosts.length ? [{
+    "@id": "loopar_host",
+    match: [{ host: hosts }],
+    handle: [{
+      handler: "reverse_proxy",
+      upstreams: [{ dial: `localhost:${hostPort}` }],
+      headers: {
+        request: {
+          set: {
+            "X-Forwarded-Proto": ["{http.request.scheme}"],
+            "X-Forwarded-Host": ["{http.request.host}"],
+            "X-Forwarded-Port": ["{http.request.port}"],
+            "X-Real-IP": ["{http.request.remote.host}"],
+          },
+        },
+      },
+    }],
+  }] : [];
+
+  return [...redirectRoutes, ...proxy];
+}
+
 export default class CaddyManager {
   constructor() {
     this.isProductionEnv = coreEnv() === 'production';
@@ -177,34 +222,16 @@ export default class CaddyManager {
    * @param {number}   hostPort  The single host process's HTTP port.
    * @param {string[]} domains   Every tenant domain to route to the host.
    */
-  async registerHostCatchAll(hostPort, domains = []) {
+  async registerHostCatchAll(hostPort, domains = [], redirects = []) {
     try {
-      const hosts = [...new Set(domains.filter(Boolean))];
-
-      const route = hosts.length && {
-        "@id": "loopar_host",
-        match: [{ host: hosts }],
-        handle: [{
-          handler: "reverse_proxy",
-          upstreams: [{ dial: `localhost:${hostPort}` }],
-          headers: {
-            request: {
-              set: {
-                "X-Forwarded-Proto": ["{http.request.scheme}"],
-                "X-Forwarded-Host": ["{http.request.host}"],
-                "X-Forwarded-Port": ["{http.request.port}"],
-                "X-Real-IP": ["{http.request.remote.host}"],
-              },
-            },
-          },
-        }],
-      };
-
       const external = (await this._readCurrentRoutes())
         .filter(r => r?.["@id"] && !String(r["@id"]).startsWith("loopar_"));
-      const routes = [...external, ...(route ? [route] : []), NO_SITE_ROUTE];
+      const routes = [...external, ...buildHostRoutes(hostPort, domains, redirects), NO_SITE_ROUTE];
       const ok = await this._writeFullConfig(routes);
-      if (ok) console.log(`✅ Caddy host route: [${hosts.join(", ")}] → localhost:${hostPort}`);
+      if (ok) {
+        console.log(`✅ Caddy host route: [${[...new Set(domains.filter(Boolean))].join(", ")}] → localhost:${hostPort}`);
+        for (const r of redirects) console.log(`↪  ${r.host}${r.path} → ${r.to}`);
+      }
       return ok;
     } catch (e) {
       console.error("Failed to register host catch-all:", e);

@@ -30,6 +30,7 @@ export default class TenantManager extends BaseDocument {
           domain: app?.domain,
           control_plane: app?.controlPlane ? 1 : 0,
           sites: Object.entries(app?.sites || {}).map(([d, a]) => `${d} = ${a}`).join('\n'),
+          redirects: Object.entries(app?.redirects || {}).map(([p, to]) => `${p} = ${to}`).join('\n'),
           ...Object.fromEntries(Object.entries(this.__DATA__ || {}).filter(([, v]) => v != null)),
         };
         this.__IS_NEW__ = false;
@@ -91,8 +92,13 @@ export default class TenantManager extends BaseDocument {
 
   async __data__() {
     // Never hand tenant secrets to the form; saveTenant keeps them when absent.
-    const { jwtSecret, secretKey, installToken, sites, controlPlane, ...data } = tenant.getTenantData(this.name);
-    return { ...data, control_plane: controlPlane ? 1 : 0, sites: Object.entries(sites || {}).map(([d, a]) => `${d} = ${a}`).join('\n') };
+    const { jwtSecret, secretKey, installToken, sites, redirects, controlPlane, ...data } = tenant.getTenantData(this.name);
+    return {
+      ...data,
+      control_plane: controlPlane ? 1 : 0,
+      sites: Object.entries(sites || {}).map(([d, a]) => `${d} = ${a}`).join('\n'),
+      redirects: Object.entries(redirects || {}).map(([p, to]) => `${p} = ${to}`).join('\n'),
+    };
   }
 
   async save() {
@@ -102,7 +108,7 @@ export default class TenantManager extends BaseDocument {
       return loopar.throw({ status: 409, title: 'Conflict', message: 'Tenant already exists, try another name' });
     }
 
-    await tenant.saveTenant({...await this.rawValues(), sites: this.#sitesMap(), ID: this.id || this.name});
+    await tenant.saveTenant({...await this.rawValues(), sites: this.#sitesMap(), redirects: this.#redirectsMap(), ID: this.id || this.name});
     await tenantOps.refreshCaddy();
     this.#evict();
     // The running instance isn't evicted; rebuild so its website cache
@@ -177,6 +183,7 @@ export default class TenantManager extends BaseDocument {
         loopar.throw({ status: 409, title: 'Conflict', message: `Domain ${domain} is already used by tenant ${owner.name}` });
       }
     }
+    this.#redirectsMap();
     await super.validate();
   }
 
@@ -193,6 +200,30 @@ export default class TenantManager extends BaseDocument {
   }
 
   #hasDomain() { return !!this.domain?.trim(); }
+
+  /**
+   * "/path/* = https://target" lines → { path: target }. The path is matched
+   * on the primary domain; the request URI is appended to the target.
+   */
+  #redirectsMap() {
+    const redirects = {};
+    for (const raw of String(this.redirects || '').split('\n')) {
+      const line = raw.trim();
+      if (!line || line.startsWith('#')) continue;
+      const at = line.indexOf('=');
+      const from = (at < 0 ? '' : line.slice(0, at)).trim();
+      const to = (at < 0 ? '' : line.slice(at + 1)).trim().replace(/\/+$/, '');
+      if (!from.startsWith('/') || !to) loopar.throw(`Invalid redirect line "${line}". Use: /path/* = https://target`);
+      let target;
+      try { target = new URL(to); } catch { loopar.throw(`Redirect ${from}: "${to}" isn't a valid URL`); }
+      if (!/^https?:$/.test(target.protocol)) loopar.throw(`Redirect ${from}: the target must be http(s)`);
+      if (target.host.toLowerCase() === String(this.domain || '').trim().toLowerCase()) {
+        loopar.throw(`Redirect ${from} points back to ${target.host} — it would loop`);
+      }
+      redirects[from] = to;
+    }
+    return redirects;
+  }
 
   /** "domain = app" lines → { domain: app }. Throws on a malformed line. */
   #sitesMap() {
