@@ -104,7 +104,7 @@ const canRename = (Document, canUpdate) =>
 /** "Edit" on a read-only view, for users who may edit the record. */
 function editTarget(Document) {
   const { meta = {}, Entity = {}, data = {} } = Document;
-  if (meta.action !== "view" || !Document.name || Entity.is_single || Entity.is_builder) return null;
+  if (meta.action !== "view" || !Document.name || Entity.is_single || Entity.is_builder || Entity.read_only) return null;
   if (!canOn(Entity.name, "update", data)) return null;
   return `/desk/${Entity.name}/update?name=${encodeURIComponent(Document.name)}`;
 }
@@ -222,7 +222,9 @@ export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...prop
   ];
 
   // `primaryAction` (view option) replaces the default one: New on lists, Save elsewhere.
+  // Read-only entities: records come from the app's flows — no New.
   const primary = primaryAction ? (typeof primaryAction === "function" ? primaryAction() : primaryAction)
+    : isList && Entity.read_only ? null
     : isList ? (
       <Link variant="default" className="text-primary-foreground hover:text-primary-foreground" tabIndex="0" to={`/desk/${Entity.name}/create`}>
         <PlusIcon className="pr-1" />

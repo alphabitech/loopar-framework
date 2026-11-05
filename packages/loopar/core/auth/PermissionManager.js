@@ -36,6 +36,15 @@ export const normalizeScope = s => {
 };
 const widest = (a, b) => (!a ? b : !b ? a : (SCOPE_RANK[a] >= SCOPE_RANK[b] ? a : b));
 
+/** Desk writes that a read-only entity (see Entity `read_only`) never allows. */
+export const READ_ONLY_DENIED_ACTIONS = new Set(['create', 'update']);
+
+/** Is `action` a hand write on an entity whose records only the app's flows write? */
+export function isReadOnlyWrite(document, action) {
+  if (!READ_ONLY_DENIED_ACTIONS.has(String(action || '').toLowerCase())) return false;
+  return !!loopar.getRef?.(document)?.read_only;
+}
+
 class PermissionManagerClass {
   // tenant -> Map(username -> Map(permKey -> scope))
   #storesByTenant = new Map();
@@ -136,6 +145,7 @@ class PermissionManagerClass {
    */
   scope(document, action, username, { includePublic = true } = {}) {
     username = username ?? loopar.auth.user() ?? 'Guest';
+    if (isReadOnlyWrite(document, action)) return null;
     if (username === 'Administrator') return SCOPE.ALL;
 
     const key = this.#buildKey(document, action);

@@ -1,5 +1,5 @@
 import { loopar, PermissionManager, CREATED_BY_COLUMN } from "loopar";
-import { SCOPE } from "./PermissionManager.js";
+import { SCOPE, isReadOnlyWrite } from "./PermissionManager.js";
 import { portalIdentity, customerCondition, isCustomerRecord, customerFieldOf, CUSTOMER_FIELD } from "./customer-scope.js";
 import { validateCsrfToken } from './csrf.js';
 import { workspaceCapabilities, workspaceRequiresAuth, getWorkspaceName, workspaceServesWebPages } from "../global/router-utils.js";
@@ -214,6 +214,16 @@ export default class AuthController {
   }
 
   async isAuthorized(user) {
+    // Read-only entities: records come from the app's flows. Opening one to
+    // edit shows it read-only; creating or saving one by hand is refused.
+    if (isReadOnlyWrite(this.document, this.action)) {
+      const opening = String(this.action).toLowerCase() === 'update' && !this.hasData() && typeof this.actionView === 'function';
+      if (!opening) {
+        loopar.throw({ code: 403, message: `${this.document} records are written by the app, not by hand.` });
+      }
+      this.action = 'view';
+    }
+
     if (user.name === 'Administrator') return true;
     const workspace = this.req.__WORKSPACE_NAME__;
 

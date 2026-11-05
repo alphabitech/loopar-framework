@@ -86,6 +86,9 @@ export class Builder {
         is_builder: isBuilder,
         is_child: isChild,
         is_virtual: isVirtual,
+        // Records written only by the app's own flows (webhooks, jobs,
+        // actions): the desk never creates or edits them by hand.
+        read_only: this.utils.trueToBinary(doc.read_only),
         is_audited: auditable ? 1 : 0,
         enable_history: this.utils.trueToBinary(doc.enable_history),
         enable_comments: this.utils.trueToBinary(doc.enable_comments),

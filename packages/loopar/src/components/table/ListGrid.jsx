@@ -1,6 +1,7 @@
 import loopar from "loopar";
 import {Link} from "@link";
 import { useTable } from "./TableContext.jsx"
+import { recordLink } from "./record-link.js"
 import { useViewOptions } from "@loopar/document";
 import BaseTable from "./BaseTable.jsx"
 import {useCallback, useMemo} from "react";
@@ -69,7 +70,7 @@ export function ListGrid(props) {
 
           return (
             <Link
-              to={`update?name=${row.name}`}
+              to={recordLink(Document.Entity, row.name)}
               renderOnRestrict={true}
               className="flex min-w-0 flex-col items-start justify-center gap-0 p-0 leading-tight hover:underline"
             >

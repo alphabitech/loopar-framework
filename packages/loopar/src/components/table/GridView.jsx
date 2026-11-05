@@ -9,6 +9,7 @@ import { DynamicIcon } from "@icon-input";
 import { CheckIcon } from "lucide-react";
 
 import { useTable } from "./TableContext";
+import { recordLink } from "./record-link.js";
 import { useViewOptions } from "@loopar/document";
 import { TableSearch } from "./TableSearch";
 import { EmptyTable } from "./EmptyTable";
@@ -68,7 +69,7 @@ function GridCard({ row, titleFields, detailCols, iconCol, selected, onSelect, E
 
         <div className="min-w-0 flex-1">
           <Link
-            to={`update?name=${encodeURIComponent(row.name)}`}
+            to={recordLink(Entity, row.name)}
             renderOnRestrict={true}
             bare
             className="block truncate font-medium leading-tight text-foreground hover:underline"

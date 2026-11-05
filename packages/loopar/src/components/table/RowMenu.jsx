@@ -19,7 +19,7 @@ export function RowMenu({ row, Entity = {}, onDelete }) {
     .filter(([, node]) => node);
 
   const name = encodeURIComponent(row.name);
-  const canEdit = canOn(Entity.name, "update", row);
+  const canEdit = !Entity.read_only && canOn(Entity.name, "update", row);
   const canPrint = !Entity.is_single && !Entity.is_builder && canOn(Entity.name, "print", row);
   const canDelete = canOn(Entity.name, "delete", row);
 
