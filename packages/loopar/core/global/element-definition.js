@@ -221,9 +221,16 @@ rebuildDerivedMaps();
 
 export function resolveColumnFormat(field) {
   if (!field?.data) return null;
-  const declared = field.data.format ?? field.data.type;
-  if (!declared) return null;
-  return COLUMN_FORMAT[String(declared).toLowerCase()] || null;
+  const { format, type } = field.data;
+  // `format` names a column format (the designer's options): an exact key wins
+  // over aliases, so format "text" is TEXT even though "text" is also the
+  // input-type alias of `data` (the meaning `type: "text"` keeps).
+  if (format) {
+    const key = String(format).toLowerCase();
+    return COLUMN_FORMATS[key] ? key : COLUMN_FORMAT[key] || null;
+  }
+  if (!type) return null;
+  return COLUMN_FORMAT[String(type).toLowerCase()] || null;
 }
 /**
  * Element groups: palette categories for the designer sidebar.

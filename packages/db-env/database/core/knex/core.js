@@ -543,7 +543,8 @@ export default class Core {
             newFields.push(field);
           } else if (
             this.#columnTypeFamilyChanged(field, existing) ||
-            this.#keyedTextColumn(field, existing)
+            this.#keyedTextColumn(field, existing) ||
+            this.#textOnVarcharColumn(field, existing)
           ) {
             changedFields.push({ field, existing });
           }
@@ -729,6 +730,17 @@ export default class Core {
   #keyedTextColumn(field, existingCol) {
     if (!this.isMySQLLike || !isKeyed(field)) return false;
     return /text/i.test(existingCol?.type || "");
+  }
+
+  /**
+   * A field declared as TEXT whose column is still VARCHAR (same "string"
+   * family, so the family check misses it): widen it. Keyed fields stay
+   * VARCHAR on purpose (see isKeyed). SQLite doesn't enforce lengths.
+   */
+  #textOnVarcharColumn(field, existingCol) {
+    if (this.isSQLiteLike || isKeyed(field)) return false;
+    if (!TEXT_FORMATS.has(resolveColumnFormatKey(field))) return false;
+    return /char/i.test(existingCol?.type || "");
   }
 
   #columnTypeFamilyChanged(field, existingCol) {

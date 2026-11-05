@@ -20,6 +20,8 @@ export function coerceDocStatus(value) {
     return Object.values(DOC_STATUS).includes(value) ? value : DOC_STATUS.ACTIVE;
   }
   if (typeof value === "string") {
+    // Numeric strings ("1") come from form posts and some drivers.
+    if (/^\d+$/.test(value.trim())) return coerceDocStatus(Number(value));
     const key = value.toUpperCase();
     if (DOC_STATUS[key] != null) return DOC_STATUS[key];
     if (key === "DELETED") return DOC_STATUS.ACTIVE;
