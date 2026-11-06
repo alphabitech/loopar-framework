@@ -29,6 +29,7 @@ export default class TenantManager extends BaseDocument {
           id: app?.name,
           domain: app?.domain,
           control_plane: app?.controlPlane ? 1 : 0,
+          template_host: app?.templateHost ? 1 : 0,
           sites: Object.entries(app?.sites || {}).map(([d, a]) => `${d} = ${a}`).join('\n'),
           redirects: Object.entries(app?.redirects || {}).map(([p, to]) => `${p} = ${to}`).join('\n'),
           ...Object.fromEntries(Object.entries(this.__DATA__ || {}).filter(([, v]) => v != null)),
@@ -92,10 +93,11 @@ export default class TenantManager extends BaseDocument {
 
   async __data__() {
     // Never hand tenant secrets to the form; saveTenant keeps them when absent.
-    const { jwtSecret, secretKey, installToken, sites, redirects, controlPlane, ...data } = tenant.getTenantData(this.name);
+    const { jwtSecret, secretKey, installToken, sites, redirects, controlPlane, templateHost, ...data } = tenant.getTenantData(this.name);
     return {
       ...data,
       control_plane: controlPlane ? 1 : 0,
+      template_host: templateHost ? 1 : 0,
       sites: Object.entries(sites || {}).map(([d, a]) => `${d} = ${a}`).join('\n'),
       redirects: Object.entries(redirects || {}).map(([p, to]) => `${p} = ${to}`).join('\n'),
     };
@@ -314,6 +316,7 @@ export default class TenantManager extends BaseDocument {
       domain: t.domain,
       status: t.online ? "online" : "stopped",
       control_plane: t.controlPlane ? 1 : 0,
+      template_host: t.templateHost ? 1 : 0,
     }));
   }
 

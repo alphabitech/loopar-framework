@@ -8,7 +8,7 @@ import path from 'path';
 import { pullApp, pushApp, commitApp, discardApp, publishApp, statusApp, getDiff, getRemoteUrl, getCwdForApp } from './git-actions.js';
 import { enqueueBuild, setEmitter } from '../../build-service.js';
 import { listGitAccounts } from './git-accounts.js';
-import { installSiteFromTemplate, isTemplateHeader, belongsToOtherTenant, addSiteDomain, defaultDemoName, defaultDemoDomain } from 'loopar/apps/core/modules/system/forms/installer/template.js';
+import { isTemplateHeader, isTemplateHostTenant, belongsToOtherTenant, publishTemplateDemo, defaultDemoDomain } from 'loopar/apps/core/modules/system/forms/installer/template.js';
 
 setEmitter((event, payload) => loopar.emit(event, payload));
 
@@ -54,11 +54,9 @@ export default class AppManagerController extends SystemController {
           app.has_git = !app.folder_mismatch && fs.existsSync(ownGitPath);
           app.is_framework = (app.name === 'loopar' && !app.has_git);
           app.is_template = isTemplateHeader(app);
-          app.template_locked = app.is_template && process.env.NODE_ENV === 'production';
-          if (app.is_template) {
-            app.default_demo_name = defaultDemoName(app.name);
-            app.default_demo_domain = defaultDemoDomain(app.name);
-          }
+          app.template_host = app.is_template && isTemplateHostTenant();
+          app.template_locked = app.is_template && process.env.NODE_ENV === 'production' && !app.template_host;
+          if (app.template_host) app.default_demo_domain = defaultDemoDomain(app.name);
 
           appsList.push(app);
         }
@@ -100,22 +98,18 @@ export default class AppManagerController extends SystemController {
   }
 
   /**
-   * Publish demo: copies a template into a new app (construction-site →
-   * construction-demo), installs it in this tenant and serves it on its own
-   * domain (tenant Domains). The tenant's main website is left as it is.
-   * (Customer sites are created by provisioning, from what the customer chose.)
+   * Publish demo (template host tenant only): installs the template as it is,
+   * when it isn't yet, and serves it on its own domain. Updating the template
+   * (pull + Update) updates the demo.
    */
   async actionPublishDemo() {
-    const { template, site_name, domain } = { ...(this.query || {}), ...(this.body || {}) };
+    const { template, domain } = { ...(this.query || {}), ...(this.body || {}) };
     const host = String(domain || '').trim().toLowerCase();
-    if (!host || !/^[a-z0-9.-]+\.[a-z]{2,}$|^[a-z0-9.-]+\.localhost$/.test(host)) {
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$|^[a-z0-9.-]+\.localhost$/.test(host)) {
       loopar.throw({ status: 400, title: 'Publish demo', message: `Enter the demo's domain (e.g. ${defaultDemoDomain(template)}).` });
     }
-
-    const site = await installSiteFromTemplate(template, site_name || defaultDemoName(template), { activate: false });
-    await addSiteDomain(host, site);
-
-    return this.success(`Demo "${site}" published on ${host}.`);
+    await publishTemplateDemo(template, host);
+    return this.success(`Demo of "${template}" published on ${host}.`);
   }
 
   async actionClone() {

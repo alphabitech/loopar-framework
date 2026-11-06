@@ -4,7 +4,7 @@ import { loopar, fileManage } from "loopar";
 import BaseDocument from "../../../../../../core/document/base-document.js";
 import { readRenameRecords, applyRenameToDatabase } from "../../../../../../core/document/entity-rename.js";
 import { normalizeScope } from "../../../../../../core/auth/PermissionManager.js";
-import { readAppHeader, isTemplateHeader, belongsToOtherTenant, parseRequires, loadInstaller } from "./template.js";
+import { readAppHeader, isTemplateHeader, isTemplateHostTenant, belongsToOtherTenant, parseRequires, loadInstaller } from "./template.js";
 
 /** Requirement chain being installed (guards against cycles). */
 const installingRequirements = new Set();
@@ -342,16 +342,16 @@ export default class Installer extends BaseDocument {
   }
 
   /**
-   * A template is never installed as is in production: a site is created
-   * from it (a copy owned by one tenant). A site copy only installs in the
-   * tenant it was created for.
+   * In production a template installs as it is only in the template host
+   * tenant (the demos); every other tenant gets a copy of it (provisioning).
+   * A copy only installs in the tenant it was created for.
    */
   #assertInstallable(header) {
     if (!header) return;
-    if (isTemplateHeader(header) && process.env.NODE_ENV === "production") {
+    if (isTemplateHeader(header) && process.env.NODE_ENV === "production" && !isTemplateHostTenant()) {
       loopar.throw({
         status: 409, code: "APP_IS_TEMPLATE", title: "Install",
-        message: `"${this.app_name}" is a website template: publish a demo from it (App Manager → Publish demo) or create a site through provisioning.`,
+        message: `"${this.app_name}" is a website template: it installs as it is only in the template host tenant (demos); customer sites are copies created by provisioning.`,
       });
     }
     if (belongsToOtherTenant(header)) {

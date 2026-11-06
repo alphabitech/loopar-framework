@@ -78,6 +78,9 @@ function normalize(name, c = {}) {
     // Manager, provisioning) and can't be reset or destroyed. Granted from the
     // TUI/CLI or by another control-plane tenant — never by the tenant itself.
     controlPlane: c.controlPlane === true,
+    // Template host: website templates install here as they are (the demos
+    // tenant), so a template's demo is the template itself and updates with it.
+    templateHost: c.templateHost === true,
     jwtSecret: c.jwtSecret || null,
     // Key for reversible field secrets (password fields in `encrypt` mode).
     // Independent of jwtSecret: rotating sessions must not brick secrets.
@@ -138,6 +141,7 @@ export function tenantList() {
     status: t.status,
     online: t.online,
     controlPlane: t.controlPlane,
+    templateHost: t.templateHost,
   }));
 }
 
@@ -162,6 +166,11 @@ export function routingTable() {
 /** Does `name` run the control plane? Unknown tenants never do. */
 export function isControlPlane(name) {
   return readTenant(name)?.controlPlane === true;
+}
+
+/** Does `name` host website templates as they are (demos tenant)? */
+export function isTemplateHost(name) {
+  return readTenant(name)?.templateHost === true;
 }
 
 /** Names of every control-plane tenant. */
@@ -190,6 +199,8 @@ function translatePatch(data) {
   if (it !== undefined) out.installToken = it;
   const cp = data.controlPlane ?? data.control_plane;
   if (cp !== undefined && cp !== null && cp !== '') out.controlPlane = truthy(cp);
+  const th = data.templateHost ?? data.template_host;
+  if (th !== undefined && th !== null && th !== '') out.templateHost = truthy(th);
   const ra = data.restoredAt ?? data.RESTORED_AT;
   if (ra !== undefined) out.restoredAt = ra;
 
@@ -227,6 +238,7 @@ export async function saveTenant(data = {}) {
     domain: ('domain' in patch ? patch.domain : current.domain) || `${name}.localhost`,
     status: patch.status ?? current.status ?? 'suspended',
     controlPlane: patch.controlPlane ?? current.controlPlane ?? false,
+    templateHost: patch.templateHost ?? current.templateHost ?? false,
     jwtSecret: patch.jwtSecret ?? current.jwtSecret ?? null,
     secretKey: patch.secretKey ?? current.secretKey ?? null,
     sites: patch.sites ?? current.sites ?? {},
@@ -239,6 +251,7 @@ export async function saveTenant(data = {}) {
     cloud: { ...(current.cloud || {}), ...(patch.cloud || {}) },
   };
   if (!next.controlPlane) delete next.controlPlane;
+  if (!next.templateHost) delete next.templateHost;
   if (!next.jwtSecret) delete next.jwtSecret;
   if (!next.secretKey) delete next.secretKey;
   if (!Object.keys(next.sites).length) delete next.sites;
@@ -354,6 +367,7 @@ export const tenant = {
   tenantStatusOf,
   isControlPlane,
   controlPlaneTenants,
+  isTemplateHost,
   routingTable,
   readTenant,
   getTenantData,

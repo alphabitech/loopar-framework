@@ -33,6 +33,9 @@ export function readAppHeader(appName) {
 
 export const isTemplateHeader = (header) => Number(header?.is_template) === 1;
 
+/** This tenant hosts templates as they are (demos tenant, Tenant Manager → Template host). */
+export const isTemplateHostTenant = (tenantId = loopar.tenantId) => tenant.readTenant(tenantId)?.templateHost === true;
+
 /** A site created from a template belongs to one tenant only. */
 export const belongsToOtherTenant = (header) =>
   !!header?.owner_tenant && header.owner_tenant !== loopar.tenantId;
@@ -42,7 +45,7 @@ export function defaultSiteName(tenantId = loopar.tenantId) {
   return `${/^[a-z]/.test(base) ? base : `s-${base}`}-site`.slice(0, 41);
 }
 
-/** Demo name for a template: construction-site → construction-demo. */
+/** Demo host label for a template: construction-site → construction-demo. */
 export function defaultDemoName(template) {
   return `${String(template).replace(/-site$/, "")}-demo`;
 }
@@ -193,4 +196,27 @@ export async function addSiteDomain(domain, app) {
   await tenant.saveTenant({ NAME: loopar.tenantId, sites: { ...current, [domain]: app } });
   await refreshCaddy();
   await loopar.build();
+}
+
+/**
+ * Publishes a template's demo in this (template host) tenant: the template is
+ * installed as it is — requirements first — when it isn't yet, and served on
+ * `domain`. The demo IS the template, so it updates with it (App Manager →
+ * Update). The tenant's main website doesn't change.
+ */
+export async function publishTemplateDemo(template, domain) {
+  template = String(template ?? "").trim();
+  const header = readAppHeader(template);
+  if (!header) fail(404, "TEMPLATE_NOT_FOUND", `Template "${template}" was not found.`);
+  if (!isTemplateHeader(header)) fail(422, "NOT_A_TEMPLATE", `App "${template}" is not a template.`);
+  if (!isTemplateHostTenant()) {
+    fail(403, "NOT_TEMPLATE_HOST", "Demos are published from the template host tenant (Tenant Manager → Template host).");
+  }
+
+  if (await loopar.appStatus(template) !== "installed") {
+    const model = await loadInstaller(template);
+    await model.install(false);
+  }
+  await addSiteDomain(domain, template);
+  return template;
 }
