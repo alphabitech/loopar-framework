@@ -8,6 +8,7 @@ import path from 'path';
 import { pullApp, pushApp, commitApp, discardApp, publishApp, statusApp, getDiff, getRemoteUrl, getCwdForApp } from './git-actions.js';
 import { enqueueBuild, setEmitter } from '../../build-service.js';
 import { listGitAccounts } from './git-accounts.js';
+import { installSiteFromTemplate, defaultSiteName, isTemplateHeader, belongsToOtherTenant } from 'loopar/apps/core/modules/system/forms/installer/template.js';
 
 setEmitter((event, payload) => loopar.emit(event, payload));
 
@@ -35,7 +36,8 @@ export default class AppManagerController extends SystemController {
 
         const app = installerData.App;
 
-        if (app) {
+        // A site created from a template is private to its tenant.
+        if (app && !belongsToOtherTenant(app)) {
           const installedApp = await loopar.getApp(app.name);
 
           app.installed = !!installedApp;
@@ -51,6 +53,9 @@ export default class AppManagerController extends SystemController {
           const ownGitPath = loopar.makePath(loopar.pathRoot, 'apps', app.name, '.git');
           app.has_git = !app.folder_mismatch && fs.existsSync(ownGitPath);
           app.is_framework = (app.name === 'loopar' && !app.has_git);
+          app.is_template = isTemplateHeader(app);
+          app.template_locked = app.is_template && process.env.NODE_ENV === 'production';
+          app.default_site_name = defaultSiteName();
 
           appsList.push(app);
         }
@@ -89,6 +94,15 @@ export default class AppManagerController extends SystemController {
 
 
     return await this.render(apps, {rows: appsList});
+  }
+
+  /** Creates a site (a tenant-owned copy) from a template app and installs it. */
+  async actionCreateSite() {
+    const { template, site_name, activate } = { ...(this.query || {}), ...(this.body || {}) };
+    const site = await installSiteFromTemplate(template, site_name || defaultSiteName(), {
+      activate: activate === undefined ? true : [true, 1, '1', 'true'].includes(activate),
+    });
+    return this.success(`Site "${site}" created from "${template}".`);
   }
 
   async actionClone() {

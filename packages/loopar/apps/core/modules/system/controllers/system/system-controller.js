@@ -6,6 +6,7 @@ import { safeReturnPath } from "../../../../../../core/global/router-utils.js";
 import { isPrivateIp } from "../../../../../../core/global/storage/upload-guard.js";
 import { testServerConnection } from "db-env";
 import { connectionFromInstallData } from "../../../../../../core/global/install-connection.js";
+import { installSiteFromTemplate, defaultSiteName } from "../../forms/installer/template.js";
 
 /**
  * Setup actions. They are `publicAction*` so the bootstrap pages (the install
@@ -239,6 +240,9 @@ export default class SystemController extends BaseController {
         ? Object.fromEntries(Object.entries(this.data).filter(([k]) => !k.startsWith('db_')))
         : this.data;
       await this.unInstallApp(this.getAppName(), data, reinstall);
+      if (this.getAppName() === "loopar" && !reinstall && data.template) {
+        await this.#createSiteFromSetup(data);
+      }
       await this.#scrubSetupToken();
       return this.redirect("view");
     } else {
@@ -247,6 +251,23 @@ export default class SystemController extends BaseController {
       response.data = { ...(response.data || {}), ...this.#connectionDefaults() };
 
       return await this.render(response);
+    }
+  }
+
+  /**
+   * Setup with a website template (Loopar Cloud provisioning sends `template`
+   * and optionally `site_name`): the site is created from it and becomes the
+   * active website. A failure here never undoes the workspace install — the
+   * site can be created later from the App Manager.
+   */
+  async #createSiteFromSetup(data) {
+    const template = String(data.template).trim();
+    const siteName = String(data.site_name || "").trim() || defaultSiteName(loopar.tenantId);
+    try {
+      const site = await installSiteFromTemplate(template, siteName, { activate: true });
+      console.log(`[setup] site "${site}" created from template "${template}"`);
+    } catch (e) {
+      console.error(`[setup] could not create a site from template "${template}":`, e?.message || e);
     }
   }
 

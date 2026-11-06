@@ -4,6 +4,10 @@ import { loopar, fileManage } from "loopar";
 import BaseDocument from "../../../../../../core/document/base-document.js";
 import { readRenameRecords, applyRenameToDatabase } from "../../../../../../core/document/entity-rename.js";
 import { normalizeScope } from "../../../../../../core/auth/PermissionManager.js";
+import { readAppHeader, isTemplateHeader, belongsToOtherTenant, parseRequires, loadInstaller } from "./template.js";
+
+/** Requirement chain being installed (guards against cycles). */
+const installingRequirements = new Set();
 
 /** The framework app: its document names are reserved for every tenant. */
 const FRAMEWORK_APP = "loopar";
@@ -318,6 +322,10 @@ export default class Installer extends BaseDocument {
   }
 
   async install(reinstall = false) {
+    const header = readAppHeader(this.app_name);
+    this.#assertInstallable(header);
+    await this.#installRequirements(header);
+
     // An installed site gets a local snapshot first: an update that breaks
     // half-way has a point to go back to (Backups page / yarn backup restore).
     if (loopar.__installed__ && loopar.tenantId) {
@@ -328,6 +336,47 @@ export default class Installer extends BaseDocument {
       return await this.#install(reinstall);
     } finally {
       loopar.installingApp = null;
+    }
+  }
+
+  /**
+   * A template is never installed as is in production: a site is created
+   * from it (a copy owned by one tenant). A site copy only installs in the
+   * tenant it was created for.
+   */
+  #assertInstallable(header) {
+    if (!header) return;
+    if (isTemplateHeader(header) && process.env.NODE_ENV === "production") {
+      loopar.throw({
+        status: 409, code: "APP_IS_TEMPLATE", title: "Install",
+        message: `"${this.app_name}" is a website template. Create a site from it instead (App Manager → Create site).`,
+      });
+    }
+    if (belongsToOtherTenant(header)) {
+      loopar.throw({ status: 403, code: "APP_OF_OTHER_TENANT", title: "Install", message: `App "${this.app_name}" belongs to another workspace.` });
+    }
+  }
+
+  /** Installs the apps listed in the header's `requires` that aren't installed yet. */
+  async #installRequirements(header) {
+    for (const required of parseRequires(header?.requires)) {
+      if (required === this.app_name || required === FRAMEWORK_APP) continue;
+      if (await loopar.appStatus(required) === "installed") continue;
+      if (installingRequirements.has(required)) {
+        loopar.throw({ status: 409, code: "REQUIRES_CYCLE", title: "Install", message: `Circular requirement: ${[...installingRequirements, required].join(" → ")}.` });
+      }
+      if (!readAppHeader(required)) {
+        loopar.throw({ status: 424, code: "REQUIRED_APP_MISSING", title: "Install", message: `"${this.app_name}" requires the app "${required}", which is not available on this server.` });
+      }
+
+      installingRequirements.add(required);
+      try {
+        console.log(`[installer] ${this.app_name} requires ${required}: installing it first`);
+        const model = await loadInstaller(required);
+        await model.install(false);
+      } finally {
+        installingRequirements.delete(required);
+      }
     }
   }
 

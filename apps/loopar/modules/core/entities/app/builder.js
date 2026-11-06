@@ -467,10 +467,16 @@ class InstallerBuilder {
       docs[appKey] = { ...docs[appKey], version: this.version };
     }
 
+    // Install-time facts the installer reads before the App record exists.
+    const appDoc = docs[appKey] || {};
+    const requires = parseRequires(appDoc.requires);
+
     return {
       App: {
         name: this.app,
         version: this.version,
+        ...(Number(appDoc.is_template) === 1 ? { is_template: 1 } : {}),
+        ...(requires.length ? { requires } : {}),
       },
       documents: docs,
       postInstaller: this.postInstaller.PostInstallerQueue
@@ -494,6 +500,12 @@ class InstallerBuilder {
  *   but does not write `installer.json`. The snapshot is still returned.
  * @returns {Promise<object>} The composed snapshot.
  */
+/** "a, b" | ["a","b"] → ["a","b"] (app names an app needs installed first). */
+export function parseRequires(value) {
+  const list = Array.isArray(value) ? value : String(value ?? '').split(',');
+  return [...new Set(list.map(v => String(v).trim()).filter(Boolean))];
+}
+
 export async function buildInstaller({app, version, dryRun = false}) {
   const postInstaller = new InstallerBuilder(app, version);
   const installer = new InstallerBuilder(app, version, postInstaller);

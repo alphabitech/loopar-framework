@@ -235,6 +235,11 @@ export default function StripePlans(props) {
         return;
       }
       body.workspace_name = ws;
+      // Website template picked on the Templates page (/pricing?template=…).
+      const template = typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("template")
+        : null;
+      if (template) body.template = template;
     }
 
     if (needsAmount) {

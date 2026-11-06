@@ -27,6 +27,7 @@ import {
   InfinityIcon,
   CloudUploadIcon,
   TriangleAlertIcon,
+  LayoutTemplateIcon,
 } from 'lucide-react';
 
 const fieldClass = "w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground";
@@ -241,6 +242,9 @@ function AppCard({app, action}) {
               {isFramework && (
                 <span title="Framework" className="flex-shrink-0 text-violet-400"><InfinityIcon className="h-4 w-4" /></span>
               )}
+              {app.is_template && (
+                <Pill tone="blue" className="flex-shrink-0">Template</Pill>
+              )}
             </div>
             <CardDescription className="mt-1 flex items-center gap-1.5 truncate text-xs">
               <span className="font-mono">v{app.version || '—'}</span>
@@ -304,8 +308,15 @@ function AppCard({app, action}) {
 
       <CardFooter className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
-          {!isInstalled && !mismatch && (
-            <Button size="sm" variant="primeblue" className="h-8" onClick={() => action(app.name, 'install')}>
+          {app.is_template && !mismatch && (
+            <Button size="sm" variant="primeblue" className="h-8" onClick={() => createSite(app)}
+              title="Create a site (a copy of this template owned by this workspace) and install it">
+              <LayoutTemplateIcon className="mr-1.5 h-4 w-4" /> Create site
+            </Button>
+          )}
+          {!isInstalled && !mismatch && !app.template_locked && (
+            <Button size="sm" variant={app.is_template ? 'secondary' : 'primeblue'} className="h-8" onClick={() => action(app.name, 'install')}
+              title={app.is_template ? 'Install the template itself (development only: to edit the template)' : undefined}>
               <FolderDownIcon className="mr-1.5 h-4 w-4" /> Install
             </Button>
           )}
@@ -377,6 +388,26 @@ function AppCard({app, action}) {
       </CardFooter>
     </Card>
   )
+}
+
+function createSite(app) {
+  loopar.prompt({
+    title: `Create site from ${app.name}`,
+    label: "Site name (the new app's name: lowercase letters, numbers and dashes)",
+    placeholder: app.default_site_name,
+    initialValue: app.default_site_name,
+    size: "sm",
+    ok: (name) => {
+      const site_name = String(name || '').trim() || app.default_site_name;
+      const result = loopar.call('App Manager', 'createSite', { body: { template: app.name, site_name, activate: 1 } });
+      result?.then?.(() => setTimeout(() => loopar.refresh(), 600)).catch(() => {});
+    },
+    validate: (name) => {
+      const value = String(name || '').trim() || app.default_site_name;
+      if (!/^[a-z][a-z0-9-]{1,40}$/.test(value)) return loopar.throw("Use lowercase letters, numbers and dashes, starting with a letter.");
+      return true;
+    },
+  });
 }
 
 function cloneApp() {
