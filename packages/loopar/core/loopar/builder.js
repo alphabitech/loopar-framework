@@ -53,9 +53,23 @@ export class Builder {
     const types_ = {};
     const refsByApp = {};
     const installed = new Set(Object.keys(this.installedApps || {}).map(a => String(a).toLowerCase()));
+    const isMine = (app) => installed.has(String(app).toLowerCase())
+      || (app && this.installingApp && this.utils.compare(app, this.installingApp));
+
+    // Website templates are only the base sites are copied from: unless this
+    // tenant installed one (to edit it) or is installing it, its entities and
+    // pages stay out of the refs, so they never shadow or block anything.
+    const templateApps = new Set(this.getApps()
+      .filter(app => {
+        const raw = this.getFile(this.makePath(this.pathRoot, app.appRoot, "installer.json"));
+        const header = raw && this.utils.isJSON(raw) ? JSON.parse(raw)?.App : null;
+        return Number(header?.is_template) === 1;
+      })
+      .map(app => app.name.toLowerCase()));
   
     for (const doc of Object.values(docs)) {
       if (doc.__deleted_at__) continue;
+      if (templateApps.has(String(doc.__APP__).toLowerCase()) && !isMine(doc.__APP__)) continue;
   
       const isBuilder = (doc.build || ['Builder', 'Entity'].includes(doc.name)) ? 1 : 0;
       const isChild = doc.is_child ? 1 : 0;
@@ -110,7 +124,7 @@ export class Builder {
         // ship the same page names. The tenant's own app wins — the one being
         // installed, else an installed one; folders this tenant doesn't use
         // never shadow it. Two of the tenant's apps clashing is an error.
-        const rank = (app) => (app && this.installingApp && this.utils.compare(app, this.installingApp)) ? 2 : (installed.has(String(app).toLowerCase()) ? 1 : 0);
+        const rank = (app) => (app && this.installingApp && this.utils.compare(app, this.installingApp)) ? 2 : (isMine(app) ? 1 : 0);
         const mine = rank(doc.__APP__), theirs = rank(clash.__APP__);
         if (mine > 0 && theirs > 0) {
           console.error(

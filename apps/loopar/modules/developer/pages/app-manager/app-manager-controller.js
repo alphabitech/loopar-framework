@@ -8,7 +8,7 @@ import path from 'path';
 import { pullApp, pushApp, commitApp, discardApp, publishApp, statusApp, getDiff, getRemoteUrl, getCwdForApp } from './git-actions.js';
 import { enqueueBuild, setEmitter } from '../../build-service.js';
 import { listGitAccounts } from './git-accounts.js';
-import { installSiteFromTemplate, defaultSiteName, isTemplateHeader, belongsToOtherTenant } from 'loopar/apps/core/modules/system/forms/installer/template.js';
+import { installSiteFromTemplate, defaultSiteName, isTemplateHeader, belongsToOtherTenant, addSiteDomain } from 'loopar/apps/core/modules/system/forms/installer/template.js';
 
 setEmitter((event, payload) => loopar.emit(event, payload));
 
@@ -96,13 +96,24 @@ export default class AppManagerController extends SystemController {
     return await this.render(apps, {rows: appsList});
   }
 
-  /** Creates a site (a tenant-owned copy) from a template app and installs it. */
+  /**
+   * Creates a site (a tenant-owned copy) from a template app and installs it.
+   * Optional `domain` serves it on its own domain (tenant Domains); the main
+   * website only changes when `activate` is set.
+   */
   async actionCreateSite() {
-    const { template, site_name, activate } = { ...(this.query || {}), ...(this.body || {}) };
+    const { template, site_name, domain, activate } = { ...(this.query || {}), ...(this.body || {}) };
+    const host = String(domain || '').trim().toLowerCase();
+    if (host && !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(host)) {
+      loopar.throw({ status: 400, title: 'Create site', message: `Invalid domain "${host}".` });
+    }
+
     const site = await installSiteFromTemplate(template, site_name || defaultSiteName(), {
-      activate: activate === undefined ? true : [true, 1, '1', 'true'].includes(activate),
+      activate: [true, 1, '1', 'true'].includes(activate),
     });
-    return this.success(`Site "${site}" created from "${template}".`);
+    if (host) await addSiteDomain(host, site);
+
+    return this.success(`Site "${site}" created from "${template}"${host ? ` on ${host}` : ''}.`);
   }
 
   async actionClone() {

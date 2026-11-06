@@ -390,22 +390,55 @@ function AppCard({app, action}) {
   )
 }
 
+/**
+ * Create-site form. Same pattern as PublishForm: the dialog's OK reads `state`.
+ * By default the site gets its own domain and the workspace's main website
+ * stays as it is; "main website" is opt-in.
+ */
+function CreateSiteForm({ app, state }) {
+  const [siteName, setSiteName] = useState(app.default_site_name);
+  const [domain, setDomain] = useState('');
+  const [activate, setActivate] = useState(false);
+
+  Object.assign(state, { site_name: siteName.trim(), domain: domain.trim().toLowerCase(), activate: activate ? 1 : 0 });
+
+  return (
+    <div className="space-y-3 text-left">
+      <label className="block space-y-1">
+        <span className="text-xs text-muted-foreground">Site name (the new app: lowercase letters, numbers and dashes)</span>
+        <input className={fieldClass} value={siteName} onChange={(e) => setSiteName(e.target.value)} />
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs text-muted-foreground">Domain (optional) — e.g. construction-demo.loopar.build</span>
+        <input className={fieldClass} value={domain} placeholder="site.example.com" onChange={(e) => setDomain(e.target.value)} />
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
+        Make it this workspace&apos;s main website (replaces the active web app)
+      </label>
+      <p className="text-xs text-muted-foreground">
+        The domain is added to this tenant&apos;s Domains and must point to this server. Locally it is also served at <code>{(domain || 'domain') + '.localhost'}</code>.
+      </p>
+    </div>
+  );
+}
+
 function createSite(app) {
-  loopar.prompt({
+  const state = {};
+  loopar.dialog({
+    type: "confirm",
     title: `Create site from ${app.name}`,
-    label: "Site name (the new app's name: lowercase letters, numbers and dashes)",
-    placeholder: app.default_site_name,
-    initialValue: app.default_site_name,
-    size: "sm",
-    ok: (name) => {
-      const site_name = String(name || '').trim() || app.default_site_name;
-      const result = loopar.call('App Manager', 'createSite', { body: { template: app.name, site_name, activate: 1 } });
+    content: <CreateSiteForm app={app} state={state} />,
+    size: "md",
+    ok: () => {
+      if (!/^[a-z][a-z0-9-]{1,40}$/.test(state.site_name || '')) {
+        return loopar.throw("Site name: lowercase letters, numbers and dashes, starting with a letter.");
+      }
+      if (state.domain && !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(state.domain)) {
+        return loopar.throw("Enter a valid domain, e.g. construction-demo.loopar.build");
+      }
+      const result = loopar.call('App Manager', 'createSite', { body: { template: app.name, ...state } });
       result?.then?.(() => setTimeout(() => loopar.refresh(), 600)).catch(() => {});
-    },
-    validate: (name) => {
-      const value = String(name || '').trim() || app.default_site_name;
-      if (!/^[a-z][a-z0-9-]{1,40}$/.test(value)) return loopar.throw("Use lowercase letters, numbers and dashes, starting with a letter.");
-      return true;
     },
   });
 }

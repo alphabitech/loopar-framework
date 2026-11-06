@@ -107,6 +107,8 @@ export default class CoreDocument {
     const relatedEntities = [];
 
     for (const ref of refs) {
+      // Virtual entities (File Manager…) have no table: nothing can point here from them.
+      if (ref.is_virtual) continue;
       const ent = await fileManage.getConfigFile(ref.__NAME__, ref.__ROOT__);
       const fields = loopar.utils.fieldList(ent.doc_structure);
 

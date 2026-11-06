@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "pathe";
-import { loopar, fileManage } from "loopar";
+import { loopar, fileManage, tenant } from "loopar";
+import { refreshCaddy } from "../../../../../../bin/tenant/tenant-ops.js";
 
 /**
  * Website templates.
@@ -159,5 +160,20 @@ export async function activateWebApp(appName) {
   const settings = await loopar.getDocument("System Settings");
   settings.active_web_app = appName;
   await settings.save({ validate: false });
+  await loopar.build();
+}
+
+/**
+ * Serves `app` on `domain` from this tenant (Tenant Manager → Domains): the
+ * tenant's `sites` map, Caddy routes, and the website cache are refreshed.
+ */
+export async function addSiteDomain(domain, app) {
+  const current = tenant.readTenant(loopar.tenantId)?.sites || {};
+  const owner = current[domain];
+  if (owner && owner !== app) {
+    loopar.throw({ status: 409, code: "DOMAIN_TAKEN", title: "Create site", message: `${domain} already serves "${owner}".` });
+  }
+  await tenant.saveTenant({ NAME: loopar.tenantId, sites: { ...current, [domain]: app } });
+  await refreshCaddy();
   await loopar.build();
 }
