@@ -100,6 +100,31 @@ async function accountFor(cwd) {
   return await resolveGitAccount(url);
 }
 
+/**
+ * Clone `repoUrl` into `cwd/dest` with the acting user's Git Account for that
+ * repository (same resolution as push/publish). Without an account git can
+ * only reach public repos: a server has no keychain and no terminal to ask.
+ */
+export async function cloneRepo(repoUrl, dest, cwd) {
+  const account = await resolveGitAccount(repoUrl);
+  if (account) return await git(cwd, ['clone', repoUrl, dest], account);
+
+  try {
+    // No prompt fallback: fail fast instead of hanging on a username prompt.
+    return await execFile('git', ['clone', repoUrl, dest], {
+      cwd, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
+  } catch (e) {
+    const detail = stderrOf(e, 'git clone failed');
+    if (AUTH_FAILURE.test(detail)) {
+      fail(403, 'GIT_ACCOUNT_REQUIRED',
+        `${repoUrl} is private or doesn't exist. Add a Git Account (Developer → Git Account) with a token that can read it, then try again.\n\n${detail}`,
+        'Get App');
+    }
+    fail(500, 'GIT_ERROR', detail);
+  }
+}
+
 export async function getStatus(cwd) {
   const { stdout: porcelain } = await git(cwd, ['status', '--porcelain']);
   const files = porcelain ? porcelain.split('\n').filter(Boolean).slice(0, 20) : [];

@@ -285,14 +285,16 @@ export default class Installer extends BaseDocument {
    * framework (installer, uploads, git actions, entity paths) resolves an app
    * as apps/<app_name>, so the folder must match installer.json App.name
    * regardless of what the remote repository is called.
+   *
+   * `cloneInto(repo, dest, cwd)` runs the actual clone; the default uses the
+   * machine's git credentials (fine for public repos).
    */
-  async clone(repo) {
+  async clone(repo, cloneInto = (r, dest) => loopar.git().clone(r, dest)) {
     const appsDir = loopar.makePath(loopar.pathRoot, 'apps');
     const tmpName = `.clone-${Date.now()}`;
     const tmpPath = path.join(appsDir, tmpName);
 
-    console.log(["Cloning", repo]);
-    await loopar.git().clone(repo, tmpName);
+    await cloneInto(repo, tmpName, appsDir);
 
     try {
       const installerPath = path.join(tmpPath, 'installer.json');
