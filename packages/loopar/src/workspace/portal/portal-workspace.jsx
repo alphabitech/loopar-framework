@@ -10,6 +10,7 @@ import {
 } from "@cn/components/ui/dropdown-menu";
 import { LogOutIcon, UserRoundCogIcon } from "lucide-react";
 import { ThemeToggle } from "@workspace/theme-toggle";
+import { Logo } from "../web/src/logo";
 
 /** Kill the session and reload the current page (same pattern as the web nav). */
 function handleLogout() {
@@ -102,18 +103,24 @@ function PortalNav({ menuData }) {
  * a minimal top bar (brand + theme + user menu) and the active document.
  */
 export default function PortalWorkspace(props) {
-  const { ActiveView } = useWorkspace();
+  const { ActiveView, __META__ } = useWorkspace();
   const menuData = props.menuData || {};
+  const webApp = __META__?.web_app || {};
+  const hasNav = (menuData.groups || []).length > 0;
 
   return (
-    <BaseWorkspace>
+    <BaseWorkspace webApp={webApp}>
       <div className="vaul-drawer-wrapper flex min-h-screen flex-col">
         <meta name="robots" content="noindex, nofollow" />
 
         <header className="sticky top-0 z-40 flex h-web-header-height items-center border-b bg-background/80 px-4 backdrop-blur-sm">
-          <Link to={menuData?.profile?.link || "/portal"} bare className="font-semibold">
-            <img src="/assets/public/images/loopar.svg" alt="loopar" style={{ height: 24 }} />
-          </Link>
+          {webApp.name ? (
+            <Logo />
+          ) : (
+            <Link to="/" bare className="font-semibold">
+              <img src="/assets/public/images/loopar.svg" alt="loopar" style={{ height: 24 }} />
+            </Link>
+          )}
           <div className="ml-auto flex items-center gap-1">
             <ThemeToggle />
             <UserMenu />
@@ -121,9 +128,11 @@ export default function PortalWorkspace(props) {
         </header>
 
         <section className="flex flex-1">
-          <aside className="hidden w-64 shrink-0 border-r p-3 md:block">
-            <PortalNav menuData={menuData} />
-          </aside>
+          {hasNav && (
+            <aside className="hidden w-64 shrink-0 border-r p-3 md:block">
+              <PortalNav menuData={menuData} />
+            </aside>
+          )}
 
           <div className="flex-1 overflow-auto p-4">
             <div className="mx-auto w-full max-w-3xl">{ActiveView}</div>

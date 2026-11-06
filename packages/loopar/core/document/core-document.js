@@ -872,7 +872,9 @@ export default class CoreDocument {
         is_single: __ENTITY__.is_single,
         enable_history: loopar.utils.trueToBinary(__REF__.enable_history),
         enable_comments: loopar.utils.trueToBinary(__REF__.enable_comments),
-        require_login_to_comment: loopar.utils.trueToBinary(__REF__.require_login_to_comment)
+        require_login_to_comment: loopar.utils.trueToBinary(__REF__.require_login_to_comment),
+        // Same source the server enforces (AuthController): no New / Edit / Save.
+        read_only: loopar.utils.trueToBinary(__REF__.read_only),
       },
       ...(withData || 1==1 ? { data: await this.rawValues() } : {}),
       ...(workflow ? { workflow: await describeWorkflow(this, workflow) } : {}),

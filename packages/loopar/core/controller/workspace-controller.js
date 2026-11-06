@@ -33,6 +33,8 @@ export default class WorkspaceController extends AuthController {
       WORKSPACE.web_app = loopar.webApp;
       if (workspace === "web") WORKSPACE.announcement = await activeAnnouncement(loopar.webApp?.name);
     } else if (workspace === "portal") {
+      // The portal is the signed-in side of the site: it wears the host's web app (logo, theme).
+      WORKSPACE.web_app = loopar.webApp;
       WORKSPACE.menu_data = await WorkspaceController.portalMenuData(loopar.auth.user());
     }
 
@@ -243,7 +245,9 @@ export default class WorkspaceController extends AuthController {
 
   static async portalMenuData(username) {
     username = username || loopar.auth.user();
-    const can = (doc, action) => PermissionManager.can(doc, action, username);
+    // Grants of the user only: public actions (a blog's public view) are the
+    // website's business, not entries of the user's portal.
+    const can = (doc, action) => PermissionManager.scope(doc, action, username, { includePublic: false }) !== null;
 
     const groups = [];
     for (const app of (loopar.deskMenu || [])) {
