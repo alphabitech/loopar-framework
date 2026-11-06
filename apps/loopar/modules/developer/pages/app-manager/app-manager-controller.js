@@ -8,7 +8,7 @@ import path from 'path';
 import { pullApp, pushApp, commitApp, discardApp, publishApp, statusApp, getDiff, getRemoteUrl, getCwdForApp } from './git-actions.js';
 import { enqueueBuild, setEmitter } from '../../build-service.js';
 import { listGitAccounts } from './git-accounts.js';
-import { installSiteFromTemplate, defaultSiteName, isTemplateHeader, belongsToOtherTenant, addSiteDomain } from 'loopar/apps/core/modules/system/forms/installer/template.js';
+import { installSiteFromTemplate, isTemplateHeader, belongsToOtherTenant, addSiteDomain, defaultDemoName, defaultDemoDomain } from 'loopar/apps/core/modules/system/forms/installer/template.js';
 
 setEmitter((event, payload) => loopar.emit(event, payload));
 
@@ -55,7 +55,10 @@ export default class AppManagerController extends SystemController {
           app.is_framework = (app.name === 'loopar' && !app.has_git);
           app.is_template = isTemplateHeader(app);
           app.template_locked = app.is_template && process.env.NODE_ENV === 'production';
-          app.default_site_name = defaultSiteName();
+          if (app.is_template) {
+            app.default_demo_name = defaultDemoName(app.name);
+            app.default_demo_domain = defaultDemoDomain(app.name);
+          }
 
           appsList.push(app);
         }
@@ -97,23 +100,22 @@ export default class AppManagerController extends SystemController {
   }
 
   /**
-   * Creates a site (a tenant-owned copy) from a template app and installs it.
-   * Optional `domain` serves it on its own domain (tenant Domains); the main
-   * website only changes when `activate` is set.
+   * Publish demo: copies a template into a new app (construction-site →
+   * construction-demo), installs it in this tenant and serves it on its own
+   * domain (tenant Domains). The tenant's main website is left as it is.
+   * (Customer sites are created by provisioning, from what the customer chose.)
    */
-  async actionCreateSite() {
-    const { template, site_name, domain, activate } = { ...(this.query || {}), ...(this.body || {}) };
+  async actionPublishDemo() {
+    const { template, site_name, domain } = { ...(this.query || {}), ...(this.body || {}) };
     const host = String(domain || '').trim().toLowerCase();
-    if (host && !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(host)) {
-      loopar.throw({ status: 400, title: 'Create site', message: `Invalid domain "${host}".` });
+    if (!host || !/^[a-z0-9.-]+\.[a-z]{2,}$|^[a-z0-9.-]+\.localhost$/.test(host)) {
+      loopar.throw({ status: 400, title: 'Publish demo', message: `Enter the demo's domain (e.g. ${defaultDemoDomain(template)}).` });
     }
 
-    const site = await installSiteFromTemplate(template, site_name || defaultSiteName(), {
-      activate: [true, 1, '1', 'true'].includes(activate),
-    });
-    if (host) await addSiteDomain(host, site);
+    const site = await installSiteFromTemplate(template, site_name || defaultDemoName(template), { activate: false });
+    await addSiteDomain(host, site);
 
-    return this.success(`Site "${site}" created from "${template}"${host ? ` on ${host}` : ''}.`);
+    return this.success(`Demo "${site}" published on ${host}.`);
   }
 
   async actionClone() {

@@ -351,7 +351,7 @@ export default class Installer extends BaseDocument {
     if (isTemplateHeader(header) && process.env.NODE_ENV === "production") {
       loopar.throw({
         status: 409, code: "APP_IS_TEMPLATE", title: "Install",
-        message: `"${this.app_name}" is a website template. Create a site from it instead (App Manager → Create site).`,
+        message: `"${this.app_name}" is a website template: publish a demo from it (App Manager → Publish demo) or create a site through provisioning.`,
       });
     }
     if (belongsToOtherTenant(header)) {

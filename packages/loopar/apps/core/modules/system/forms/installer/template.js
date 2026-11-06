@@ -42,6 +42,23 @@ export function defaultSiteName(tenantId = loopar.tenantId) {
   return `${/^[a-z]/.test(base) ? base : `s-${base}`}-site`.slice(0, 41);
 }
 
+/** Demo name for a template: construction-site → construction-demo. */
+export function defaultDemoName(template) {
+  return `${String(template).replace(/-site$/, "")}-demo`;
+}
+
+/**
+ * Suggested demo domain: the demo name under the parent domain of this
+ * tenant (cloud.loopar.build → construction-demo.loopar.build; locally
+ * dev.localhost → construction-demo.localhost).
+ */
+export function defaultDemoDomain(template) {
+  const domain = String(tenant.readTenant(loopar.tenantId)?.domain || "").toLowerCase();
+  const labels = domain.split(".").filter(Boolean);
+  const parent = labels.length > 2 ? labels.slice(1).join(".") : labels.length === 2 && labels[1] !== "localhost" ? domain : "localhost";
+  return `${defaultDemoName(template)}.${parent}`;
+}
+
 /** The app's installer model (its own installer.js, or the core Installer). */
 export async function loadInstaller(appName, data = {}) {
   const Installer = await fileManage.importClass(loopar.makePath("apps", appName, "installer.js"), false);
@@ -50,7 +67,7 @@ export async function loadInstaller(appName, data = {}) {
   return model;
 }
 
-const fail = (status, code, message) => loopar.throw({ status, code, title: "Create site", message });
+const fail = (status, code, message) => loopar.throw({ status, code, title: "Website template", message });
 
 function rewrite(value, from, to) {
   if (Array.isArray(value)) return value.map(v => rewrite(v, from, to));
@@ -171,7 +188,7 @@ export async function addSiteDomain(domain, app) {
   const current = tenant.readTenant(loopar.tenantId)?.sites || {};
   const owner = current[domain];
   if (owner && owner !== app) {
-    loopar.throw({ status: 409, code: "DOMAIN_TAKEN", title: "Create site", message: `${domain} already serves "${owner}".` });
+    loopar.throw({ status: 409, code: "DOMAIN_TAKEN", title: "Website template", message: `${domain} already serves "${owner}".` });
   }
   await tenant.saveTenant({ NAME: loopar.tenantId, sites: { ...current, [domain]: app } });
   await refreshCaddy();

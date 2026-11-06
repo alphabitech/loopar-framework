@@ -309,9 +309,9 @@ function AppCard({app, action}) {
       <CardFooter className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
           {app.is_template && !mismatch && (
-            <Button size="sm" variant="primeblue" className="h-8" onClick={() => createSite(app)}
-              title="Create a site (a copy of this template owned by this workspace) and install it">
-              <LayoutTemplateIcon className="mr-1.5 h-4 w-4" /> Create site
+            <Button size="sm" variant="primeblue" className="h-8" onClick={() => publishDemo(app)}
+              title="Copy this template to a new app, install it here and serve it on its own domain">
+              <LayoutTemplateIcon className="mr-1.5 h-4 w-4" /> Publish demo
             </Button>
           )}
           {!isInstalled && !mismatch && !app.template_locked && (
@@ -391,53 +391,49 @@ function AppCard({app, action}) {
 }
 
 /**
- * Create-site form. Same pattern as PublishForm: the dialog's OK reads `state`.
- * By default the site gets its own domain and the workspace's main website
- * stays as it is; "main website" is opt-in.
+ * Publish-demo form (same pattern as PublishForm: the dialog's OK reads `state`).
+ * The demo is a copy of the template, installed here and served on its own
+ * domain; this workspace's main website doesn't change.
  */
-function CreateSiteForm({ app, state }) {
-  const [siteName, setSiteName] = useState(app.default_site_name);
-  const [domain, setDomain] = useState('');
-  const [activate, setActivate] = useState(false);
+function PublishDemoForm({ app, state }) {
+  const [siteName, setSiteName] = useState(app.default_demo_name);
+  const [domain, setDomain] = useState(app.default_demo_domain);
 
-  Object.assign(state, { site_name: siteName.trim(), domain: domain.trim().toLowerCase(), activate: activate ? 1 : 0 });
+  Object.assign(state, { site_name: siteName.trim(), domain: domain.trim().toLowerCase() });
 
   return (
     <div className="space-y-3 text-left">
       <label className="block space-y-1">
-        <span className="text-xs text-muted-foreground">Site name (the new app: lowercase letters, numbers and dashes)</span>
+        <span className="text-xs text-muted-foreground">Demo app (copy of {app.name}: lowercase letters, numbers and dashes)</span>
         <input className={fieldClass} value={siteName} onChange={(e) => setSiteName(e.target.value)} />
       </label>
       <label className="block space-y-1">
-        <span className="text-xs text-muted-foreground">Domain (optional) — e.g. construction-demo.loopar.build</span>
-        <input className={fieldClass} value={domain} placeholder="site.example.com" onChange={(e) => setDomain(e.target.value)} />
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
-        Make it this workspace&apos;s main website (replaces the active web app)
+        <span className="text-xs text-muted-foreground">Domain</span>
+        <input className={fieldClass} value={domain} onChange={(e) => setDomain(e.target.value)} />
       </label>
       <p className="text-xs text-muted-foreground">
-        The domain is added to this tenant&apos;s Domains and must point to this server. Locally it is also served at <code>{(domain || 'domain') + '.localhost'}</code>.
+        The template is copied to <code>{siteName || '…'}</code>, installed in this workspace and served on <code>{domain || '…'}</code> (added to this tenant&apos;s Domains; it must point to this server).
+        The workspace&apos;s main website doesn&apos;t change.
       </p>
     </div>
   );
 }
 
-function createSite(app) {
+function publishDemo(app) {
   const state = {};
   loopar.dialog({
     type: "confirm",
-    title: `Create site from ${app.name}`,
-    content: <CreateSiteForm app={app} state={state} />,
+    title: `Publish demo of ${app.name}`,
+    content: <PublishDemoForm app={app} state={state} />,
     size: "md",
     ok: () => {
       if (!/^[a-z][a-z0-9-]{1,40}$/.test(state.site_name || '')) {
-        return loopar.throw("Site name: lowercase letters, numbers and dashes, starting with a letter.");
+        return loopar.throw("Demo app: lowercase letters, numbers and dashes, starting with a letter.");
       }
-      if (state.domain && !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(state.domain)) {
-        return loopar.throw("Enter a valid domain, e.g. construction-demo.loopar.build");
+      if (!/^[a-z0-9.-]+\.[a-z]{2,}$|^[a-z0-9.-]+\.localhost$/.test(state.domain || '')) {
+        return loopar.throw("Enter the demo's domain, e.g. construction-demo.loopar.build");
       }
-      const result = loopar.call('App Manager', 'createSite', { body: { template: app.name, ...state } });
+      const result = loopar.call('App Manager', 'publishDemo', { body: { template: app.name, ...state } });
       result?.then?.(() => setTimeout(() => loopar.refresh(), 600)).catch(() => {});
     },
   });
