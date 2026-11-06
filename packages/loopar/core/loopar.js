@@ -433,7 +433,10 @@ export class Loopar extends Document {
     // in production (unexpected exceptions get a generic message there).
     err.expose = true;
 
-    this.#installingApp = null;
+    // installingApp is NOT reset here: errors thrown and caught inside an
+    // install (lookups, optional steps) used to clear it mid-install, so every
+    // later entity save ran makeJSON → App.bump → buildInstaller + build().
+    // Installer.install()/unInstall() reset it in their own `finally`.
     throw err;
   }
 
