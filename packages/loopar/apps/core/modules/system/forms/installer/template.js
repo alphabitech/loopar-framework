@@ -100,13 +100,18 @@ export async function createSiteFromTemplate(template, siteName) {
     fail(409, "SITE_EXISTS", `An app named "${siteName}" already exists.`);
   }
 
-  // Page names stay as in the template; refuse when this tenant already has
-  // one of them (e.g. the template itself is installed here).
+  // Page names stay as in the template; refuse when an app INSTALLED in this
+  // tenant already has one of them (e.g. the template itself, or another site
+  // made from it). Folders on disk that this tenant doesn't use don't count.
+  const installed = new Set(Object.keys(loopar.installedApps || {}).map(a => a.toLowerCase()));
   const inst = fileManage.getConfigFile("installer", loopar.makePath("apps", template), {});
   const taken = Object.keys(inst.documents || {})
     .filter(k => k.startsWith("Page Builder:"))
     .map(k => k.slice("Page Builder:".length))
-    .filter(name => loopar.getRef(name));
+    .filter(name => {
+      const app = loopar.getRef(name)?.__APP__;
+      return app && installed.has(String(app).toLowerCase());
+    });
   if (taken.length) {
     fail(409, "PAGES_EXIST", `This workspace already has pages named ${taken.map(n => `"${n}"`).join(", ")}. Remove them (or the app that owns them) first.`);
   }

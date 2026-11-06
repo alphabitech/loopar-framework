@@ -52,6 +52,7 @@ export class Builder {
     const refs = {};
     const types_ = {};
     const refsByApp = {};
+    const installed = new Set(Object.keys(this.installedApps || {}).map(a => String(a).toLowerCase()));
   
     for (const doc of Object.values(docs)) {
       if (doc.__deleted_at__) continue;
@@ -104,15 +105,23 @@ export class Builder {
       const key = this.utils.toEntityKey(doc.name);
       const clash = refs[key];
       if (clash && clash.__APP_KEY__ !== appKey) {
-        // Entity names are unique per tenant. Two apps shipping the same name
-        // would shadow each other here (the later one's files get rendered):
-        // make it loud. The installer refuses to install the second one.
-        console.error(
-          `[refs] name collision: "${doc.name}" (${doc.__ENTITY__ || 'Entity'} in app "${doc.__APP__}") ` +
-          `shadows "${clash.__NAME__}" (${clash.__ENTITY__} in app "${clash.__APP__}"). Rename one of them.`
-        );
+        // Entity names are unique per tenant, but the apps folder is shared:
+        // a template and the sites created from it (or two tenants' sites)
+        // ship the same page names. The tenant's own app wins — the one being
+        // installed, else an installed one; folders this tenant doesn't use
+        // never shadow it. Two of the tenant's apps clashing is an error.
+        const rank = (app) => (app && this.installingApp && this.utils.compare(app, this.installingApp)) ? 2 : (installed.has(String(app).toLowerCase()) ? 1 : 0);
+        const mine = rank(doc.__APP__), theirs = rank(clash.__APP__);
+        if (mine > 0 && theirs > 0) {
+          console.error(
+            `[refs] name collision: "${doc.name}" (${doc.__ENTITY__ || 'Entity'} in app "${doc.__APP__}") ` +
+            `shadows "${clash.__NAME__}" (${clash.__ENTITY__} in app "${clash.__APP__}"). Rename one of them.`
+          );
+        }
+        if (mine >= theirs) refs[key] = ref;
+      } else {
+        refs[key] = ref;
       }
-      refs[key] = ref;
   
       if (!refsByApp[appKey]) refsByApp[appKey] = {};
       refsByApp[appKey][key] = ref;
