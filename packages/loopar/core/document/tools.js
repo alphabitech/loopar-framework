@@ -230,6 +230,12 @@ async function preloadCollection(field, requestContext) {
       field.data.featured_only === true ||
       q.featured_only === "1" ||
       q.featured_only === "true";
+    const excludeFeatured =
+      field.data.exclude_featured === 1 ||
+      field.data.exclude_featured === "1" ||
+      field.data.exclude_featured === true ||
+      q.exclude_featured === "1" ||
+      q.exclude_featured === "true";
     const tag = q.tag ?? field.data.tag;
     const category = q.category ?? field.data.category;
 
@@ -246,12 +252,17 @@ async function preloadCollection(field, requestContext) {
       .where(filter)
       .whereNull("__deleted_at__");
     if (tag && has("tags")) qb = qb.where("tags", "like", `%${String(tag).trim()}%`);
+    // Featured items are usually shown in their own collection; this hides them
+    // here (null counts as not featured).
+    const notFeatured = (b) => b.whereNull("featured").orWhere("featured", 0);
+    if (excludeFeatured && !featuredOnly && has("featured")) qb = qb.where(notFeatured);
 
     let countQb = loopar.db.qx()(entityName)
       .count({ count: "id" })
       .where(filter)
       .whereNull("__deleted_at__");
     if (tag && has("tags")) countQb = countQb.where("tags", "like", `%${String(tag).trim()}%`);
+    if (excludeFeatured && !featuredOnly && has("featured")) countQb = countQb.where(notFeatured);
 
     const orderBy = [];
     if (has("featured")) orderBy.push({ column: "featured", order: "desc" });

@@ -1,10 +1,24 @@
 import nodemailer from 'nodemailer';
 import { loopar } from './loopar.js';
 import { shouldRunJobs } from './config/core-config.js';
+import { Op } from 'db-env';
 
+const isOn = (v) => [1, '1', true, 'true'].includes(v);
+
+/**
+ * Sending goes through Email Settings, except on a multi-site tenant's
+ * website domain with an enabled Email Account for its web app: then that
+ * account is the sender (and its SMTP login), so each site mails as itself.
+ * An account without its own host borrows Email Settings' server.
+ */
 export class EmailService {
   transporter = null;
   settings = null;
+  /** web app → enabled Email Account name (null = not loaded yet). */
+  accounts = null;
+  accountDocs = new Map();
+  /** Pooled transporter per sender account (the default one is `transporter`). */
+  transporters = new Map();
   templateCache = new Map();
   isProcessing = false;
   processorInterval = null;
@@ -23,6 +37,67 @@ export class EmailService {
       this.settings = await loopar.getDocument('Email Settings');
     }
     return this.settings;
+  }
+
+  /** The enabled Email Account of a web app, or null. */
+  async accountFor(app) {
+    if (!app) return null;
+    if (!this.accounts) {
+      const accounts = new Map();
+      try {
+        const rows = await loopar.db.getAll('Email Account', ['name', 'web_app', 'enabled']);
+        for (const r of rows) if (r.web_app && isOn(r.enabled)) accounts.set(r.web_app, r.name);
+      } catch (_) { /* entity not installed yet: everything uses Email Settings */ }
+      this.accounts = accounts;
+    }
+    const name = this.accounts.get(app);
+    if (!name) return null;
+    if (!this.accountDocs.has(name)) this.accountDocs.set(name, await loopar.getDocument('Email Account', name));
+    return this.accountDocs.get(name);
+  }
+
+  /** Plain settings for an account: its sender and login over Email Settings' server and limits. */
+  async mergeAccount(account) {
+    const base = await this.getSettings();
+    const ownHost = String(account.host || '').trim();
+    const secure = ownHost ? (isOn(account.secure) ? 1 : 0) : base.secure;
+    return {
+      host: ownHost || base.host,
+      port: ownHost ? (parseInt(account.port) || (secure ? 465 : 587)) : base.port,
+      secure,
+      auth_enabled: 1,
+      user: String(account.user || '').trim() || account.name,
+      password: account.password,
+      timeout: base.timeout,
+      max_connections: base.max_connections,
+      rate_limit: base.rate_limit,
+      debug: base.debug,
+      from_name: account.from_name || base.from_name,
+      from_email: account.name,
+      reply_to: account.reply_to || '',
+      notification_email: account.notification_email || base.notification_email || base.from_email || '',
+      account: account.name,
+    };
+  }
+
+  /**
+   * Settings to send with: the account of `app` (default: the website domain
+   * serving this request) when there is one, else Email Settings.
+   */
+  async resolve(app = loopar.requestSite) {
+    const account = await this.accountFor(app);
+    return account ? this.mergeAccount(account) : this.getSettings();
+  }
+
+  /** Where contact forms of `app` (default: this request's site) are delivered. */
+  async notificationEmail(app = loopar.requestSite) {
+    const s = await this.resolve(app);
+    return s.notification_email || s.from_email || '';
+  }
+
+  /** True when there is an SMTP server to send through for `app`. */
+  async hasTransport(app = loopar.requestSite) {
+    return !!(await this.resolve(app))?.host;
   }
 
   buildTransportOptions(settings) {
@@ -45,6 +120,13 @@ export class EmailService {
   }
 
   async getTransporter(settings, force) {
+    if (settings?.account) {
+      if (!this.transporters.has(settings.account) || force) {
+        this.transporters.set(settings.account, nodemailer.createTransport(this.buildTransportOptions(settings)));
+      }
+      return this.transporters.get(settings.account);
+    }
+
     settings ??= await this.getSettings();
 
     if (!this.transporter || force) {
@@ -85,9 +167,9 @@ export class EmailService {
   /**
    * Sends one email immediately (no queue).
    */
-  async send({ to, subject, html, text, attachments = [], cc, bcc, replyTo }) {
-    const settings = await this.getSettings();
-    const transporter = await this.getTransporter();
+  async send({ to, subject, html, text, attachments = [], cc, bcc, replyTo, app }) {
+    const settings = await this.resolve(app);
+    const transporter = await this.getTransporter(settings);
 
     const mailOptions = {
       from: `"${settings.from_name}" <${settings.from_email}>`,
@@ -105,7 +187,7 @@ export class EmailService {
     return { success: true, messageId: result.messageId };
   }
 
-  async sendTemplate({ template, to, variables = {}, attachments = [], cc, bcc, replyTo }) {
+  async sendTemplate({ template, to, variables = {}, attachments = [], cc, bcc, replyTo, app }) {
     try {
       const tpl = await this.getTemplate(template);
       
@@ -119,7 +201,8 @@ export class EmailService {
         attachments,
         cc,
         bcc,
-        replyTo
+        replyTo,
+        app
       });
     } catch (error) {
       return { success: false, error: error.message };
@@ -261,29 +344,19 @@ export class EmailService {
     const results = [];
 
     try {
-      const now = new Date().toISOString();
+      // date_time fields are stored as local "yyyy-MM-dd HH:mm:ss": compare in that form.
+      const now = loopar.dateUtils.getDateTime(new Date(), 'DB');
 
-      const pendingEmails = await loopar.db.getAll('Email Queue', 
-        ['name'],
-        {
-          '=': { status: 'Pending' },
-          'OR': [
-            { 'IS NULL': { scheduled_at: true } },
-            { '<=': { scheduled_at: now } }
-          ],
-          'AND': {
-            'OR': [
-              { 'IS NULL': { next_retry_at: true } },
-              { '<=': { next_retry_at: now } }
-            ]
-          }
-        },
-        limit
-      );
+      // Due = pending, and both its schedule and its next retry (when set) have come.
+      const due = (field) => ({ [Op.or]: [{ [field]: null }, { [field]: '' }, { [field]: { [Op.lte]: now } }] });
+      const pendingEmails = await loopar.db.getAll('Email Queue', ['name', 'priority'], {
+        status: 'Pending',
+        [Op.and]: [due('scheduled_at'), due('next_retry_at')],
+      });
 
       const sortedIds = pendingEmails.sort((a, b) => {
-        return (this.priorityWeight[a.priority] || 2) - (this.priorityWeight[b.priority] || 2);
-      });
+        return (this.priorityWeight[a.priority] ?? 2) - (this.priorityWeight[b.priority] ?? 2);
+      }).slice(0, limit);
 
       for (const { name } of sortedIds) {
         const item = await loopar.getDocument('Email Queue', name);
@@ -352,10 +425,10 @@ export class EmailService {
   }
 
   async retryFailed(ids = null) {
-    const filter = { '=': { status: 'Failed' } };
-    
+    const filter = { status: 'Failed' };
+
     if (ids && ids.length) {
-      filter['IN'] = { name: ids };
+      filter.name = ids;
     }
 
     const failed = await loopar.db.getAll('Email Queue', ['name'], filter);
@@ -392,16 +465,17 @@ export class EmailService {
   }
 
   async cleanOldEmails(daysOld = 30) {
-    const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000).toISOString();
-    
+    // __created_at__ is stored by the database clock as "YYYY-MM-DD HH:MM:SS".
+    const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+
     const oldEmails = await loopar.db.getAll('Email Queue', ['name'], {
-      '<=': { creation: cutoffDate },
-      'IN': { status: ['Sent', 'Failed', 'Cancelled'] }
+      __created_at__: { [Op.lte]: cutoffDate },
+      status: ['Sent', 'Failed', 'Cancelled'],
     });
 
     let deleted = 0;
     for (const { name } of oldEmails) {
-      await loopar.deleteDocument('Email Queue', name);
+      await loopar.deleteDocument('Email Queue', name, { sofDelete: false }); // a purge, not a trash
       deleted++;
     }
 
@@ -434,7 +508,10 @@ export class EmailService {
 
   reset() {
     this.transporter = null;
+    this.transporters.clear();
     this.settings = null;
+    this.accounts = null;
+    this.accountDocs.clear();
     this.templateCache.clear();
   }
 }

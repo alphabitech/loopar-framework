@@ -89,10 +89,15 @@ export default function FeatureCard(props) {
     props.className
   );
 
+  // Content laid over the image always sits on the dark overlay/gradient, so it
+  // must use light text regardless of the theme (light mode would otherwise
+  // render foreground-colored text on a dark photo).
+  const onImage = content_position === "overlay" && hasImage;
+
   const Content = () => (
     <div className={cn("flex flex-col gap-2", alignMap[align])}>
-      <h3 className={v.titleClass}>{label}</h3>
-      <p className={v.textClass}>{text}</p>
+      <h3 className={cn(v.titleClass, onImage && "!text-white drop-shadow-sm")}>{label}</h3>
+      <p className={cn(v.textClass, onImage && "!text-white/85")}>{text}</p>
     </div>
   );
 
@@ -141,7 +146,7 @@ export default function FeatureCard(props) {
           <div className={cn("absolute inset-0", overlayMap[overlay_intensity])} />
         )}
 
-        {v.bottomGradient && (
+        {(v.bottomGradient || onImage) && (
           <div className={cn(
             "absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t to-transparent",
             content_position === "outside" ? "from-card" : "from-black/80"

@@ -18,8 +18,8 @@ const APP_URL = process.env.DOMAIN || 'localhost:3000';
 async function deliverEmail({ to, subject, html }) {
   let hasLocalSmtp = false;
   try {
-    const settings = await loopar.getDocument('Email Settings');
-    hasLocalSmtp = !!settings?.host;
+    // Email Settings, or the Email Account of the website serving this request.
+    hasLocalSmtp = await loopar.mail.hasTransport();
   } catch (_) { /* no settings doc → treat as not configured */ }
 
   if (hasLocalSmtp) {

@@ -188,6 +188,12 @@ export async function activateWebApp(appName) {
  * tenant's `sites` map, Caddy routes, and the website cache are refreshed.
  */
 export async function addSiteDomain(domain, app) {
+  // One host, one tenant: the registry keeps only one owner per host.
+  const other = tenant.tenants().find(t => t.name !== loopar.tenantId
+    && (String(t.domain).toLowerCase() === domain || Object.keys(t.sites || {}).includes(domain)));
+  if (other) {
+    loopar.throw({ status: 409, code: "DOMAIN_TAKEN", title: "Website template", message: `${domain} is already served by the tenant "${other.name}". Remove it there first (Tenant Manager → Domains).` });
+  }
   const current = tenant.readTenant(loopar.tenantId)?.sites || {};
   const owner = current[domain];
   if (owner && owner !== app) {

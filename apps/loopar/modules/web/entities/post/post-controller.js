@@ -63,6 +63,7 @@ export default class PostController extends BaseController {
     const page = clampInt(q.page, 1, 1000, 1);
     const pageSize = clampInt(q.page_size, 1, 48, 9);
     const featuredOnly = q.featured_only === '1' || q.featured_only === 'true';
+    const excludeFeatured = !featuredOnly && (q.exclude_featured === '1' || q.exclude_featured === 'true');
     const tag = q.tag ? String(q.tag).trim() : null;
 
     const filter = { app, published: 1 };
@@ -70,6 +71,7 @@ export default class PostController extends BaseController {
 
     const scoped = (qb) => {
       qb = qb.where(filter).whereNull('__deleted_at__');
+      if (excludeFeatured) qb = qb.where((b) => b.whereNull('featured').orWhere('featured', 0));
       return tag ? qb.where('tags', 'like', `%${tag}%`) : qb;
     };
 

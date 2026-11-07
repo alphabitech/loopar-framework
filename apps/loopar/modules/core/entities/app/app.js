@@ -1,6 +1,6 @@
 'use strict';
 
-import { BaseDocument, fileManage, loopar } from 'loopar';
+import { BaseDocument, fileManage, loopar, tenant } from 'loopar';
 import { buildInstaller } from './builder.js';
 import { themeCSS } from '../system-settings/theme-css.js';
 import fs from 'fs';
@@ -155,6 +155,24 @@ export default class App extends BaseDocument {
     const installedApps = fileManage.getConfigFile('installed-apps');
     delete installedApps[this.name];
     fileManage.setConfigFile('installed-apps', installedApps);
+    await this.#releaseWebsite();
     return await loopar.build();
+  }
+
+  /**
+   * An uninstalled app no longer serves a website here: its domains leave
+   * this tenant's Domains (and the proxy) and its own theme file goes.
+   */
+  async #releaseWebsite() {
+    const theme = loopar.makePath(loopar.tenantPath, 'themes', `${this.name}.css`);
+    if (fs.existsSync(theme)) fs.unlinkSync(theme);
+
+    const sites = tenant.readTenant(loopar.tenantId)?.sites || {};
+    const kept = Object.fromEntries(Object.entries(sites).filter(([, app]) => app !== this.name));
+    if (Object.keys(kept).length === Object.keys(sites).length) return;
+
+    await tenant.saveTenant({ NAME: loopar.tenantId, sites: kept });
+    const { refreshCaddy } = await import('loopar/bin/tenant/tenant-ops.js');
+    await refreshCaddy();
   }
 }

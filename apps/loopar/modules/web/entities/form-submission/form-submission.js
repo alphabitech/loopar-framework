@@ -71,8 +71,7 @@ export default class FormSubmission extends BaseDocument {
     if (![1, '1', true, 'true'].includes(meta.notify)) return;
 
     try {
-      const settings = await loopar.getDocument('Email Settings');
-      const to = meta.notify_email || settings.notification_email || settings.from_email;
+      const to = meta.notify_email || await loopar.mail.notificationEmail();
       if (!to) return;
 
       const escapeHTML = (v) => String(v ?? '')

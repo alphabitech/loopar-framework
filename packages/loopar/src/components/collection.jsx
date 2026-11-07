@@ -82,6 +82,7 @@ export default function Collection({ data = {} }) {
     page_size = 12,
     columns = 3,
     featured_only,
+    exclude_featured,
     category,
     tag,
     title,
@@ -115,6 +116,7 @@ export default function Collection({ data = {} }) {
       };
       if (appOverride) query.app = String(appOverride).trim();
       if (featured_only) query.featured_only = "1";
+      else if (exclude_featured) query.exclude_featured = "1";
       if (category) query.category = String(category).trim();
       if (tag) query.tag = String(tag).trim();
 
@@ -130,7 +132,7 @@ export default function Collection({ data = {} }) {
       setLoading(false);
       setRefetching(false);
     }
-  }, [entityName, appOverride, page, pageSize, featured_only, category, tag]);
+  }, [entityName, appOverride, page, pageSize, featured_only, exclude_featured, category, tag]);
 
   useEffect(() => {
     if (!consumedPreloadRef.current) {
@@ -234,6 +236,7 @@ Collection.metaFields = () => {
         page_size: { element: INPUT, data: { label: "Items per page", format: "int" } },
         columns: { element: INPUT, data: { label: "Columns (1–4)", format: "int" } },
         featured_only: { element: SWITCH, data: { label: "Featured only" } },
+        exclude_featured: { element: SWITCH, data: { label: "Exclude featured", description: "Hide featured items (e.g. when another collection on the page already shows them)." } },
         category: {
           element: INPUT,
           data: {

@@ -256,8 +256,8 @@ export default class ContactMessage extends BaseDocument {
 
   async notifyAdmin() {
     try {
-      const settings = await loopar.getDocument('Email Settings');
-      const adminEmail = settings.notification_email || settings.from_email;
+      // The site's Email Account when it has one, else Email Settings.
+      const adminEmail = await loopar.mail.notificationEmail();
 
       if (!adminEmail) {
         console.warn('No notification email configured');

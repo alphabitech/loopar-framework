@@ -294,8 +294,8 @@ export default class ContactFormBase extends BaseDocument {
 
   async notifyAdmin() {
     try {
-      const settings = await loopar.getDocument('Email Settings');
-      const to = settings.notification_email || settings.from_email;
+      // The site's Email Account when it has one, else Email Settings.
+      const to = await loopar.mail.notificationEmail();
       if (!to) {
         console.warn('No notification email configured');
         return;

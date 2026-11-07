@@ -72,6 +72,7 @@ export default class ServiceController extends BaseController {
     const page = clampInt(q.page, 1, 1000, 1);
     const pageSize = clampInt(q.page_size, 1, 48, 12);
     const featuredOnly = q.featured_only === '1' || q.featured_only === 'true';
+    const excludeFeatured = !featuredOnly && (q.exclude_featured === '1' || q.exclude_featured === 'true');
     const tag = q.tag ? String(q.tag).trim() : null;
     const category = q.category ? String(q.category).trim() : null;
 
@@ -83,6 +84,7 @@ export default class ServiceController extends BaseController {
       .select(PUBLIC_FIELDS)
       .where(filter)
       .whereNull('__deleted_at__');
+    if (excludeFeatured) qb = qb.where((b) => b.whereNull('featured').orWhere('featured', 0));
 
     if (tag) qb = qb.where('tags', 'like', `%${tag}%`);
 
@@ -90,6 +92,7 @@ export default class ServiceController extends BaseController {
       .count({ count: 'id' })
       .where(filter)
       .whereNull('__deleted_at__');
+    if (excludeFeatured) countQb = countQb.where((b) => b.whereNull('featured').orWhere('featured', 0));
 
     if (tag) countQb = countQb.where('tags', 'like', `%${tag}%`);
 

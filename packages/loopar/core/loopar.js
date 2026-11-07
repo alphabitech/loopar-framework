@@ -231,7 +231,10 @@ export class Loopar extends Document {
    * else the tenant theme from System Settings.
    */
   themeCssPath() {
-    const app = getTenant()?.webApp || this.#defaultWebApp?.name;
+    // A domain mapped to an app that isn't installed here renders the default
+    // web app (see `webApp`), so it must get the default theme too.
+    const site = getTenant()?.webApp;
+    const app = (site && this.webApps?.[site]?.name) || this.#defaultWebApp?.name;
     if (app) {
       const own = this.makePath(this.tenantPath, 'themes', `${app}.css`);
       if (fs.existsSync(own)) return own;
