@@ -11,6 +11,7 @@ import {
   ResponsiveContainer, Legend
 } from "recharts";
 import { useState, useEffect, useCallback } from "react";
+import { __ } from "loopar";
 
 const C = {
   primary: "var(--color-primary)",
@@ -129,7 +130,7 @@ function PeriodBtn({ label, active, onClick }) {
 }
 
 function Empty() {
-  return <p className="text-sm text-muted-foreground py-2">No data yet</p>;
+  return <p className="text-sm text-muted-foreground py-2">{__("No data yet")}</p>;
 }
 
 function AnalyticsDashboard({data}) {
@@ -172,16 +173,16 @@ function AnalyticsDashboard({data}) {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-xl font-bold text-foreground">Analytics</h2>
+        <h2 className="text-xl font-bold text-foreground">{__("Analytics")}</h2>
         <div className="flex gap-1.5 items-center">
           {sites.length > 0 && (
             <select
               className="rounded border border-border bg-background px-2 py-1 text-sm text-foreground"
               value={site}
               onChange={(e) => setSite(e.target.value)}
-              title="Site"
+              title={__("Site")}
             >
-              <option value="">All sites</option>
+              <option value="">{__("All sites")}</option>
               {sites.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           )}
@@ -198,23 +199,23 @@ function AnalyticsDashboard({data}) {
 
       <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <KpiCard label="Page Views" value={kpis.total_views} diff={kpis.views_diff} />
-          <KpiCard label="Unique Visitors" value={kpis.unique_visitors} diff={kpis.visitors_diff} />
-          <KpiCard label="Sessions" value={kpis.sessions} diff={kpis.sessions_diff} />
-          <KpiCard label="Unique Pages" value={kpis.unique_pages} diff={null} />
+          <KpiCard label={__("Page Views")} value={kpis.total_views} diff={kpis.views_diff} />
+          <KpiCard label={__("Unique Visitors")} value={kpis.unique_visitors} diff={kpis.visitors_diff} />
+          <KpiCard label={__("Sessions")} value={kpis.sessions} diff={kpis.sessions_diff} />
+          <KpiCard label={__("Unique Pages")} value={kpis.unique_pages} diff={null} />
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <KpiCard label="Engaged Visits" value={kpis.engaged_views} diff={kpis.engaged_diff} />
-          <KpiCard label="Engaged Rate" display={`${kpis.engaged_rate || 0}%`} />
-          <KpiCard label="Avg Active Time" display={fmtDuration(kpis.avg_active_seconds)} />
-          <KpiCard label="Avg Scroll" display={`${kpis.avg_scroll_depth || 0}%`} />
-          <KpiCard label="Pages / Session" display={`${kpis.pages_per_session || 0}`} />
-          <KpiCard label="Bounce Rate" display={`${kpis.bounce_rate || 0}%`} />
+          <KpiCard label={__("Engaged Visits")} value={kpis.engaged_views} diff={kpis.engaged_diff} />
+          <KpiCard label={__("Engaged Rate")} display={`${kpis.engaged_rate || 0}%`} />
+          <KpiCard label={__("Avg Active Time")} display={fmtDuration(kpis.avg_active_seconds)} />
+          <KpiCard label={__("Avg Scroll")} display={`${kpis.avg_scroll_depth || 0}%`} />
+          <KpiCard label={__("Pages / Session")} display={`${kpis.pages_per_session || 0}`} />
+          <KpiCard label={__("Bounce Rate")} display={`${kpis.bounce_rate || 0}%`} />
         </div>
 
         <Panel>
-          <SectionTitle>Daily visits</SectionTitle>
+          <SectionTitle>{__("Daily visits")}</SectionTitle>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={visits}>
               <XAxis
@@ -236,14 +237,14 @@ function AnalyticsDashboard({data}) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Panel>
-            <SectionTitle>Top pages</SectionTitle>
+            <SectionTitle>{__("Top pages")}</SectionTitle>
             {pages.length === 0
               ? <Empty />
               : pages.map((p, i) => <HBar key={p.page} label={p.page} value={p.views} max={maxPages} color={PALETTE[i % PALETTE.length]} />)
             }
           </Panel>
           <Panel>
-            <SectionTitle>Top countries</SectionTitle>
+            <SectionTitle>{__("Top countries")}</SectionTitle>
             {countries.length === 0
               ? <Empty />
               : countries.map((c, i) => <HBar key={c.country} label={c.country} value={c.views} max={maxCountries} color={PALETTE[i % PALETTE.length]} />)
@@ -254,7 +255,7 @@ function AnalyticsDashboard({data}) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
 
           <Panel>
-            <SectionTitle>Devices</SectionTitle>
+            <SectionTitle>{__("Devices")}</SectionTitle>
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
                 <Pie
@@ -276,7 +277,7 @@ function AnalyticsDashboard({data}) {
           </Panel>
 
           <Panel>
-            <SectionTitle>Browsers</SectionTitle>
+            <SectionTitle>{__("Browsers")}</SectionTitle>
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={browsers} layout="vertical" margin={{ left: 0, right: 8 }}>
                 <XAxis
@@ -301,7 +302,7 @@ function AnalyticsDashboard({data}) {
           </Panel>
 
           <Panel>
-            <SectionTitle>Traffic sources</SectionTitle>
+            <SectionTitle>{__("Traffic sources")}</SectionTitle>
             {referrers.length === 0
               ? <Empty />
               : referrers.map((r, i) => <HBar key={r.source} label={r.source} value={r.views} max={maxReferrers} color={PALETTE[i % PALETTE.length]} />)
@@ -311,7 +312,7 @@ function AnalyticsDashboard({data}) {
 
         <Panel>
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-            <SectionTitle>Traffic by hour of day</SectionTitle>
+            <SectionTitle>{__("Traffic by hour of day")}</SectionTitle>
             <div className="flex gap-3 text-[10px] text-muted-foreground">
               {[
                 { c: "#3B82F6", l: "0-5h" },
@@ -349,18 +350,18 @@ function AnalyticsDashboard({data}) {
         </Panel>
 
         <Panel>
-          <SectionTitle>Campaigns (UTM)</SectionTitle>
+          <SectionTitle>{__("Campaigns (UTM)")}</SectionTitle>
           {campaigns.length === 0
             ? <Empty />
             : (
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-muted-foreground text-left">
-                    <th className="py-1 font-medium">Source</th>
-                    <th className="py-1 font-medium">Medium</th>
-                    <th className="py-1 font-medium">Campaign</th>
-                    <th className="py-1 font-medium text-right">Views</th>
-                    <th className="py-1 font-medium text-right">Sessions</th>
+                    <th className="py-1 font-medium">{__("Source")}</th>
+                    <th className="py-1 font-medium">{__("Medium")}</th>
+                    <th className="py-1 font-medium">{__("Campaign")}</th>
+                    <th className="py-1 font-medium text-right">{__("Views")}</th>
+                    <th className="py-1 font-medium text-right">{__("Sessions")}</th>
                   </tr>
                 </thead>
                 <tbody>

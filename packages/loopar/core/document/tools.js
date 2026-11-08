@@ -1,3 +1,4 @@
+import { translateRecord, translateRecords } from '../server/i18n.js';
 import { fileManage } from "../file-manage.js";
 import { loopar } from "../loopar.js";
 
@@ -278,7 +279,7 @@ async function preloadCollection(field, requestContext) {
 
     field.data.preloaded = {
       mode: "list",
-      items: rows.map(parseRowTags),
+      items: translateRecords(entityName, rows).map(parseRowTags),
       total,
       page: pageNum,
       page_size: pageSize,
@@ -330,10 +331,11 @@ async function preloadCollectionView(field, requestContext) {
       .first();
 
     if (row) {
-      field.data.preloaded = { mode: "detail", item: parseRowTags(row), fields: schema };
+      const shown = translateRecord(entityName, row);
+      field.data.preloaded = { mode: "detail", item: parseRowTags(shown), fields: schema };
       if (requestContext) {
         requestContext._anyDetailMatched = true;
-        requestContext._detailTitle ??= row.title || null;
+        requestContext._detailTitle ??= shown.title || null;
       }
       return;
     }

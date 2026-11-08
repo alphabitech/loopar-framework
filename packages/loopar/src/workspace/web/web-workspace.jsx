@@ -7,10 +7,25 @@ import { Markdown } from "@pure-html-block";
 import TrafficTracker from "./src/traffic-tracker";
 import { ANNOUNCEMENT_HEIGHT } from "./src/announcement-bar";
 import { useState } from "react";
+import { currentLanguage } from "@global/i18n";
+
+/** og:locale wants "es_ES"-style tags; a bare language gets its common region. */
+const OG_REGION = { en: "US", es: "ES", pt: "BR", fr: "FR", de: "DE", it: "IT", nl: "NL", ca: "ES", ja: "JP", zh: "CN", ko: "KR" };
+const ogLocale = (code = "en") => {
+  const [lang, region] = code.split("-");
+  return `${lang}_${(region || OG_REGION[lang] || lang).toUpperCase()}`;
+};
 
 const SEO = () => {
+  const { __META__ } = useWorkspace();
+  const language = currentLanguage();
+  const alternates = __META__?.site_languages?.alternates || [];
   return <>
-  <meta property="og:locale" content="en_US"/>
+  <meta property="og:locale" content={ogLocale(language)}/>
+  {alternates.filter(a => a.language !== "x-default" && a.language !== language).map(a => (
+    <meta key={`og-${a.language}`} property="og:locale:alternate" content={ogLocale(a.language)}/>
+  ))}
+  {alternates.map(a => <link key={a.language} rel="alternate" hrefLang={a.language} href={a.href}/>)}
   <meta property="og:type" content="website"/>
   <meta charSet="utf-8"/>
   <meta name="generator" content="Loopar"/>

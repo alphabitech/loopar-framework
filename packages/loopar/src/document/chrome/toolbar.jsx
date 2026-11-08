@@ -3,6 +3,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@cn/components/ui/popov
 import { Button } from "@cn/components/ui/button";
 import { MoreHorizontalIcon } from "lucide-react";
 import { cn } from "@cn/lib/utils";
+import { __ } from "@global/i18n";
 
 const MenuEntries = ({ entries, className = "" }) => entries.map(([key, node]) => (
   <div key={key} className={cn("lp-toolbar-menu-item flex empty:hidden [&>*]:w-full [&>*]:justify-start", className)}>
@@ -33,8 +34,8 @@ export function Toolbar({ inline = [], menu = [], toggle = null, primary = null,
             <Button
               variant="secondary"
               className={cn("shrink-0 px-2", !hasMenu && "sm:hidden")}
-              aria-label="More actions"
-              title="More actions"
+              aria-label={__("More actions")}
+              title={__("More actions")}
             >
               <MoreHorizontalIcon />
             </Button>

@@ -12,6 +12,7 @@ import {
 } from "@cn/components/ui/table";
 
 import { EmptyTable } from "./EmptyTable";
+import { __ } from "@global/i18n";
 
 export function SimpleTable(props) {
   const {baseColumns, tableId} = useTable();
@@ -64,7 +65,7 @@ export function SimpleTable(props) {
 
   return (
     <Table 
-      aria-label="sticky table" 
+      aria-label={__("sticky table")} 
       className="w-full overflow-hidden"
     >
       <TableHeader className="bg-muted/40">

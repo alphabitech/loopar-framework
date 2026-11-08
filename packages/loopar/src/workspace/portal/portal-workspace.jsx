@@ -11,6 +11,7 @@ import {
 import { LogOutIcon, UserRoundCogIcon } from "lucide-react";
 import { ThemeToggle } from "@workspace/theme-toggle";
 import { Logo } from "../web/src/logo";
+import { __ } from "@global/i18n";
 
 /** Kill the session and reload the current page (same pattern as the web nav). */
 function handleLogout() {
@@ -33,7 +34,7 @@ function UserMenu() {
       <DropdownMenuTrigger asChild>
         <button
           className={`${buttonVariants({ size: "icon", variant: "ghost" })} cursor-pointer rounded-full overflow-hidden`}
-          aria-label="User menu"
+          aria-label={__("User menu")}
         >
           {picture ? (
             <img src={picture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full object-cover" />
@@ -51,13 +52,13 @@ function UserMenu() {
         </div>
         <div className="grid grid-cols-1 p-1">
           <Link to="/portal/Profile/update" className="justify-start" variant="ghost" size="sm">
-            <UserRoundCogIcon className="mr-2 h-4 w-4" /> Profile
+            <UserRoundCogIcon className="mr-2 h-4 w-4" /> {__("Profile")}
           </Link>
           <button
             onClick={handleLogout}
             className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`}
           >
-            <LogOutIcon className="mr-2 h-4 w-4" /> Log Out
+            <LogOutIcon className="mr-2 h-4 w-4" /> {__("Log Out")}
           </button>
         </div>
       </DropdownMenuContent>

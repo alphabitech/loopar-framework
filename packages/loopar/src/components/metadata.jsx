@@ -15,6 +15,7 @@ import {
   TableCell,
 } from "@cn/components/ui/table";
 import { PlusIcon, Trash2Icon } from "lucide-react";
+import { __ } from "@global/i18n";
 
 function parsePlainText(text) {
   return text
@@ -85,7 +86,7 @@ const Metadata = (props) => {
                             colSpan={3}
                             className="py-3 text-center text-muted-foreground"
                           >
-                            No metadata yet
+                            {__("No metadata yet")}
                           </TableCell>
                         </TableRow>
                       )}
@@ -137,7 +138,7 @@ const Metadata = (props) => {
                     }}
                   >
                     <PlusIcon className="mr-1" size={16} />
-                    Add row
+                    {__("Add row")}
                   </Button>
                 </div>
                 {data.description && (

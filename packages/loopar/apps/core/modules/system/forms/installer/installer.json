@@ -222,7 +222,8 @@
                     "key": "inst_select_8",
                     "label": "Language",
                     "name": "language",
-                    "options": "En:English\nEs:Español"
+                    "options": "en:English\nes:Español",
+                    "description": "The Administrator's language. Each user can change theirs in their profile."
                   },
                   "elements": []
                 }

@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'pathe';
 import { loopar } from 'loopar';
 import { StorageDriver } from './storage-driver.js';
-import { assertSafeUpload, assertSafeRemoteUrl } from './upload-guard.js';
+import { assertSafeUpload, fetchPublicUrl } from './upload-guard.js';
 
 /**
  * LocalDriver — persists assets on the local filesystem.
@@ -140,9 +140,8 @@ export class LocalDriver extends StorageDriver {
   }
 
   async importFromUrl({ url, app, visibility }) {
-    // SSRF guard: only http(s) to a public host.
-    await assertSafeRemoteUrl(url);
-    const res = await fetch(url);
+    // SSRF guard: only http(s) to a public host — every redirect hop included.
+    const res = await fetchPublicUrl(url);
     if (!res.ok) {
       throw new Error(`LocalDriver.importFromUrl: ${res.status} ${res.statusText} for ${url}`);
     }

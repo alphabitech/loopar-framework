@@ -7,6 +7,8 @@ import {
   Check, X, Clock, Send, Loader2, ChevronDown, ChevronUp,
   LogIn, CornerDownRight,
 } from "lucide-react";
+import { __ } from "@global/i18n";
+import { formatDateTime } from "@global/format";
 
 const HISTORY_DOC = "Document History";
 const STATUS = Object.freeze({ ACTIVE: 1, PENDING: 4, APPROVED: 5, REJECTED: 6 });
@@ -16,9 +18,7 @@ const ICON_BY_ACTION = {
 };
 
 function formatDate(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+  return value ? formatDateTime(value, "medium") : "";
 }
 
 function initials(name = "") {
@@ -58,9 +58,9 @@ function Avatar({ name, className = "" }) {
 function SignInPrompt() {
   return (
     <div className="rounded-md border border-border bg-secondary/40 p-4 flex flex-col items-center gap-2 text-center">
-      <p className="text-sm text-muted-foreground">Sign in to join the conversation.</p>
+      <p className="text-sm text-muted-foreground">{__("Sign in to join the conversation.")}</p>
       <a href="/auth/login" className="inline-flex items-center gap-1.5 px-3 h-8 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-opacity">
-        <LogIn className="w-4 h-4" /> Sign in
+        <LogIn className="w-4 h-4" /> {__("Sign in")}
       </a>
     </div>
   );
@@ -92,12 +92,12 @@ function Composer({ onSubmit, submitting, guestIdentity = false, loggedInName = 
   return (
     <div className="flex flex-col gap-2">
       {loggedInName && !compact && (
-        <p className="text-xs text-muted-foreground">Commenting as <span className="font-medium text-foreground">{loggedInName}</span></p>
+        <p className="text-xs text-muted-foreground">{__("Commenting as")} <span className="font-medium text-foreground">{loggedInName}</span></p>
       )}
       {guestIdentity && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <input className={inputCls} placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} disabled={submitting} />
-          <input type="email" className={inputCls} placeholder="Your email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={submitting} />
+          <input className={inputCls} placeholder={__("Your name")} value={name} onChange={(e) => setName(e.target.value)} disabled={submitting} />
+          <input type="email" className={inputCls} placeholder={__("Your email")} value={email} onChange={(e) => setEmail(e.target.value)} disabled={submitting} />
         </div>
       )}
       <textarea
@@ -112,7 +112,7 @@ function Composer({ onSubmit, submitting, guestIdentity = false, loggedInName = 
       {guestIdentity && <CaptchaSlot captcha={ts} />}
       <div className="flex justify-end gap-2">
         {onCancel && (
-          <button type="button" onClick={onCancel} disabled={submitting} className="px-3 h-8 rounded-md text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+          <button type="button" onClick={onCancel} disabled={submitting} className="px-3 h-8 rounded-md text-sm text-muted-foreground hover:text-foreground">{__("Cancel")}</button>
         )}
         <button
           type="button" onClick={send} disabled={submitting || !text.trim() || identityMissing || verificationMissing}
@@ -128,8 +128,8 @@ function Composer({ onSubmit, submitting, guestIdentity = false, loggedInName = 
 
 function StatusBadge({ status }) {
   const s = Number(status);
-  if (s === STATUS.PENDING) return <span className="inline-flex items-center gap-1 px-1.5 h-5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px]"><Clock className="w-2.5 h-2.5" /> Pending</span>;
-  if (s === STATUS.REJECTED) return <span className="inline-flex items-center gap-1 px-1.5 h-5 rounded-full bg-red-500/15 text-red-600 text-[10px]">Rejected</span>;
+  if (s === STATUS.PENDING) return <span className="inline-flex items-center gap-1 px-1.5 h-5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px]"><Clock className="w-2.5 h-2.5" /> {__("Pending")}</span>;
+  if (s === STATUS.REJECTED) return <span className="inline-flex items-center gap-1 px-1.5 h-5 rounded-full bg-red-500/15 text-red-600 text-[10px]">{__("Rejected")}</span>;
   return null;
 }
 
@@ -148,23 +148,23 @@ function CommentNode({ node, ctx, depth = 0 }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium">{node.user || "Guest"}</span>
-              <span className="text-xs text-muted-foreground">commented · {formatDate(node.event_at)}</span>
+              <span className="text-xs text-muted-foreground">{__("commented ·")} {formatDate(node.event_at)}</span>
               <StatusBadge status={node.status} />
             </div>
             <p className="text-sm mt-1 whitespace-pre-wrap break-words">{node.comment}</p>
             <div className="flex items-center gap-3 mt-2">
               {canComment && (
                 <button type="button" onClick={() => setActiveKey(activeKey === key ? null : key)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                  <CornerDownRight className="w-3 h-3" /> Reply
+                  <CornerDownRight className="w-3 h-3" /> {__("Reply")}
                 </button>
               )}
               {canModerate && isPending && (
                 <>
                   <button type="button" onClick={() => onModerate(node, STATUS.APPROVED)} disabled={moderatingName === node.name} className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-500 disabled:opacity-40">
-                    {moderatingName === node.name ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Approve
+                    {moderatingName === node.name ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} {__("Approve")}
                   </button>
                   <button type="button" onClick={() => onModerate(node, STATUS.REJECTED)} disabled={moderatingName === node.name} className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-500 disabled:opacity-40">
-                    <X className="w-3 h-3" /> Reject
+                    <X className="w-3 h-3" /> {__("Reject")}
                   </button>
                 </>
               )}
@@ -220,7 +220,7 @@ function AuditNode({ node, ctx }) {
           )}
           {canComment && (
             <button type="button" onClick={() => setActiveKey(activeKey === key ? null : key)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-1">
-              <MessageSquare className="w-3 h-3" /> Comment
+              <MessageSquare className="w-3 h-3" /> {__("Comment")}
             </button>
           )}
         </div>
@@ -231,7 +231,7 @@ function AuditNode({ node, ctx }) {
           <Composer
             {...composerProps}
             compact autoFocus
-            placeholder="Comment on this change…"
+            placeholder={__("Comment on this change…")}
             onCancel={() => setActiveKey(null)}
             onSubmit={(text, identity) => composerProps.submit(text, identity, { parent: null, targetDocument: HISTORY_DOC, targetDocumentName: node.name })}
           />
@@ -378,7 +378,7 @@ export default function DocumentHistory({
 
   if (!enableHistory && !enableComments) return null;
   if (!document || !documentName) {
-    return <div className="text-xs text-muted-foreground p-3">DocumentHistory needs <code>document</code> and <code>documentName</code>.</div>;
+    return <div className="text-xs text-muted-foreground p-3">{__("DocumentHistory needs")} <code>document</code> {__("and")} <code>documentName</code>.</div>;
   }
 
   const ctx = {

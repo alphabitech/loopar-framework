@@ -13,6 +13,7 @@ import { RgbaColorPicker } from "react-colorful";
 
 import useClickOutside from "./color-picker/useClickOutside";
 import "./color-picker/style.css";
+import { __ } from "@global/i18n";
 
 function normalizeColor(inputColor) {
   try {
@@ -97,13 +98,13 @@ export default function PopoverPicker(props) {
                         commitColor(field, localColor);
                       }}
                     >
-                      OK
+                      {__("OK")}
                     </button>
                     <button
                       className="mt-2 btn btn-secondary"
                       onClick={clearColor}
                     >
-                      Clear
+                      {__("Clear")}
                     </button>
                   </div>
                 </div>

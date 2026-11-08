@@ -1,5 +1,6 @@
 import { Modal } from "@dialog";
 import { Entity } from "@loopar/loader";
+import { __ } from "@global/i18n";
 
 export function Browser(props) {
   return (
@@ -19,7 +20,7 @@ export function FileBrowser(props) {
     <Modal
       position="top"
       size="full"
-      title="File Browser"
+      title={__("File Browser")}
       scrollable={true}
       open={true}
       onClose={() => {

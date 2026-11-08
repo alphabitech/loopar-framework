@@ -1,4 +1,5 @@
 'use strict'
+import { translateStructure } from '../global/i18n.js';
 import DynamicField from './dynamic-field.js';
 import { loopar } from '../loopar.js';
 import { fileManage } from '../file-manage.js';
@@ -11,6 +12,9 @@ import { guardWorkflowState, workflowFor, describeWorkflow } from './workflow.js
 import { computeFormulas, tableRows } from '../global/formula.js';
 import { acceptsFile } from '../global/file-accept.js';
 import { purgePrivateFiles } from '../global/private-files.js';
+import { guardedChanges, comparable, GUARDED_POLICIES, WRITE_POLICY } from '../global/field-policy.js';
+import { policyMapOf, lockStructure } from '../auth/field-access.js';
+import { getRequest } from '../server/router/request-context.js';
 
 const isTrue = (v) => [1, '1', true, 'true'].includes(v);
 
@@ -33,6 +37,9 @@ function childRowChanged(row, incoming, columns) {
 export default class CoreDocument {
   #fields = {};
   #protectedPassword = "********";
+  // Guarded fields (write_policy protected/system) a verified flow cleared for
+  // the next save — see authorize() and #guardFieldPolicy().
+  #authorized = new Set();
 
   constructor(props) {
     Object.assign(this, props);
@@ -44,6 +51,103 @@ export default class CoreDocument {
 
   get protectedPassword() {
     return this.#protectedPassword
+  }
+
+  /**
+   * Clears `protected` / `system` fields for the NEXT save(). Server code that
+   * legitimately changes one (a verified email change, an admin reset) calls
+   * this right before assigning; without it save() refuses the change.
+   *
+   *   user.authorize('email'); user.email = verified; await user.save();
+   */
+  authorize(...fields) {
+    for (const f of fields.flat()) if (f) this.#authorized.add(String(f));
+    return this;
+  }
+
+  /** Guarded fields as comparable text: secrets decrypted, masks = unchanged. */
+  #guardedValues(names, source) {
+    const out = {};
+    for (const name of names) {
+      const field = this.#fields[name];
+      if (!field) continue;
+      let value = source === 'original' ? this.__ORIGINAL__?.[name] : field.value;
+      if (field.element === PASSWORD) {
+        if (source === 'current' && (value === this.#protectedPassword)) {
+          value = this.__ORIGINAL__?.[name];
+          if (loopar.isEncryptedSecret?.(value)) {
+            try { value = loopar.decryptSecret(value); } catch { value = ''; }
+          }
+        } else if (loopar.isEncryptedSecret?.(value)) {
+          // Undecryptable (other tenant's key): DynamicField holds '' for it.
+          try { value = loopar.decryptSecret(value); } catch { value = ''; }
+        }
+      }
+      // Same normalization both sides: empty → the field default (what the
+      // DynamicField holds for a stored NULL), switches → '1' / '0'.
+      if (loopar.utils.nullValue(value)) value = field.default_value;
+      out[name] = ['switch', 'checkbox'].includes(field.element)
+        ? (loopar.utils.trueValue(value) ? '1' : '0')
+        : comparable(value);
+    }
+    return out;
+  }
+
+  /**
+   * Layer B of the field write policy (global/field-policy.js). An existing
+   * record loaded from the database (`__ORIGINAL__`) may not change a
+   * `protected` or `system` field unless authorize() cleared it — whatever
+   * path brought the value (a controller doing `doc[field] = body.x`, a
+   * getDocument() fed raw input…). Fields flagged `readonly` only in the UI
+   * (no write_policy) are reported, not blocked, so they can be migrated.
+   */
+  async #guardFieldPolicy(args = {}) {
+    // `__ORIGINAL__` exists only for records loaded from the database (singles
+    // included, which carry no name and so look "new").
+    if (loopar.installing || !this.__ORIGINAL__) return;
+
+    const map = policyMapOf(this.__ENTITY__?.name);
+    const names = Object.keys(map).filter((n) => this.#fields[n]);
+    if (!names.length) return;
+
+    const original = this.#guardedValues(names, 'original');
+    const current = this.#guardedValues(names, 'current');
+    const authorized = [...this.#authorized, ...(args.authorize || [])];
+
+    const blocked = guardedChanges(map, original, current, authorized);
+    if (blocked.length) {
+      const who = loopar.auth?.user?.() || 'guest';
+      console.warn(`[field-policy] blocked change of ${this.__ENTITY__.name}/${this.__DOCUMENT_NAME__}: ${blocked.join(', ')} — user=${who}`);
+      loopar.throw({
+        code: 403,
+        title: 'Forbidden',
+        message: `These fields can only be changed through a verified flow: ${blocked.join(', ')}.`,
+      });
+    }
+
+    // Migration aid: UI-readonly fields changed inside a request.
+    if (getRequest()) {
+      for (const name of names) {
+        const rule = map[name];
+        if (rule.policy !== WRITE_POLICY.EDITABLE || !rule.legacyReadonly) continue;
+        if (original[name] !== current[name]) {
+          console.warn(`[field-policy:audit] ${this.__ENTITY__.name}/${this.__DOCUMENT_NAME__}: field "${name}" is readonly in the form but changed on save. Set write_policy "readonly" to enforce it (or drop the readonly flag).`);
+        }
+      }
+    }
+  }
+
+  /** After a successful save the stored values are the new baseline. */
+  #rebaseOriginal() {
+    if (!this.__ORIGINAL__) return;
+    const map = policyMapOf(this.__ENTITY__?.name);
+    for (const name of Object.keys(map)) {
+      const field = this.#fields[name];
+      if (!field || !GUARDED_POLICIES.has(map[name].policy)) continue;
+      if (field.element === PASSWORD && field.value === this.#protectedPassword) continue;
+      this.__ORIGINAL__[name] = field.value;
+    }
+    this.#authorized.clear();
   }
 
   async onLoad() {
@@ -335,7 +439,7 @@ export default class CoreDocument {
         if (current && !sent.has(String(row.name))) {
           sent.add(String(row.name));
           if (!childRowChanged(current, data, columns)) continue;
-          writes.push({ name: current.name, data: { ...current, ...data, id: current.id, name: current.name } });
+          writes.push({ name: current.name, data: { ...current, ...data, id: current.id, name: current.name }, original: current });
         } else {
           writes.push({ name: null, data: { ...data, id: null, name: loopar.utils.randomString(15) } });
         }
@@ -345,9 +449,11 @@ export default class CoreDocument {
       if (removed.length) await this.#childRows(entity, parentId).whereIn("name", removed).delete();
 
       let nextId = null;
-      for (const { name, data } of writes) {
+      for (const { name, data, original } of writes) {
         if (!name) data.id = nextId = (nextId == null ? await loopar.db.nextId(entity) : nextId + 1);
-        const document = await documentManage.newDocument(entity, data, name || undefined);
+        // Existing rows carry their stored values: the child entity's
+        // protected/system fields are checked on save like any record's.
+        const document = await documentManage.newDocument(entity, data, name || undefined, false, null, undefined, original ? { ...original } : null);
         await document.save(saveArgs);
       }
     }
@@ -366,6 +472,8 @@ export default class CoreDocument {
     await this.#applyFormulas();
     this.beforeSave && await this.beforeSave();
     await this.#applyFormulas();
+    // Field write policy, layer B: after beforeSave (it may authorize).
+    await this.#guardFieldPolicy(args);
     // The series number is reserved only after validation passes, so a
     // rejected save doesn't burn a number.
     const seriesPending = this.#usesNamingSeries;
@@ -406,6 +514,8 @@ export default class CoreDocument {
       const app = await loopar.getDocument("App", this.installerApp, null, { ifNotFound: null });
       app && app.bump("patch");
     }
+
+    this.#rebaseOriginal();
 
     this.afterSave && await this.afterSave();
   }
@@ -824,12 +934,16 @@ export default class CoreDocument {
             const ref = loopar.getRef(data.options);
             if (ref) el.__META__ = {
               Entity: {
-                doc_structure: await loopar.db.getValue(ref.__ENTITY__, "doc_structure", ref.__NAME__),
+                doc_structure: JSON.stringify(translateStructure(loopar.utils.JSONparse(
+                  await loopar.db.getValue(ref.__ENTITY__, "doc_structure", ref.__NAME__), []
+                ))),
               }
             }
           }
       
           el.elements = await updateValue(el.elements || []);
+          // Interface text in the request's language (children already done).
+          translateStructure([{ ...el, elements: null }]);
           return el;
         }));
       };
@@ -857,6 +971,18 @@ export default class CoreDocument {
         ...(el.elements ? { elements: pin(el.elements) } : {}),
       }));
       __ENTITY__.doc_structure = JSON.stringify(pin(loopar.utils.JSONparse(__ENTITY__.doc_structure, [])));
+    }
+
+    // Field write policy: fields this actor can't write render read-only
+    // (protected ones with the verified "Change" flow). A form (Form Builder)
+    // edits an existing record even without a name — it is never "new".
+    {
+      const isForm = __REF__.__ENTITY__ === 'Form Builder';
+      __ENTITY__.doc_structure = JSON.stringify(await lockStructure(
+        __ENTITY__.name,
+        loopar.utils.JSONparse(__ENTITY__.doc_structure, []),
+        { isNew: this.__IS_NEW__ && !isForm && !__ENTITY__.is_single }
+      ));
     }
 
     return {

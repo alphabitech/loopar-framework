@@ -3,6 +3,7 @@ import loopar from "loopar";
 import { Button } from "@cn/components/ui/button";
 import { cn } from "@cn/lib/utils";
 import { EntryModal } from "@app/entry-modal";
+import { __ } from "@global/i18n";
 
 /** Badge colors for workflow states (theme-friendly, light and dark). */
 export const STATE_COLORS = {
@@ -54,7 +55,7 @@ function TransitionFields({ fields, defs, values, current }) {
         if (el.element === "select" && options.length > 1) {
           input = (
             <select id={id} className={SELECT_CLASS} defaultValue={initial} onChange={set}>
-              <option value="">Select {label}</option>
+              <option value="">{__("Select")} {label}</option>
               {options.map((o) => {
                 const [value, text] = o.split(":");
                 return <option key={value} value={value}>{text || value}</option>;
@@ -152,7 +153,7 @@ export function WorkflowBar({ ctrl }) {
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 pb-3">
-        <span className="text-sm text-muted-foreground">Status</span>
+        <span className="text-sm text-muted-foreground">{__("Status")}</span>
         <StateBadge state={workflow.state} color={workflow.color} />
         {transitions.length > 0 && <span className="mx-1 h-5 w-px bg-border" />}
         {transitions.map((t) => (

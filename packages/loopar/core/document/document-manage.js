@@ -1,6 +1,13 @@
+import { applyContentLayer, translationLayer } from '../global/i18n-content.js';
+import { requestLanguage, siteDefaultLanguage } from '../server/i18n.js';
+import { DEFAULT_LANGUAGE } from '../global/i18n.js';
+
+/** Builders whose content is website text (base language: the site's default). */
+const WEBSITE_BUILDERS = new Set(['Page Builder', 'Contact Form Builder']);
 import { loopar } from '../loopar.js';
 import { fileManage } from "../file-manage.js";
 import { parseDocStructure } from "./tools.js";
+import { elementsDict } from '../global/element-definition.js';
 
 class DocumentManage {
   constructor(props) {
@@ -19,7 +26,9 @@ class DocumentManage {
       // Pass the pre-parsed ENTITY through so newDocument doesn't trigger
       // a second parseDocStructure pass (which would re-execute side
       // effects like COLLECTION preload — losing the requestContext).
-      return await this.newDocument(document, { ...databaseData, ...(data || {}) }, name, parse, ENTITY);
+      // `databaseData` rides along as the stored baseline: save() checks the
+      // protected/system fields against it (field write policy, layer B).
+      return await this.newDocument(document, { ...databaseData, ...(data || {}) }, name, parse, ENTITY, undefined, { ...databaseData });
     } else {
       if(ENTITY.is_virtual){
         return await this.newDocument(document, data, name, parse, ENTITY, ifNotFound);
@@ -37,7 +46,7 @@ class DocumentManage {
     }
   }
 
-  async newDocument(document, data = {}, name, parse = false, preParsedEntity = null, ifNotFound) {
+  async newDocument(document, data = {}, name, parse = false, preParsedEntity = null, ifNotFound, original = null) {
     // Reuse the ENTITY when the caller already parsed it (carrying the
     // request-scoped state in field.data.preloaded). Falls back to a
     // fresh parse for standalone callers — which is the original behaviour.
@@ -51,7 +60,8 @@ class DocumentManage {
       __DOCUMENT_NAME__: name,
       __DATA__: data || {},
       __IS_NEW__: !name,
-      __SPACING__: spacing || {gap: 1, col_padding: "p-0"}
+      __SPACING__: spacing || {gap: 1, col_padding: "p-0"},
+      __ORIGINAL__: original,
     });
 
     const result = await instance.__init__(ifNotFound);
@@ -83,8 +93,21 @@ class DocumentManage {
         ENTITY.doc_structure = JSON.stringify(ENTITY.doc_structure);
       }
 
+      let structure = loopar.utils.JSONparse(ENTITY.doc_structure, ENTITY.doc_structure);
+
+      // The definition's language layer (by node key and prop) replaces its
+      // texts: on website pages, written in the site's default language, it
+      // is the page in another language; on entities and forms, written in
+      // English, it overrides the dictionary for those elements.
+      const language = requestLanguage();
+      const base = WEBSITE_BUILDERS.has(ENTITY.__ENTITY__) ? siteDefaultLanguage() : DEFAULT_LANGUAGE;
+      const layer = ENTITY.translations && language !== base
+        ? translationLayer(ENTITY.translations, language)
+        : null;
+      if (layer) structure = applyContentLayer(structure, layer, (el) => elementsDict[el]?.def);
+
       ENTITY.doc_structure = JSON.stringify(
-        await parseDocStructure(loopar.utils.JSONparse(ENTITY.doc_structure, ENTITY.doc_structure), true, document, requestContext, ref.__APP__)
+        await parseDocStructure(structure, true, document, requestContext, ref.__APP__)
       );
     }
 

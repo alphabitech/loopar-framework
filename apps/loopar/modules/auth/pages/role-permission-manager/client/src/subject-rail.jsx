@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search, Plus, ChevronDown } from "lucide-react";
 import { avatarColor } from "../helper";
+import { __ } from "loopar";
 
 /**
  * Left rail: every subject the manager can edit — roles grouped by
@@ -69,7 +70,7 @@ export function SubjectRail({ subjects, selected, onSelect, onCreateRole, onCrea
           {label}
         </button>
         {action && (
-          <button onClick={action} title="New" className="text-muted-foreground hover:text-primary">
+          <button onClick={action} title={__("New")} className="text-muted-foreground hover:text-primary">
             <Plus size={12} />
           </button>
         )}
@@ -86,7 +87,7 @@ export function SubjectRail({ subjects, selected, onSelect, onCreateRole, onCrea
           <input
             value={q}
             onChange={e => setQ(e.target.value)}
-            placeholder="Search role or user…"
+            placeholder={__("Search role or user…")}
             className="flex-1 min-w-0 bg-transparent border-none outline-none text-[12px] text-foreground placeholder:text-muted-foreground"
           />
           {q && <button onClick={() => setQ("")} className="text-[10px] hover:text-foreground">✕</button>}
@@ -95,7 +96,7 @@ export function SubjectRail({ subjects, selected, onSelect, onCreateRole, onCrea
 
       <div className="flex-1 overflow-y-auto pb-3" style={{ scrollbarWidth: "thin" }}>
         {loading && (
-          <div className="px-4 py-6 text-[11px] text-muted-foreground">Loading…</div>
+          <div className="px-4 py-6 text-[11px] text-muted-foreground">{__("Loading…")}</div>
         )}
 
         {groups.roleGroups.map(g => (
@@ -107,17 +108,17 @@ export function SubjectRail({ subjects, selected, onSelect, onCreateRole, onCrea
           </Section>
         ))}
         {!loading && !groups.roleGroups.some(g => g.id === "custom") && (
-          <Section id="custom" label="Custom" action={onCreateRole}>
-            <div className="px-2.5 py-1 text-[11px] text-muted-foreground/70">No custom roles yet</div>
+          <Section id="custom" label={__("Custom")} action={onCreateRole}>
+            <div className="px-2.5 py-1 text-[11px] text-muted-foreground/70">{__("No custom roles yet")}</div>
           </Section>
         )}
 
-        <Section id="users" label="Users" action={onCreateUser}>
+        <Section id="users" label={__("Users")} action={onCreateUser}>
           {groups.users.map(u => (
             <Item key={u.name} type="user" name={u.name} sub={u.email} color="#0ea5e9" />
           ))}
           {!loading && groups.users.length === 0 && (
-            <div className="px-2.5 py-1 text-[11px] text-muted-foreground/70">No users</div>
+            <div className="px-2.5 py-1 text-[11px] text-muted-foreground/70">{__("No users")}</div>
           )}
         </Section>
       </div>

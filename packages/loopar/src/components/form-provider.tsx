@@ -1,3 +1,5 @@
+// @ts-ignore — shared JS module
+import { __ } from "@global/i18n";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   useForm,
@@ -107,9 +109,9 @@ const buildEmptyValues = (
 /** Human-readable label for validation messages: `data.label`, or the
  * field name Capitalized ("first_name" → "First name"). */
 const fieldLabel = (data: FormFieldData): string => {
-  if (data?.label) return String(data.label);
+  if (data?.label) return __(String(data.label));
   const name = String(data?.name || "").replaceAll("_", " ").trim();
-  return name ? name.charAt(0).toUpperCase() + name.slice(1) : "This field";
+  return __(name ? name.charAt(0).toUpperCase() + name.slice(1) : "This field");
 };
 
 const asString = (v: unknown): string => {
@@ -129,12 +131,12 @@ const stringField = (data: FormFieldData): z.ZodTypeAny => {
   const label = fieldLabel(data);
 
   let schema = z.string().trim();
-  if (data.required) schema = schema.min(1, `${label} is required`);
+  if (data.required) schema = schema.min(1, __("{0} is required", [label]));
 
   const withFormat =
     (data.format || "").toLowerCase() === "email"
       ? schema.refine((v) => v === "" || EMAIL_RE.test(v), {
-          message: `${label} must be a valid email address`,
+          message: __("{0} must be a valid email address", [label]),
         })
       : schema;
 

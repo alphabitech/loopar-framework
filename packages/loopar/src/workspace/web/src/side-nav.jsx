@@ -5,6 +5,7 @@ import React, {useMemo} from "react";
 import { cn } from "@cn/lib/utils";
 import { Cross1Icon } from "@radix-ui/react-icons";
 import { Item } from "@radix-ui/react-context-menu";
+import { __ } from "@global/i18n";
 
 const getActive = (item, activePage) => {
   if (item.page == activePage) return true;
@@ -43,7 +44,7 @@ const MenuItemTree = ({item, isChild = false}={item:Item, isChild:Boolean}) => {
     <>
       <SideNavItem
         path={getLink(item)}
-        title={item.link}
+        title={__(item.link)}
         className={`rounded-md pl-0 pt-0`}
         active={treeIsActive}
         hasChildren={item.items.length > 0}
@@ -103,7 +104,7 @@ export function SideNav({sideMenuItems}) {
                 tab-index="0"
                 onClick={() => setOpenNav(false)}
               >
-                <span className="sr-only">Close navigation</span>
+                <span className="sr-only">{__("Close navigation")}</span>
                 <Cross1Icon />
               </button>
             </>

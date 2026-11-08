@@ -1,20 +1,21 @@
 import {Entity as EntityComponent} from "../loader.jsx"
+import { __ } from "@global/i18n";
 const Entity = (props) =>{
   const data = props.data;
 
   if(!data.name || !data.action){
     return (
       <div>
-        <h1>Entity</h1>
-        <p>Name and Action are required</p>
-        <p>Name: {data.name}</p>
-        <p>Action: {data.action}</p>
-        <p>Name and Action are required</p>
-        <p>Name: {data.name}</p>
-        <p>Action: {data.action}</p>
-        <p>Name and Action are required</p>
-        <p>Name: {data.name}</p>
-        <p>Action: {data.action}</p>
+        <h1>{__("Entity")}</h1>
+        <p>{__("Name and Action are required")}</p>
+        <p>{__("Name:")} {data.name}</p>
+        <p>{__("Action:")} {data.action}</p>
+        <p>{__("Name and Action are required")}</p>
+        <p>{__("Name:")} {data.name}</p>
+        <p>{__("Action:")} {data.action}</p>
+        <p>{__("Name and Action are required")}</p>
+        <p>{__("Name:")} {data.name}</p>
+        <p>{__("Action:")} {data.action}</p>
       </div>
     );
   }

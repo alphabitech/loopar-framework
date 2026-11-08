@@ -6,6 +6,7 @@ import BaseInput from "@base-input";
 import { useState, useEffect, useMemo } from "react";
 import { previewDarkBackground, generateThemeCSS, isNeutralTheme, normalizeBrand, themeBaseColor, CUSTOM_THEME, COMPANY_THEME } from "@global/theme-generator";
 import {loopar} from "loopar";
+import { __ } from "loopar";
 
 function getColorMetrics(hex) {
   let r = 0, g = 0, b = 0;
@@ -107,7 +108,7 @@ const ColorField = ({ label, hint, value, fallback, onChange }) => (
         placeholder={fallback || "Default"}
       />
       {value && !fallback ? (
-        <Button variant="ghost" size="sm" onClick={(e) => { e.preventDefault(); onChange(""); }}>Clear</Button>
+        <Button variant="ghost" size="sm" onClick={(e) => { e.preventDefault(); onChange(""); }}>{__("Clear")}</Button>
       ) : null}
     </div>
     <p className="text-xs text-muted-foreground">{hint}</p>
@@ -124,7 +125,7 @@ const BrandColorsConfig = ({ value, onChange }) => {
     <div className="space-y-4 p-4 border border-border rounded-lg bg-muted/30">
       <div className="flex items-center gap-2 text-sm font-medium">
         <Palette className="w-4 h-4" />
-        <span>Brand Colors</span>
+        <span>{__("Brand Colors")}</span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {BRAND_FIELDS.map(f => (
@@ -132,7 +133,7 @@ const BrandColorsConfig = ({ value, onChange }) => {
         ))}
       </div>
       {!valid ? (
-        <p className="text-xs text-destructive">Enter the primary color as a hex value (for example #164a36).</p>
+        <p className="text-xs text-destructive">{__("Enter the primary color as a hex value (for example #164a36).")}</p>
       ) : null}
     </div>
   );
@@ -166,7 +167,7 @@ const DarkBackgroundConfig = ({ theme, brand, value, onChange }) => {
     <div className="space-y-4 mt-4 p-4 border border-border rounded-lg bg-muted/30">
       <div className="flex items-center gap-2 text-sm font-medium">
         <Droplet className="w-4 h-4" />
-        <span>Dark Background Configuration</span>
+        <span>{__("Dark Background Configuration")}</span>
       </div>
 
       <div className="flex justify-start">
@@ -177,7 +178,7 @@ const DarkBackgroundConfig = ({ theme, brand, value, onChange }) => {
             onClick={() => handleModeChange('auto')}
             className="flex-1"
           >
-            Auto
+            {__("Auto")}
           </Button>
           <Button
             variant={mode === 'custom' ? 'default' : 'outline'}
@@ -185,7 +186,7 @@ const DarkBackgroundConfig = ({ theme, brand, value, onChange }) => {
             onClick={() => handleModeChange('custom')}
             className="flex-1"
           >
-            Custom
+            {__("Custom")}
           </Button>
         </div>
       </div>
@@ -205,7 +206,7 @@ const DarkBackgroundConfig = ({ theme, brand, value, onChange }) => {
                 className={`w-10 h-10 rounded cursor-pointer border border-border ${
                   mode === 'auto' ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
-                title="Color Picker"
+                title={__("Color Picker")}
               />
               <input
                 type="text"
@@ -222,7 +223,7 @@ const DarkBackgroundConfig = ({ theme, brand, value, onChange }) => {
 
           <div className="space-y-2">
             <div className="flex justify-between items-center text-xs">
-              <span className="text-muted-foreground">Intensity</span>
+              <span className="text-muted-foreground">{__("Intensity")}</span>
               <span className="font-medium">{Math.round(intensity * 100)}%</span>
             </div>
             <input
@@ -235,8 +236,8 @@ const DarkBackgroundConfig = ({ theme, brand, value, onChange }) => {
               className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Lighter</span>
-              <span>Darker</span>
+              <span>{__("Lighter")}</span>
+              <span>{__("Darker")}</span>
             </div>
           </div>
         </div>
@@ -328,7 +329,7 @@ export function ThemeSelector({ value, onChange }) {
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Palette className="w-4 h-4" />
-          <span>Theme Color Palette</span>
+          <span>{__("Theme Color Palette")}</span>
         </div>
         
         <div className="space-y-4 border border-border rounded-md p-4">
@@ -358,7 +359,7 @@ export function ThemeSelector({ value, onChange }) {
           ))}
           <div className="space-y-2">
             <h3 className="text-xs uppercase tracking-wider font-semibold text-muted-foreground opacity-70">
-              Brand
+              {__("Brand")}
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
               <Button
@@ -372,11 +373,11 @@ export function ThemeSelector({ value, onChange }) {
                 >
                   {isCustom && <CheckCircle className="w-4 h-4 text-white" />}
                 </span>
-                Custom
+                {__("Custom")}
               </Button>
               <Button
                 variant="ghost"
-                title="Built from the brand color set in Company"
+                title={__("Built from the brand color set in Company")}
                 className={`w-full inline-flex items-center justify-start gap-2 ${isCompany ? 'bg-primary/50 text-white' : 'text-primary'}`}
                 onClick={(e) => { e.preventDefault(); handleThemeSelect(COMPANY_THEME); }}
               >
@@ -386,7 +387,7 @@ export function ThemeSelector({ value, onChange }) {
                 >
                   {isCompany ? <CheckCircle className="w-4 h-4 text-white" /> : <Building2 className="w-3 h-3" />}
                 </span>
-                Company brand
+                {__("Company brand")}
               </Button>
             </div>
           </div>
@@ -418,7 +419,7 @@ export function ThemeSelector({ value, onChange }) {
           className="w-4 h-4 rounded border-border"
         />
         <label htmlFor="includeTitles" className="text-sm cursor-pointer">
-          Include title gradients (h1-h6)
+          {__("Include title gradients (h1-h6)")}
         </label>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import DefaultDetail from "./collection/default-detail.jsx";
+import { __ } from "@global/i18n";
 
 const detailModules = import.meta.glob("./*-detail.jsx", { eager: true });
 
@@ -22,7 +23,7 @@ export default function CollectionView({ data = {} }) {
     return (
       <section className="w-full py-16 px-4 min-h-section-min">
         <div className="max-w-3xl mx-auto text-center text-sm text-muted-foreground">
-          Collection view has no entity configured.
+          {__("Collection view has no entity configured.")}
         </div>
       </section>
     );

@@ -11,6 +11,7 @@ import { cn } from "@cn/lib/utils";
 import { Link } from "@link";
 import Icon from "@icon";
 import { MainNav } from "./main-nav";
+import { __ } from "@global/i18n";
 
 const appOwns = (app, key) =>
   !!key && (app.home === key || (app.modules || []).some(m => m.link === key || (m.routes || []).some(r => r.description === key)));
@@ -57,7 +58,7 @@ function AppIcon({ app, className }) {
 /** Rail: icon + short label under it (Teams/Discord pattern), full description on hover. */
 function AppRail({ apps, activeApp }) {
   return (
-    <nav aria-label="Apps" className="flex w-[72px] shrink-0 flex-col items-center border-r border-border/60">
+    <nav aria-label={__("Apps")} className="flex w-[72px] shrink-0 flex-col items-center border-r border-border/60">
       <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto pb-3">
       <LogoMark />
       {apps.map(app => {
@@ -68,7 +69,7 @@ function AppRail({ apps, activeApp }) {
             award={false}
             bare
             to={appHome(app)}
-            title={app.description}
+            title={__(app.description)}
             aria-current={active ? "page" : undefined}
             className={cn(
               "group flex w-16 flex-col items-center gap-1 rounded-lg py-1.5 transition-colors",
@@ -84,7 +85,7 @@ function AppRail({ apps, activeApp }) {
               <AppIcon app={app} className="h-5 w-5" />
             </span>
             <span className={cn("w-full truncate px-0.5 text-center text-[10px] leading-tight", active && "font-semibold")}>
-              {appLabel(app)}
+              {__(appLabel(app))}
             </span>
           </Link>
         );
@@ -97,8 +98,8 @@ function AppRail({ apps, activeApp }) {
 /** Brand mark heading the rail (Slack/Discord: workspace icon on top). */
 function LogoMark() {
   return (
-    <Link award={false} bare to="/desk" title="Desk" className="mb-1 flex h-header-height w-full shrink-0 items-center justify-center">
-      <img src="/assets/public/images/logo-dark-min.svg" alt="Loopar" className="h-7 w-8" loading="lazy" decoding="async" />
+    <Link award={false} bare to="/desk" title={__("Desk")} className="mb-1 flex h-header-height w-full shrink-0 items-center justify-center">
+      <img src="/assets/public/images/logo-dark-min.svg" alt={__("Loopar")} className="h-7 w-8" loading="lazy" decoding="async" />
     </Link>
   );
 }
@@ -130,13 +131,13 @@ function AppMenuItems({ apps, activeApp, detailed }) {
       <AppIcon app={app} className="h-4 w-4 shrink-0" />
       {detailed ? (
         <span className="flex min-w-0 flex-col">
-          <span className="truncate">{appLabel(app)}</span>
+          <span className="truncate">{__(appLabel(app))}</span>
           {app.description && app.description !== app.name && (
-            <span className="truncate text-xs font-normal text-muted-foreground">{app.description}</span>
+            <span className="truncate text-xs font-normal text-muted-foreground">{__(app.description)}</span>
           )}
         </span>
       ) : (
-        <span className="truncate">{app.description}</span>
+        <span className="truncate">{__(app.description)}</span>
       )}
     </Link>
   ));
@@ -155,7 +156,7 @@ function AppHeader({ apps, activeApp, multiApp }) {
   const [open, setOpen] = useCloseOnNavigate();
   const title = (
     <span className="min-w-0 flex-1 truncate text-left font-semibold text-slate-900 dark:text-slate-200">
-      {activeApp.description}
+      {__(activeApp.description)}
     </span>
   );
 
@@ -166,7 +167,7 @@ function AppHeader({ apps, activeApp, multiApp }) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          title={activeApp.description}
+          title={__(activeApp.description)}
           className="flex w-full items-center gap-1 rounded-md px-1 py-1 hover:bg-secondary/60"
         >
           {title}
@@ -189,7 +190,7 @@ function AppSwitcher({ apps, activeApp }) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          title={activeApp.description}
+          title={__(activeApp.description)}
           className="mx-auto mt-1 flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground"
         >
           <AppIcon app={activeApp} className="h-5 w-5" />
@@ -219,7 +220,7 @@ function HomeItem({ app, compact }) {
         )}
       >
         <HouseIcon className={compact ? "h-6 w-8 shrink-0" : "mr-2 h-6 w-6 shrink-0"} />
-        {compact ? <small className="w-full truncate">Home</small> : <span className="min-w-0 flex-1">Home</span>}
+        {compact ? <small className="w-full truncate">{__("Home")}</small> : <span className="min-w-0 flex-1">{__("Home")}</span>}
       </Link>
     </li>
   );
@@ -265,13 +266,13 @@ function ModuleList({ app, compact }) {
           icon={module.icon}
           DefaultIcon={ChevronLeftIcon}
           path={module.link}
-          title={module.description}
+          title={__(module.description)}
           compact={compact}
           className="rounded-md py-2 hover:bg-slate-300/50 dark:hover:bg-slate-700/80"
         />
       ))}
       {(app?.dashboards || []).length > 0 && !compact && (
-        <li className="mt-4 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dashboards</li>
+        <li className="mt-4 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{__("Dashboards")}</li>
       )}
       {(app?.dashboards || []).map(d => <DashboardItem key={d.name} dashboard={d} compact={compact} />)}
     </ul>

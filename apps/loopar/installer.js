@@ -1,4 +1,4 @@
-import { loopar, CoreInstaller, fileManage, connectionFromInstallData } from "loopar";
+import { loopar, CoreInstaller, fileManage, connectionFromInstallData, normalizeLanguage } from "loopar";
 import { testServerConnection } from "db-env";
 import sha1 from "sha1";
 import { ensureCustomerContact, linkPortalUser } from "./modules/crm/portal-access.js";
@@ -117,6 +117,7 @@ export default class Installer extends CoreInstaller {
       await this.#dropModuleGroup();
       await this.#migrateCustomers();
       await this.#migrateCompany();
+      await this.#migrateSystemLanguage();
       return result;
     }
     await this.validate(reinstall);
@@ -233,7 +234,8 @@ export default class Installer extends CoreInstaller {
 
   /**
    * The installer's "Organization" block: the Company single (identity and
-   * regional defaults) and the interface language of System Settings.
+   * regional defaults). The language chosen in the wizard is the
+   * Administrator's (see insertAdministratorUser).
    */
   async #dropSqliteTables() {
     const knex = loopar.db.knex;
@@ -254,10 +256,6 @@ export default class Installer extends CoreInstaller {
         if (this[field] && !company[field]) company[field] = this[field];
       }
       await company.save();
-
-      const settings = await loopar.getDocument("System Settings");
-      settings.languaje = ["En", "Es"].includes(this.language) ? this.language : (settings.languaje || "En");
-      await settings.save();
     } catch (e) {
       // The tenant is installed; Company can be completed from the desk.
       console.error("[Installer] Organization not seeded:", e.message);
@@ -452,6 +450,34 @@ export default class Installer extends CoreInstaller {
     }
   }
 
+  /**
+   * One-time migration (7.5.3): the tenant-wide language left System
+   * Settings (`languaje` before 7.5.0, `language` after). Users without a
+   * language of their own and websites without a default language take it,
+   * so nobody's screen changes; then the setting is removed. Idempotent;
+   * delete once every tenant is past 7.5.3.
+   */
+  async #migrateSystemLanguage() {
+    try {
+      const single = () => loopar.db.qx()("Document Single Values").where({ document: "System Settings" }).whereIn("field", ["language", "languaje"]);
+      const rows = await single().clone().select("field", "value");
+      if (!rows.length) return;
+      const value = normalizeLanguage((rows.find((r) => r.field === "language") || rows[0]).value) || "en";
+
+      const blank = (q) => q.whereNull("language").orWhere("language", "");
+      if (await loopar.db.qx().schema.hasColumn("User", "language")) {
+        await loopar.db.qx()("User").where(blank).update({ language: value });
+      }
+      if (await loopar.db.qx().schema.hasColumn("App", "default_language")) {
+        await loopar.db.qx()("App").where((q) => q.whereNull("default_language").orWhere("default_language", "")).update({ default_language: value });
+      }
+      await single().clone().del();
+      console.log(`[Installer] System Settings language (${value}) moved to users and websites`);
+    } catch (e) {
+      console.error("[Installer] Language migration failed:", e.message);
+    }
+  }
+
   async #migrateAppTypeToHasWebsite() {
     const columns = await loopar.db.getTableDescription("App");
     if (!columns.some(c => c.name.toLowerCase() === "type")) return;
@@ -472,11 +498,17 @@ export default class Installer extends CoreInstaller {
       user = await loopar.newDocument("User");
     }
 
+    // The installer owns these protected/system fields (field write policy):
+    // on a re-install over an existing Administrator, clear them for this save.
+    user.authorize('email', 'password', 'confirm_password', 'must_change_password');
     user.name = "Administrator";
     user.email = this.email;
     user.password = this.admin_password;
     user.confirm_password = this.confirm_password;
     user.__document_status__ = "Active";
+    // The wizard's language: the desk opens in it from the first sign-in.
+    const language = normalizeLanguage(this.language);
+    if (language) user.language = language;
 
     // When the password is auto-generated (cloud-provisioned tenant) we mark
     // the user so the desk can show a "set your password" banner and the

@@ -7,6 +7,7 @@ import * as simpleIcons from 'simple-icons';
 import { fileManage } from "../file-manage.js";
 import { elementsDict, elementsDefinition } from "../global/element-definition.js";
 import { formulaFields } from "../global/formula.js";
+import { writePolicyMap } from "../global/field-policy.js";
 import { deskHomes, listDeskPages } from "../document/desk-page.js";
 import { isAuditableEntity, AUDIT_COLUMN_NAMES, orderChildRows } from "../global/audit.js";
 import { migrateChildPositions } from "../global/child-position-migration.js";
@@ -49,6 +50,15 @@ export class Builder {
         .map(field => field.data.name);
     }
   
+    // Fields with a value per website language (see global/i18n-content.js).
+    const getTranslatableFields = (fields) => {
+      const getAll = fields => fields.reduce((acc, field) =>
+        acc.concat(field, ...getAll(field.elements || [])), []);
+      return getAll(fields)
+        .filter(field => !!field.data?.name && this.utils.trueValue(field.data?.translatable))
+        .map(field => field.data.name);
+    }
+
     const refs = {};
     const types_ = {};
     const refsByApp = {};
@@ -112,8 +122,12 @@ export class Builder {
         __TYPE__: doc.type,
         __FIELDS__: getEntityFields(fields, { auditable }),
         __FORM_TABLE_FIELDS__: getFormTableFields(fields),
+        __TRANSLATABLE__: getTranslatableFields(fields),
         // Computed fields: { fieldName: formula }, recomputed on every save.
-        __FORMULAS__: formulaFields(fields)
+        __FORMULAS__: formulaFields(fields),
+        // Who may write each restricted field and through which path
+        // (see global/field-policy.js). Built from the entity JSON — server side.
+        __WRITE_POLICY__: writePolicyMap(fields),
       };
   
       const key = this.utils.toEntityKey(doc.name);

@@ -67,7 +67,55 @@ export {
   CUSTOMER_FIELD,
 } from "./core/auth/customer-scope.js";
 export { SCOPE, normalizeScope } from "./core/auth/PermissionManager.js";
+export { sanitizeInput, policyMapOf, currentActor, lockStructure } from "./core/auth/field-access.js";
+export { WRITE_POLICY, writePolicyMap, filterInput } from "./core/global/field-policy.js";
+export { markStepUp, hasFreshStepUp, clearStepUp, requireStepUp, stepUpLocked, registerStepUpFailure, STEP_UP_REQUIRED_CODE } from "./core/auth/step-up.js";
 export { connectionFromInstallData } from "./core/global/install-connection.js";
+export {
+  __,
+  interpolate,
+  currentLanguage,
+  normalizeLanguage,
+  baseLanguage,
+  languageName,
+  languageOptions,
+  parseLanguageList,
+  LANGUAGE_NAMES,
+  DEFAULT_LANGUAGE,
+} from "./core/global/i18n.js";
+export {
+  getMessages,
+  availableLanguages,
+  browserLanguage,
+  withLanguage,
+  siteLanguages,
+  siteDefaultLanguage,
+  requestLanguage,
+  setLanguageCookie,
+  invalidateTranslations,
+  clientI18nPayload,
+  LANGUAGE_COOKIE,
+  translateRecord,
+  translateRecords,
+  contentLanguages,
+  loadRegional,
+  invalidateRegional,
+  regionalFor,
+} from "./core/server/i18n.js";
+export {
+  formatNumber,
+  formatCurrency,
+  formatDate,
+  formatTime,
+  formatDateTime,
+  countryName as localizedCountryName,
+} from "./core/global/format.js";
+export {
+  applyContentLayer,
+  applyRecordLayer,
+  contentTexts,
+  translationLayer,
+} from "./core/global/i18n-content.js";
 import { parseDocument } from './core/document/tools.js';
 import {
   pruneDocStructure,

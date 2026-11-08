@@ -6,7 +6,8 @@ import fileManager from "@@file/file-manager";
 const MarkdownPreview = lazy(() => import("../../components/markdown/preview.jsx"));
 import { elementsDict } from "@global/element-definition";
 import { useDocument } from "../base/provider";
-import { printKind, formatPrintValue, isEmptyValue, isNumericKind, DEFAULT_LOCALE } from "./format-value";
+import { printKind, formatPrintValue, isEmptyValue, isNumericKind } from "./format-value";
+import { formatDate } from "@global/format";
 
 const SECTION_ELEMENTS = new Set(["tab", "section", "panel", "card"]);
 
@@ -226,7 +227,7 @@ export function PrintHeader({ title, subtitle, children }) {
   // Client-only: "today" on the server may not be today in the browser (hydration).
   const [date, setDate] = useState("");
   useEffect(() => {
-    setDate(new Date().toLocaleDateString(DEFAULT_LOCALE, { year: "numeric", month: "short", day: "2-digit" }));
+    setDate(formatDate(new Date(), "medium"));
   }, []);
 
   return (

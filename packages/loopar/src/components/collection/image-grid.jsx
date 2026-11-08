@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import fileManager from "@@file/file-manager";
+import { __ } from "@global/i18n";
 
 export default function ImageGrid({
   images,
@@ -20,7 +21,7 @@ export default function ImageGrid({
   if (slides.length === 0) {
     return (
       <div className={`bg-secondary text-secondary-foreground ${rounded} ${aspect} flex items-center justify-center text-sm opacity-60 ${className}`}>
-        No images
+        {__("No images")}
       </div>
     );
   }

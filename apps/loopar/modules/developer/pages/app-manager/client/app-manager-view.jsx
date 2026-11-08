@@ -29,6 +29,7 @@ import {
   TriangleAlertIcon,
   LayoutTemplateIcon,
 } from 'lucide-react';
+import { __ } from "loopar";
 
 const fieldClass = "w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground";
 
@@ -51,7 +52,7 @@ function PublishForm({ appName, accounts, state }) {
   return (
     <div className="space-y-3 text-left">
       <label className="block space-y-1">
-        <span className="text-xs text-muted-foreground">Git account</span>
+        <span className="text-xs text-muted-foreground">{__("Git account")}</span>
         <select className={fieldClass} value={account} onChange={(e) => {
           const next = accounts.find(a => a.name === e.target.value);
           setAccount(e.target.value);
@@ -64,23 +65,23 @@ function PublishForm({ appName, accounts, state }) {
       </label>
       <div className="flex items-end gap-2">
         <label className="block flex-1 space-y-1">
-          <span className="text-xs text-muted-foreground">Owner</span>
+          <span className="text-xs text-muted-foreground">{__("Owner")}</span>
           <select className={fieldClass} value={owner} onChange={(e) => setOwner(e.target.value)}>
             {owners.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
         </label>
         <span className="pb-2 text-muted-foreground">/</span>
         <label className="block flex-1 space-y-1">
-          <span className="text-xs text-muted-foreground">Repository</span>
+          <span className="text-xs text-muted-foreground">{__("Repository")}</span>
           <input className={fieldClass} value={repo} onChange={(e) => setRepo(e.target.value)} />
         </label>
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
-        Private (only used when the repository is created)
+        {__("Private (only used when the repository is created)")}
       </label>
       <p className="text-xs text-muted-foreground">
-        If <code>{owner}/{repo}</code> doesn't exist it will be created, then the app is committed and pushed.
+        {__("If")} <code>{owner}/{repo}</code> {__("doesn't exist it will be created, then the app is committed and pushed.")}
       </p>
     </div>
   );
@@ -240,23 +241,23 @@ function AppCard({app, action}) {
             <div className="flex items-center gap-2">
               <CardTitle className="truncate text-xl font-semibold leading-tight tracking-tight">{app.name}</CardTitle>
               {isFramework && (
-                <span title="Framework" className="flex-shrink-0 text-violet-400"><InfinityIcon className="h-4 w-4" /></span>
+                <span title={__("Framework")} className="flex-shrink-0 text-violet-400"><InfinityIcon className="h-4 w-4" /></span>
               )}
               {app.is_template && (
-                <Pill tone="blue" className="flex-shrink-0">Template</Pill>
+                <Pill tone="blue" className="flex-shrink-0">{__("Template")}</Pill>
               )}
             </div>
             <CardDescription className="mt-1 flex items-center gap-1.5 truncate text-xs">
               <span className="font-mono">v{app.version || '—'}</span>
               {needsUpdate && (
-                <span className="font-mono text-orange-500" title="Installed version in the database">
-                  (db {app.installed_version})
+                <span className="font-mono text-orange-500" title={__("Installed version in the database")}>
+                  {__("(db")} {app.installed_version})
                 </span>
               )}
               <span className="text-border">•</span>
               {isInstalled
-                ? <span className="inline-flex items-center gap-1 text-emerald-500"><CheckCircle2Icon className="h-3 w-3" />Installed</span>
-                : <span>Not installed</span>}
+                ? <span className="inline-flex items-center gap-1 text-emerald-500"><CheckCircle2Icon className="h-3 w-3" />{__("Installed")}</span>
+                : <span>{__("Not installed")}</span>}
               {app.autor && <><span className="text-border">•</span><span className="truncate">{app.autor}</span></>}
             </CardDescription>
           </div>
@@ -270,8 +271,7 @@ function AppCard({app, action}) {
           <div className="flex gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-500 ring-1 ring-inset ring-amber-500/20">
             <TriangleAlertIcon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
             <p className="min-w-0 break-words">
-              Folder <code className="font-mono">apps/{app.folder}</code> must be renamed
-              to <code className="font-mono">apps/{app.name}</code> to manage this app.
+              {__("Folder")} <code className="font-mono">apps/{app.folder}</code> {__("must be renamed to")} <code className="font-mono">apps/{app.name}</code> {__("to manage this app.")}
             </p>
           </div>
         )}
@@ -292,14 +292,14 @@ function AppCard({app, action}) {
             )}
             {status && (
               <span className="ml-auto flex flex-shrink-0 items-center gap-2 font-mono text-[11px]">
-                {hasRemote && status.upstream === false && <span className="text-amber-500">no upstream</span>}
+                {hasRemote && status.upstream === false && <span className="text-amber-500">{__("no upstream")}</span>}
                 {tracksUpstream && (
                   <>
-                    <span className={ahead > 0 ? 'text-blue-400' : ''} title="Commits ahead">↑{ahead}</span>
-                    <span className={behind > 0 ? 'text-yellow-500' : ''} title="Commits behind">↓{behind}</span>
+                    <span className={ahead > 0 ? 'text-blue-400' : ''} title={__("Commits ahead")}>↑{ahead}</span>
+                    <span className={behind > 0 ? 'text-yellow-500' : ''} title={__("Commits behind")}>↓{behind}</span>
                   </>
                 )}
-                {!isDirty && <span className="text-emerald-500">clean</span>}
+                {!isDirty && <span className="text-emerald-500">{__("clean")}</span>}
               </span>
             )}
           </div>
@@ -310,14 +310,14 @@ function AppCard({app, action}) {
         <div className="flex flex-wrap items-center gap-2">
           {app.template_host && !mismatch && (
             <Button size="sm" variant="primeblue" className="h-8" onClick={() => publishDemo(app)}
-              title="Install this template here (if needed) and serve it on its own domain">
-              <LayoutTemplateIcon className="mr-1.5 h-4 w-4" /> Publish demo
+              title={__("Install this template here (if needed) and serve it on its own domain")}>
+              <LayoutTemplateIcon className="mr-1.5 h-4 w-4" /> {__("Publish demo")}
             </Button>
           )}
           {!isInstalled && !mismatch && !app.template_locked && (
             <Button size="sm" variant={app.is_template ? 'secondary' : 'primeblue'} className="h-8" onClick={() => action(app.name, 'install')}
               title={app.is_template ? 'Install the template itself (development only: to edit the template)' : undefined}>
-              <FolderDownIcon className="mr-1.5 h-4 w-4" /> Install
+              <FolderDownIcon className="mr-1.5 h-4 w-4" /> {__("Install")}
             </Button>
           )}
           {needsUpdate && !mismatch && (
@@ -330,20 +330,20 @@ function AppCard({app, action}) {
                 : `Update DB to ${app.version} (currently ${app.installed_version})`}
             >
               {isRollback
-                ? <><RotateCcwIcon className="mr-1.5 h-4 w-4" /> Rollback</>
-                : <><RefreshCcwDotIcon className="mr-1.5 h-4 w-4" /> Update</>}
+                ? <><RotateCcwIcon className="mr-1.5 h-4 w-4" /> {__("Rollback")}</>
+                : <><RefreshCcwDotIcon className="mr-1.5 h-4 w-4" /> {__("Update")}</>}
             </Button>
           )}
 
           {repoMode === 'full' && (
             <div className="inline-flex divide-x divide-border overflow-hidden rounded-md ring-1 ring-inset ring-border">
-              <GitSegment icon={ArrowDownToLineIcon} label="Pull" tone="yellow" active={behind > 0}
+              <GitSegment icon={ArrowDownToLineIcon} label={__("Pull")} tone="yellow" active={behind > 0}
                 title={isFramework ? 'Pull framework from remote' : 'Pull from remote'}
                 onClick={() => action(app.name, 'pull')} />
-              <GitSegment icon={GitCommitHorizontalIcon} label="Commit" tone="amber" active={isDirty}
+              <GitSegment icon={GitCommitHorizontalIcon} label={__("Commit")} tone="amber" active={isDirty}
                 title={isFramework ? 'Commit framework changes' : 'Commit local changes'}
                 onClick={() => action(app.name, 'commit')} />
-              <GitSegment icon={ArrowUpFromLineIcon} label="Push" tone="blue" active={ahead > 0}
+              <GitSegment icon={ArrowUpFromLineIcon} label={__("Push")} tone="blue" active={ahead > 0}
                 title={isFramework ? 'Push framework to remote' : 'Push to remote'}
                 onClick={() => action(app.name, 'push')} />
             </div>
@@ -351,38 +351,38 @@ function AppCard({app, action}) {
 
           {repoMode === 'local' && (
             <div className="inline-flex divide-x divide-border overflow-hidden rounded-md ring-1 ring-inset ring-border">
-              <GitSegment icon={GitCommitHorizontalIcon} label="Commit" tone="amber" active={isDirty}
-                title="Commit local changes" onClick={() => action(app.name, 'commit')} />
-              <GitSegment icon={CloudUploadIcon} label="Publish" tone="violet" active
-                title="Connect to a remote and push existing history" onClick={() => action(app.name, 'publish')} />
+              <GitSegment icon={GitCommitHorizontalIcon} label={__("Commit")} tone="amber" active={isDirty}
+                title={__("Commit local changes")} onClick={() => action(app.name, 'commit')} />
+              <GitSegment icon={CloudUploadIcon} label={__("Publish")} tone="violet" active
+                title={__("Connect to a remote and push existing history")} onClick={() => action(app.name, 'publish')} />
             </div>
           )}
 
           {repoMode === 'none' && (
             <Button size="sm" variant="ghost" className="h-8 text-violet-400 hover:bg-violet-500/10 hover:text-violet-300"
-              title="Initialize git, link to a remote, and push the initial commit"
+              title={__("Initialize git, link to a remote, and push the initial commit")}
               onClick={() => action(app.name, 'publish')}>
-              <CloudUploadIcon className="mr-1.5 h-4 w-4" /> Publish
+              <CloudUploadIcon className="mr-1.5 h-4 w-4" /> {__("Publish")}
             </Button>
           )}
         </div>
 
         <div className="ml-auto flex items-center gap-0.5">
           {(repoMode === 'full' || repoMode === 'local') && (
-            <IconAction icon={RotateCcwIcon} danger title="Discard ALL local changes (destructive)" onClick={discard} />
+            <IconAction icon={RotateCcwIcon} danger title={__("Discard ALL local changes (destructive)")} onClick={discard} />
           )}
           {app.installed && (
             <Link
               variant="ghost"
               to={`/desk/App/update?name=${app.name}`}
-              title="Edit"
+              title={__("Edit")}
               className="h-8 w-8 justify-center p-0 text-muted-foreground hover:text-foreground"
             >
               <PencilIcon className="h-4 w-4" />
             </Link>
           )}
           {app.installed && !isFramework && (
-            <IconAction icon={Trash2Icon} danger title="Uninstall" onClick={() => action(app.name, 'uninstall')} />
+            <IconAction icon={Trash2Icon} danger title={__("Uninstall")} onClick={() => action(app.name, 'uninstall')} />
           )}
         </div>
       </CardFooter>
@@ -402,13 +402,12 @@ function PublishDemoForm({ app, state }) {
   return (
     <div className="space-y-3 text-left">
       <label className="block space-y-1">
-        <span className="text-xs text-muted-foreground">Domain</span>
+        <span className="text-xs text-muted-foreground">{__("Domain")}</span>
         <input className={fieldClass} value={domain} onChange={(e) => setDomain(e.target.value)} />
       </label>
       <p className="text-xs text-muted-foreground">
-        {app.installed ? <><code>{app.name}</code> is installed here; </> : <><code>{app.name}</code> (and the apps it requires) is installed here; </>}
-        it is served on <code>{domain || '…'}</code>, added to this tenant&apos;s Domains (it must point to this server).
-        Updating the template updates the demo.
+        {app.installed ? <><code>{app.name}</code> {__("is installed here;")} </> : <><code>{app.name}</code> {__("(and the apps it requires) is installed here;")} </>}
+        {__("it is served on")} <code>{domain || '…'}</code>{__(", added to this tenant's Domains (it must point to this server). Updating the template updates the demo.")}
       </p>
     </div>
   );
@@ -620,7 +619,7 @@ const ACTIONS = {
       className="bg-success text-white hover:bg-success/80"
       to="/desk/App/create"
     >
-      <PlusIcon className="mr-2"/> Add App
+      <PlusIcon className="mr-2"/> {__("Add App")}
     </Link>
   ),
   getApp: (
@@ -631,7 +630,7 @@ const ACTIONS = {
         cloneApp();
       }}
     >
-      <DownloadIcon className="mr-2"/> Get App
+      <DownloadIcon className="mr-2"/> {__("Get App")}
     </Button>
   ),
 };

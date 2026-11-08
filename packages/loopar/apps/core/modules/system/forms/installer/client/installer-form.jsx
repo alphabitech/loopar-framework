@@ -5,13 +5,14 @@ import { Button } from '@cn/components/ui/button';
 import { CheckIcon } from 'lucide-react';
 import { cn } from '@cn/lib/utils';
 import { useForm } from '@loopar/form';
+import { __ } from "loopar";
 
 /** The browser's time zone and language, as installer defaults. */
 function browserDefaults() {
   if (typeof window === 'undefined') return {};
   let time_zone = '';
   try { time_zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { /* old browser */ }
-  const language = String(navigator.language || '').toLowerCase().startsWith('es') ? 'Es' : 'En';
+  const language = String(navigator.language || '').toLowerCase().startsWith('es') ? 'es' : 'en';
   return { time_zone, language };
 }
 
@@ -34,10 +35,10 @@ function fieldNames(element, acc = []) {
  */
 function Stepper({ steps, current, onSelect }) {
   return (
-    <nav aria-label="Installation steps" className="mb-8">
+    <nav aria-label={__("Installation steps")} className="mb-8">
       <div className="sm:hidden space-y-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Step {current + 1} of {steps.length}
+          {__("Step")} {current + 1} {__("of")} {steps.length}
         </p>
         <div className="flex gap-1.5">
           {steps.map((step, index) => (
@@ -182,11 +183,11 @@ export default function InstallerForm() {
           {isDatabaseStep(index) && keepConnection ? (
             <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
               <p className="text-sm">
-                This workspace already has a database connection: <strong>{engine}</strong>
-                {server ? <> on <strong>{server}</strong></> : null}.
+                {__("This workspace already has a database connection:")} <strong>{engine}</strong>
+                {server ? <> {__("on")} <strong>{server}</strong></> : null}.
               </p>
               <Button type="button" variant="outline" size="sm" onClick={() => setKeepConnection(false)}>
-                Use another connection
+                {__("Use another connection")}
               </Button>
             </div>
           ) : (
@@ -203,11 +204,11 @@ export default function InstallerForm() {
           disabled={current === 0 || busy}
           onClick={() => setCurrent(current - 1)}
         >
-          Back
+          {__("Back")}
         </Button>
         {isLast ? (
           <Button type="button" variant="destructive" disabled={busy} onClick={install}>
-            Install
+            {__("Install")}
           </Button>
         ) : (
           <Button type="button" disabled={busy} onClick={next}>

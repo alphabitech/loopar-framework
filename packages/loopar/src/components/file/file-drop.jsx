@@ -8,6 +8,7 @@ import loopar from "loopar";
 import { validateFile } from "@@file/defaults";
 import { isEqual } from 'es-toolkit/predicate';
 import { useDesigner } from "@context/designer-context";
+import { __ } from "@global/i18n";
 
 const origins = [
   { name: "Local", icon: MonitorUpIcon, color: "bg-secondary" },
@@ -249,14 +250,14 @@ export const FileDrop = (props) => {
       {dropping ? (
         <div className="w-full flex flex-col items-center text-lg">
           <UploadCloudIcon className="w-12 h-12" />
-          Drop files here!
+          {__("Drop files here!")}
         </div>
       ) : (
         loaded ? (
           <>
             {!hasFiles && <div className="mb-2">
               <small className="flex text-lg text-center w-full">
-                Drag & Drop or upload from
+                {__("Drag & Drop or upload from")}
               </small>
             </div>}
             <div className={`flex ${!hasFiles ? "flex-row" : "flex-col"} gap-2`}>

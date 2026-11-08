@@ -5,6 +5,7 @@ import { loopar } from '../loopar.js';
 import { botContext, verifyCaptcha } from '../document/web-form.js';
 import { CONTACT_FORM_ENVELOPE } from '../document/contact-form-base.js';
 import { PermissionManager } from '../auth/PermissionManager.js';
+import { sanitizeInput } from '../auth/field-access.js';
 
 const isTrue = v => [1, '1', true, 'true'].includes(v);
 
@@ -103,7 +104,8 @@ export default class BaseContactFormController extends BaseController {
     delete payload.__REMOTE_FILES__;
     if (!this.#declaresFileField(entity)) delete payload.__REQ_FILES__;
 
-    const doc = await loopar.newDocument(this.document, payload);
+    // Field write policy (layer A) on top of the internal-field strip.
+    const doc = await loopar.newDocument(this.document, await sanitizeInput(this.document, payload, { op: 'create' }));
 
     // A binary is kept only when it belongs to a public file field of the form.
     if (Array.isArray(doc.__DATA__?.__REQ_FILES__)) {

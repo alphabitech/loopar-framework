@@ -9,6 +9,7 @@ import { cn } from "@cn/lib/utils";
 import { STATE_COLORS, runTransition } from "../form/workflow-bar";
 import { EntryModal } from "@app/entry-modal";
 import { useWorkspace } from "@workspace/workspace-provider";
+import { __ } from "@global/i18n";
 
 /**
  * Kanban board for entities with an active workflow: one column per state
@@ -183,7 +184,7 @@ export function KanbanBoard({ ctrl }) {
   if (!states.length) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-        The workflow of {entity} has no states to show on the board.
+        {__("The workflow of {0} has no states to show on the board.", [entity])}
       </div>
     );
   }

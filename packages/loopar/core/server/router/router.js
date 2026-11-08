@@ -73,6 +73,7 @@ export default class Router extends Middleware {
       this.setupAssetMiddleware(),
       this.setupNotFoundSourceMiddleware(),
       this.setupRouteMiddleware(),
+      this.setupLanguageMiddleware(),
       this.setupSiteDeskMiddleware(),
       this.setupBuildParamsMiddleware(),
       this.setupSystemMiddleware(),

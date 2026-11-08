@@ -8,6 +8,7 @@ import {
   Pill, Panel, Empty, KeyValues, Select, fieldClass,
 } from "./shared.jsx";
 import { SqlCode, SqlToggle, Console } from "./code.jsx";
+import { __ } from "loopar";
 
 const STATUS_OPTIONS = [
   { value: "", label: "Any status" },
@@ -25,9 +26,9 @@ const METHOD_OPTIONS = [
 function QueryFlags({ row }) {
   return (
     <span className="inline-flex items-center gap-1">
-      {row.slowQueries > 0 && <Pill tone="warning" title="Slow queries"><TimerIcon className="h-3 w-3" />{row.slowQueries}</Pill>}
-      {row.repeatedQueries > 0 && <Pill tone="danger" title="Same statement repeated (possible N+1)"><RepeatIcon className="h-3 w-3" />N+1</Pill>}
-      {row.duplicateQueries > 0 && <Pill tone="warning" title="Identical duplicated queries"><CopyIcon className="h-3 w-3" />{row.duplicateQueries}</Pill>}
+      {row.slowQueries > 0 && <Pill tone="warning" title={__("Slow queries")}><TimerIcon className="h-3 w-3" />{row.slowQueries}</Pill>}
+      {row.repeatedQueries > 0 && <Pill tone="danger" title={__("Same statement repeated (possible N+1)")}><RepeatIcon className="h-3 w-3" />N+1</Pill>}
+      {row.duplicateQueries > 0 && <Pill tone="warning" title={__("Identical duplicated queries")}><CopyIcon className="h-3 w-3" />{row.duplicateQueries}</Pill>}
     </span>
   );
 }
@@ -59,15 +60,15 @@ export function RequestsPanel({ initial, live, selectedId, onSelect, refreshKey 
       bodyClassName="p-0"
       actions={(
         <>
-          <input className={cn(fieldClass, "w-48")} placeholder="URL contains…" value={filter.q} onChange={(e) => set("q")(e.target.value)} />
+          <input className={cn(fieldClass, "w-48")} placeholder={__("URL contains…")} value={filter.q} onChange={(e) => set("q")(e.target.value)} />
           <Select value={filter.status} onChange={set("status")} options={STATUS_OPTIONS} />
           <Select value={filter.method} onChange={set("method")} options={METHOD_OPTIONS} />
-          <input className={cn(fieldClass, "w-24")} type="number" min="0" placeholder="≥ ms" value={filter.minMs} onChange={(e) => set("minMs")(e.target.value)} />
-          {loading && <span className="text-[11px] text-muted-foreground">loading…</span>}
+          <input className={cn(fieldClass, "w-24")} type="number" min="0" placeholder={__("≥ ms")} value={filter.minMs} onChange={(e) => set("minMs")(e.target.value)} />
+          {loading && <span className="text-[11px] text-muted-foreground">{__("loading…")}</span>}
         </>
       )}
     >
-      {!result.rows?.length ? <Empty>No requests match. Use the desk in another tab and they show up here.</Empty> : (
+      {!result.rows?.length ? <Empty>{__("No requests match. Use the desk in another tab and they show up here.")}</Empty> : (
         <div className="max-h-[70vh] overflow-auto">
           <table className="w-full table-fixed text-xs">
             <colgroup>
@@ -81,13 +82,13 @@ export function RequestsPanel({ initial, live, selectedId, onSelect, refreshKey 
             </colgroup>
             <thead className="sticky top-0 z-10 bg-card text-left text-muted-foreground">
               <tr className="border-b border-border">
-                <th className="px-3 py-2 font-medium">Time</th>
-                <th className="px-2 py-2 font-medium">Method</th>
-                <th className="px-2 py-2 font-medium">Request</th>
-                <th className="px-2 py-2 font-medium">Status</th>
-                <th className="px-2 py-2 text-right font-medium">Duration</th>
-                <th className="px-2 py-2 text-right font-medium">SQL</th>
-                <th className="px-3 py-2 font-medium">User</th>
+                <th className="px-3 py-2 font-medium">{__("Time")}</th>
+                <th className="px-2 py-2 font-medium">{__("Method")}</th>
+                <th className="px-2 py-2 font-medium">{__("Request")}</th>
+                <th className="px-2 py-2 font-medium">{__("Status")}</th>
+                <th className="px-2 py-2 text-right font-medium">{__("Duration")}</th>
+                <th className="px-2 py-2 text-right font-medium">{__("SQL")}</th>
+                <th className="px-3 py-2 font-medium">{__("User")}</th>
               </tr>
             </thead>
             <tbody>
@@ -152,10 +153,10 @@ function QueryRow({ q, index, flagged }) {
         <span className="w-8 shrink-0 pt-2 text-right font-mono text-[11px] text-muted-foreground">{index + 1}</span>
         <div className="min-w-0 flex-1"><SqlCode sql={q.sql} full={open} className={q.error ? "border-red-500/50" : undefined} /></div>
         <span className="flex shrink-0 items-center gap-1 pt-1.5">
-          {flagged && <Pill tone="danger">repeated</Pill>}
-          {q.tx && <Pill>tx</Pill>}
-          {q.late && <Pill title="Ran after the response was sent (after-hooks)">late</Pill>}
-          {q.rows !== null && q.rows !== undefined && <Pill>{q.rows} rows</Pill>}
+          {flagged && <Pill tone="danger">{__("repeated")}</Pill>}
+          {q.tx && <Pill>{__("tx")}</Pill>}
+          {q.late && <Pill title={__("Ran after the response was sent (after-hooks)")}>{__("late")}</Pill>}
+          {q.rows !== null && q.rows !== undefined && <Pill>{q.rows} {__("rows")}</Pill>}
           <Pill tone={q.error ? "danger" : q.durationMs >= 100 ? "warning" : "muted"}>{fmtMs(q.durationMs)}</Pill>
         </span>
       </div>
@@ -178,8 +179,8 @@ export function RequestDetail({ id, onClose }) {
   const r = data?.request;
   useEffect(() => setTab("Overview"), [id]);
 
-  if (loading && !r) return <Panel title="Request"><Empty>Loading…</Empty></Panel>;
-  if (error || !r) return <Panel title="Request" actions={<button onClick={onClose}><XIcon className="h-4 w-4" /></button>}><Empty>{error?.message || "Request not found (the buffer keeps the latest ones only)."}</Empty></Panel>;
+  if (loading && !r) return <Panel title={__("Request")}><Empty>{__("Loading…")}</Empty></Panel>;
+  if (error || !r) return <Panel title={__("Request")} actions={<button onClick={onClose}><XIcon className="h-4 w-4" /></button>}><Empty>{error?.message || "Request not found (the buffer keeps the latest ones only)."}</Empty></Panel>;
 
   const repeated = new Set((r.analysis?.repeated || []).map((x) => x.sql));
   const counts = { Queries: r.queryCount, Logs: r.logCount, Errors: r.errorCount };
@@ -198,7 +199,7 @@ export function RequestDetail({ id, onClose }) {
       <div className="mb-3 flex flex-wrap gap-2">
         <Pill tone={statusTone(r.status)}>{r.status}</Pill>
         <Pill tone={durationTone(r.durationMs)}><TimerIcon className="h-3 w-3" />{fmtMs(r.durationMs)}</Pill>
-        <Pill><DatabaseIcon className="h-3 w-3" />{r.queryCount} queries · {fmtMs(r.queryMs)}</Pill>
+        <Pill><DatabaseIcon className="h-3 w-3" />{r.queryCount} {__("queries ·")} {fmtMs(r.queryMs)}</Pill>
         <QueryFlags row={r} />
         {r.user && <Pill tone="primary">{r.user}</Pill>}
       </div>
@@ -219,9 +220,9 @@ export function RequestDetail({ id, onClose }) {
       {tab === "Overview" && (
         <div className="space-y-4">
           <KeyValues data={{ at: r.at, ...r.route, ajax: r.ajax, ip: r.ip, tenant: r.tenant, response: r.response?.type, size: r.response?.size }} />
-          <div><h4 className="mb-1 text-xs font-semibold text-muted-foreground">Query params</h4><KeyValues data={r.params?.query} /></div>
-          <div><h4 className="mb-1 text-xs font-semibold text-muted-foreground">Body (redacted)</h4><KeyValues data={r.params?.body} /></div>
-          <div><h4 className="mb-1 text-xs font-semibold text-muted-foreground">Headers</h4><KeyValues data={r.headers} /></div>
+          <div><h4 className="mb-1 text-xs font-semibold text-muted-foreground">{__("Query params")}</h4><KeyValues data={r.params?.query} /></div>
+          <div><h4 className="mb-1 text-xs font-semibold text-muted-foreground">{__("Body (redacted)")}</h4><KeyValues data={r.params?.body} /></div>
+          <div><h4 className="mb-1 text-xs font-semibold text-muted-foreground">{__("Headers")}</h4><KeyValues data={r.headers} /></div>
         </div>
       )}
 
@@ -230,7 +231,7 @@ export function RequestDetail({ id, onClose }) {
           <Timeline queries={r.queries} total={r.durationMs} />
           {r.analysis?.repeated?.length > 0 && (
             <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs">
-              <strong>Possible N+1:</strong>
+              <strong>{__("Possible N+1:")}</strong>
               <ul className="mt-1 space-y-1">
                 {r.analysis.repeated.map((x, i) => <li key={i} className="flex items-start gap-2"><span className="pt-2 font-mono">{x.count}×</span><SqlToggle sql={x.sql} className="flex-1" /></li>)}
               </ul>
@@ -238,22 +239,22 @@ export function RequestDetail({ id, onClose }) {
           )}
           {r.analysis?.duplicates?.length > 0 && (
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs">
-              <strong>Identical duplicates:</strong>
+              <strong>{__("Identical duplicates:")}</strong>
               <ul className="mt-1 space-y-1">
                 {r.analysis.duplicates.map((x, i) => <li key={i} className="flex items-start gap-2"><span className="pt-2 font-mono">{x.count}×</span><div className="min-w-0 flex-1"><SqlToggle sql={x.sql} /><div className="mt-0.5 font-mono text-[11px] text-muted-foreground">{JSON.stringify(x.bindings)}</div></div></li>)}
               </ul>
             </div>
           )}
-          {!r.queries.length ? <Empty>No SQL.</Empty> : (
+          {!r.queries.length ? <Empty>{__("No SQL.")}</Empty> : (
             <ol>{r.queries.map((q, i) => <QueryRow key={i} q={q} index={i} flagged={repeated.has(q.sql)} />)}</ol>
           )}
-          {r.droppedQueries > 0 && <div className="text-xs text-muted-foreground">+{r.droppedQueries} more not kept.</div>}
+          {r.droppedQueries > 0 && <div className="text-xs text-muted-foreground">+{r.droppedQueries} {__("more not kept.")}</div>}
         </div>
       )}
 
-      {tab === "Logs" && (!r.logs.length ? <Empty>Nothing logged.</Empty> : <LogLines rows={r.logs} />)}
+      {tab === "Logs" && (!r.logs.length ? <Empty>{__("Nothing logged.")}</Empty> : <LogLines rows={r.logs} />)}
 
-      {tab === "Errors" && (!r.errors.length ? <Empty>No errors.</Empty> : <ErrorList rows={r.errors} />)}
+      {tab === "Errors" && (!r.errors.length ? <Empty>{__("No errors.")}</Empty> : <ErrorList rows={r.errors} />)}
     </Panel>
   );
 }
@@ -270,7 +271,7 @@ export function LogLines({ rows, onOpenRequest }) {
           <span className={cn("w-10 shrink-0 select-none uppercase", LEVEL_COLOR[l.level])}>{l.level}</span>
           <span className={cn("min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]", l.level === "error" && "text-red-300")}>{l.text}</span>
           {onOpenRequest && l.requestId && (
-            <button type="button" className="shrink-0 text-sky-400 hover:underline" onClick={() => onOpenRequest(l.requestId)}>request</button>
+            <button type="button" className="shrink-0 text-sky-400 hover:underline" onClick={() => onOpenRequest(l.requestId)}>{__("request")}</button>
           )}
         </div>
       ))}
@@ -300,8 +301,8 @@ function ErrorItem({ e, onOpenRequest }) {
         <div className="mt-2 space-y-2">
           <Console lines={String(e.stack || e.text).split("\n")} />
           <div className="flex gap-3 text-xs">
-            <span className="text-muted-foreground">source: {e.source}</span>
-            {onOpenRequest && e.requestId && <button type="button" className="text-primary hover:underline" onClick={() => onOpenRequest(e.requestId)}>open request</button>}
+            <span className="text-muted-foreground">{__("source:")} {e.source}</span>
+            {onOpenRequest && e.requestId && <button type="button" className="text-primary hover:underline" onClick={() => onOpenRequest(e.requestId)}>{__("open request")}</button>}
           </div>
         </div>
       )}

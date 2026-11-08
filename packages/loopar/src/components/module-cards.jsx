@@ -5,6 +5,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { useWorkspace } from "@workspace/workspace-provider";
 import { useDocument } from "@loopar/document";
 import { useDesigner } from "@context/designer-context";
+import { __ } from "@global/i18n";
 
 /**
  * Desk page element: a card per module of the page's app, the ones the user
@@ -40,7 +41,7 @@ export default function ModuleCards(props) {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{m.description}</span>
-                <span className="block text-xs text-muted-foreground">{(m.routes || []).length} documents</span>
+                <span className="block text-xs text-muted-foreground">{(m.routes || []).length} {__("documents")}</span>
               </span>
               <ChevronRightIcon className="h-4 w-4 text-muted-foreground" />
             </>

@@ -1,17 +1,20 @@
 
 'use strict';
 
-import {loopar, BaseController} from 'loopar';
+import {loopar, BaseController, markStepUp, stepUpLocked, registerStepUpFailure} from 'loopar';
 import {validatePasswordResetToken, generatePasswordResetToken, resetPassword} from "./recovery.js"
 import {sendPasswordResetEmail} from "./recovery-email.js"
 import {getProvider, providerKeys, providerLabel, generateState, generateCodeVerifier} from "./oauth-providers.js"
 import {setOauthTx, readOauthTx, clearOauthTx, oauthRedirectUri, loadProviderConfig, parseScopes, linkUser} from "./oauth.js"
-import {completeLogin, verifyChallenge, cancelChallenge} from "./mfa.js"
+import {completeLogin, verifyChallenge, cancelChallenge, verifyFactor, hasMfa} from "./mfa.js"
+import {confirmEmailChange} from "./email-change.js"
 
 export default class AuthController extends BaseController {
  static actionsEnabled = ['login', 'logout', 'requestReset', 'oauthCallback'];
   // Mutations: never reachable over GET.
-  static postOnlyActions = ['mfaVerify', 'mfaCancel'];
+  static postOnlyActions = ['mfaVerify', 'mfaCancel', 'reauthenticate'];
+  // Any logged user may re-authenticate themselves (no role grant needed).
+  static freeActions = ['reauthenticate'];
   
   constructor(props){
     super(props);
@@ -219,6 +222,63 @@ export default class AuthController extends BaseController {
    * button; no current password needed. Always answers success to avoid
    * leaking user existence.
    */
+  /**
+   * POST Auth/reauthenticate   body: { password, code? | recovery_code? }
+   *
+   * Step-up: the logged user proves again they are at the keyboard before a
+   * protected change (email, password… see field write_policy). Password
+   * always; the 2FA code too when the user has it on.
+   *   → { verified: true }      proof stored in the session (5 min)
+   *   → { mfa_required: true }  password ok, the code is still missing
+   * Failures count per session (and the login rate limit applies).
+   */
+  async actionReauthenticate() {
+    const name = loopar.auth.user();
+    if (!name) loopar.throw({ code: 401, message: 'You must be logged in.' });
+
+    if (stepUpLocked()) {
+      loopar.throw({ code: 429, title: 'Too many attempts', message: 'Too many failed attempts. Try again in a few minutes.' });
+    }
+
+    const { password, code, recovery_code } = this.body || {};
+    const row = await loopar.db.query('User').where({ name }).select('name', 'password').first();
+    if (!row || !password || !(await loopar.verifyHash(String(password), row.password))) {
+      registerStepUpFailure();
+      loopar.throw({ code: 401, title: 'Verification failed', message: 'Incorrect password.' });
+    }
+
+    if (await hasMfa(name)) {
+      // Plain objects (no `message`): the client needs the flags.
+      if (!code && !recovery_code) return { mfa_required: true };
+      try {
+        await verifyFactor(name, { code, recovery_code });
+      } catch (err) {
+        registerStepUpFailure();
+        throw err;
+      }
+    }
+
+    markStepUp(name);
+    return { verified: true };
+  }
+
+  /**
+   * GET /auth/confirmEmailChange?token=… — link sent to the NEW address of a
+   * verified email change (see email-change.js). Public: the token is the
+   * proof; it is single-use and expires in 24 h.
+   */
+  async publicActionConfirmEmailChange() {
+    const result = await confirmEmailChange(this.query?.token);
+    const qs = result.ok ? 'email_changed=1' : `email_change=${encodeURIComponent(result.reason)}`;
+
+    const current = loopar.auth.user();
+    if (!current) return this.redirect(`/auth/login?${qs}`, { hard: true });
+
+    const row = await loopar.db.query('User').where({ name: current }).select('user_type').first();
+    const base = row?.user_type === 'Web' ? '/portal' : '/desk';
+    return this.redirect(`${base}/Profile/update?${qs}`, { hard: true });
+  }
+
   async actionRequestReset() {
     // `loopar.auth.user()` returns the User row's `name`; the email comes from the row.
     const name = loopar.auth?.user?.();

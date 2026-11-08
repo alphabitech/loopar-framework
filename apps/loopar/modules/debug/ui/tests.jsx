@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { debugCall, useDebugData, useDebugStream, fmtMs, fmtDateTime, Pill, Panel, Empty, fieldClass } from "./shared.jsx";
 import { Console } from "./code.jsx";
+import { __ } from "loopar";
 
 const RUN_TONE = { running: "info", passed: "success", failed: "danger", cancelled: "muted", timeout: "warning", error: "danger" };
 
@@ -99,7 +100,7 @@ function FileItem({ file, run, tests, errors, output, picked, onPick, open, onTo
           )}
           {output.length > 0 && (
             <div className="mt-1">
-              <div className="mb-1 px-2 text-[11px] font-semibold text-muted-foreground">output</div>
+              <div className="mb-1 px-2 text-[11px] font-semibold text-muted-foreground">{__("output")}</div>
               <Console maxHeight="max-h-48" lines={output.map((o) => ({ text: o.text, className: o.stream === "stderr" ? "text-amber-300" : undefined }))} />
             </div>
           )}
@@ -198,24 +199,24 @@ export function TestsPanel() {
     <div className="space-y-4">
       <Panel>
         {!allowed && files.data && (
-          <div className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs">Test runs are only available while the core runs in development mode. From a terminal: <code>yarn test</code> or the TUI (<code>yarn tui</code> → Tests).</div>
+          <div className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs">{__("Test runs are only available while the core runs in development mode. From a terminal:")} <code>yarn test</code> {__("or the TUI (")}<code>yarn tui</code> {__("→ Tests).")}</div>
         )}
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" disabled={disabled} onClick={() => start({ suite: "all" })}><PlayIcon className="mr-1 h-3.5 w-3.5" />All</Button>
-          <Button size="sm" variant="outline" disabled={disabled} onClick={() => start({ suite: "unit" })}>Unit</Button>
-          <Button size="sm" variant="outline" disabled={disabled} onClick={() => start({ suite: "integration" })}>Integration</Button>
-          <Button size="sm" variant="outline" disabled={disabled || !picked.size} onClick={() => start({ files: [...picked].join(",") })}>Selected ({picked.size})</Button>
-          {running && <Button size="sm" variant="destructive" onClick={() => debugCall("cancelTests", { id: run.id }).then(() => loadRun(run.id))}><SquareIcon className="mr-1 h-3.5 w-3.5" />Stop</Button>}
-          <input className={cn(fieldClass, "min-w-[14rem] flex-1")} placeholder="Only tests whose name matches (regex)…" value={pattern} onChange={(e) => setPattern(e.target.value)} />
+          <Button size="sm" disabled={disabled} onClick={() => start({ suite: "all" })}><PlayIcon className="mr-1 h-3.5 w-3.5" />{__("All")}</Button>
+          <Button size="sm" variant="outline" disabled={disabled} onClick={() => start({ suite: "unit" })}>{__("Unit")}</Button>
+          <Button size="sm" variant="outline" disabled={disabled} onClick={() => start({ suite: "integration" })}>{__("Integration")}</Button>
+          <Button size="sm" variant="outline" disabled={disabled || !picked.size} onClick={() => start({ files: [...picked].join(",") })}>{__("Selected (")}{picked.size})</Button>
+          {running && <Button size="sm" variant="destructive" onClick={() => debugCall("cancelTests", { id: run.id }).then(() => loadRun(run.id))}><SquareIcon className="mr-1 h-3.5 w-3.5" />{__("Stop")}</Button>}
+          <input className={cn(fieldClass, "min-w-[14rem] flex-1")} placeholder={__("Only tests whose name matches (regex)…")} value={pattern} onChange={(e) => setPattern(e.target.value)} />
         </div>
         {run && (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
             <StatusIcon status={run.status} />
             <Pill tone={RUN_TONE[run.status]}>{run.status}</Pill>
-            <Pill tone="success">{c.pass} passed</Pill>
-            <Pill tone={c.fail ? "danger" : "muted"}>{c.fail} failed</Pill>
-            {c.skip > 0 && <Pill>{c.skip} skipped</Pill>}
-            {c.cancelled > 0 && <Pill tone="warning">{c.cancelled} cancelled</Pill>}
+            <Pill tone="success">{c.pass} {__("passed")}</Pill>
+            <Pill tone={c.fail ? "danger" : "muted"}>{c.fail} {__("failed")}</Pill>
+            {c.skip > 0 && <Pill>{c.skip} {__("skipped")}</Pill>}
+            {c.cancelled > 0 && <Pill tone="warning">{c.cancelled} {__("cancelled")}</Pill>}
             <Pill>{fmtMs(run.durationMs)}</Pill>
             <span className="truncate text-xs text-muted-foreground">
               {run.args?.files?.length ? `${run.args.files.length} file(s)` : `suite: ${run.args?.suite}`}
@@ -227,15 +228,15 @@ export function TestsPanel() {
       </Panel>
 
       <Panel
-        title="Test files"
+        title={__("Test files")}
         actions={(
           <>
-            <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => setOpenFiles(new Set((files.data?.files || []).map((f) => f.file)))}>expand all</button>
-            <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => setOpenFiles(new Set())}>collapse all</button>
+            <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => setOpenFiles(new Set((files.data?.files || []).map((f) => f.file)))}>{__("expand all")}</button>
+            <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => setOpenFiles(new Set())}>{__("collapse all")}</button>
           </>
         )}
       >
-        {!Object.keys(groups).length ? <Empty>No test files under test/.</Empty> : Object.entries(groups).map(([suite, list]) => (
+        {!Object.keys(groups).length ? <Empty>{__("No test files under test/.")}</Empty> : Object.entries(groups).map(([suite, list]) => (
           <div key={suite} className="mb-3 last:mb-0">
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{suite}</div>
             <ul className="space-y-0.5">
@@ -260,7 +261,7 @@ export function TestsPanel() {
       </Panel>
 
       {runnerOutput.length > 0 && (
-        <Panel title="Runner output">
+        <Panel title={__("Runner output")}>
           <Console lines={runnerOutput.map((o) => o.text)} />
         </Panel>
       )}

@@ -1,6 +1,7 @@
 import { useViewOptions } from "@loopar/document";
 import { useDesigner } from "@context/designer-context";
 import { Plug } from "lucide-react";
+import { __ } from "@global/i18n";
 
 export default function MetaSlot(props) {
   const data = props.data || {};
@@ -23,10 +24,10 @@ export default function MetaSlot(props) {
       }}>
         <Plug size={14} style={{ flexShrink: 0, color: "var(--color-text-secondary)" }} />
         <span style={{ fontSize: 12, color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>
-          slot: <strong style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{ref}</strong>
+          {__("slot:")} <strong style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{ref}</strong>
         </span>
         <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>
-          runtime only
+          {__("runtime only")}
         </span>
       </div>
     );

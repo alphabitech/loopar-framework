@@ -9,7 +9,7 @@ export default class ProfileController extends PageController {
   // NOT a public one: public actions skip CSRF, and saving a profile is a
   // state change of the logged user.
   static freeActions = [
-    "view", "update", "setInfo", "changePassword",
+    "view", "update", "setInfo", "updateInfo", "changePassword", "changeProtected",
     "mfaStatus", "mfaSetup", "mfaEnable", "mfaDisable", "mfaRegenerateCodes",
   ]
   // State changes: POST only, so the CSRF check always applies.
@@ -30,13 +30,28 @@ export default class ProfileController extends PageController {
     return await super.render(user)
   }
 
+  /** Protected changes (email) apply to the logged user's own record. */
+  async protectedChangeTarget() {
+    return await loopar.newDocument("Profile");
+  }
+
   clientImporter(Document) {
     return "profile-form"
   }
 
   async actionUpdateInfo(){
     const profile = await loopar.newDocument("Profile");
+    const before = (await profile.rawValues())?.language || "";
     await profile.updateInfo(this.body)
+
+    // A new language needs a full reload: the page's dictionary is loaded
+    // before hydration. Reload IN PLACE (`refresh: 'hard'` → the client
+    // reloads its own URL). It used to rebuild the URL from the Referer, but
+    // the client sends `referrerPolicy: 'no-referrer'`, so it always fell
+    // back to /desk — saving the profile "redirected to the desk".
+    if ("language" in (this.body || {}) && (this.body.language || "") !== (before || "")) {
+      return this.reload();
+    }
 
     return this.success("Completed")
   }

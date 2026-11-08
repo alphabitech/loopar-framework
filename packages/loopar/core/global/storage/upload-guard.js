@@ -74,7 +74,17 @@ export const isPrivateIp = (ip) => {
     if (low === '::1' || low === '::') return true;     // loopback / unspecified
     if (low.startsWith('fc') || low.startsWith('fd')) return true; // ULA
     if (low.startsWith('fe80')) return true;            // link-local
-    if (low.startsWith('::ffff:')) return isPrivateIp(low.slice(7)); // mapped v4
+    if (low.startsWith('::ffff:')) {
+      const rest = low.slice(7);
+      if (net.isIPv4(rest)) return isPrivateIp(rest); // mapped v4, dotted
+      // mapped v4 in hex form (::ffff:7f00:1) → a.b.c.d
+      const m = rest.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+      if (m) {
+        const hi = parseInt(m[1], 16), lo = parseInt(m[2], 16);
+        return isPrivateIp(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+      }
+      return true; // unknown mapped form: refuse
+    }
     return false;
   }
   return false;
@@ -112,4 +122,28 @@ export async function assertSafeRemoteUrl(rawUrl) {
     err.status = 400; err.expose = true;
     throw err;
   }
+}
+
+/**
+ * fetch() for a user-supplied URL. assertSafeRemoteUrl() alone only checked
+ * the FIRST url: fetch follows redirects by default, so a public URL answering
+ * `302 Location: http://127.0.0.1/…` (or the cloud metadata address) reached
+ * the internal network anyway. Here every hop is validated before it is
+ * requested, redirects are followed by hand and capped.
+ */
+export async function fetchPublicUrl(rawUrl, init = {}, { maxRedirects = 5 } = {}) {
+  let url = String(rawUrl);
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    await assertSafeRemoteUrl(url);
+    const res = await fetch(url, { ...init, redirect: 'manual' });
+    const location = res.headers.get('location');
+    if (res.status >= 300 && res.status < 400 && location) {
+      url = new URL(location, url).href;
+      continue;
+    }
+    return res;
+  }
+  const err = new Error('Import URL redirected too many times.');
+  err.status = 400; err.expose = true;
+  throw err;
 }

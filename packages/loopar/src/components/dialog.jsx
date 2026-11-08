@@ -16,6 +16,7 @@ import {
 
 import { Label } from "@cn/components/ui/label";
 import { Textarea } from "@cn/components/ui/textarea";
+import { __ } from "@global/i18n";
 
 export { SlideButton };
 
@@ -219,7 +220,7 @@ const MetaDialog = (props) => {
                   return (
                     <SlideButton
                       key={b.name}
-                      text={props.slideText || b.text || "Slide to confirm"}
+                      text={__(props.slideText || b.text || "Slide to confirm")}
                       confirmedText={props.slideConfirmedText || "Confirmed"}
                       threshold={typeof props.slideThreshold === "number" ? props.slideThreshold : 0.95}
                       onConfirm={() => {
@@ -242,7 +243,7 @@ const MetaDialog = (props) => {
                     }}
                     ref={b.name === "ok" ? okButton : null}
                   >
-                    {b.content || b.text || b.label}
+                    {b.content || __(b.text || b.label)}
                   </Button>
                 );
               })}

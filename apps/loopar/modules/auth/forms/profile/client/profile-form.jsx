@@ -8,6 +8,7 @@ import fileManager from "@global/file-manager.js";
 import { useEffect, useState } from "react";
 import { Button } from "@cn/components/ui/button";
 import { Input } from "@cn/components/ui/input";
+import { __ } from "loopar";
 
 const UserInfo = ({user}) => {
   const profile_picture = fileManager.getImage({image: user.profile_picture}, "image")
@@ -32,7 +33,7 @@ const UserInfo = ({user}) => {
   
       <div className="flex items-center gap-1.5">
         <div className="w-2 h-2 rounded-full bg-teal-500" />
-        <span className="text-xs text-teal-700">Active</span>
+        <span className="text-xs text-teal-700">{__("Active")}</span>
       </div>
     </div>
   )
@@ -58,16 +59,15 @@ const RecoveryCodes = ({ codes, onDone }) => {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm">
-        Save these recovery codes somewhere safe. Each one works <strong>once</strong> if you lose
-        access to your authenticator app. They won't be shown again.
+        {__("Save these recovery codes somewhere safe. Each one works")} <strong>{__("once")}</strong> {__("if you lose access to your authenticator app. They won't be shown again.")}
       </p>
       <div className="grid grid-cols-2 gap-2 rounded-md border p-3 font-mono text-sm">
         {codes.map((c) => <span key={c}>{c}</span>)}
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" onClick={() => navigator.clipboard?.writeText(text)}>Copy</Button>
-        <Button type="button" variant="outline" onClick={download}>Download</Button>
-        <Button type="button" onClick={onDone}>I saved them</Button>
+        <Button type="button" variant="outline" onClick={() => navigator.clipboard?.writeText(text)}>{__("Copy")}</Button>
+        <Button type="button" variant="outline" onClick={download}>{__("Download")}</Button>
+        <Button type="button" onClick={onDone}>{__("I saved them")}</Button>
       </div>
     </div>
   );
@@ -115,7 +115,7 @@ const FactorPrompt = ({ title, actionLabel, destructive, onSubmit, onCancel }) =
         <Button type="submit" variant={destructive ? "destructive" : "default"} disabled={busy || !value.trim()}>
           {actionLabel}
         </Button>
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>{__("Cancel")}</Button>
       </div>
     </form>
   );
@@ -181,14 +181,13 @@ const MfaSettings = () => {
     <div className="flex flex-col gap-4 p-4 border-t border-border/40 mt-4">
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <h3 className="text-base font-semibold">Two-factor authentication</h3>
+          <h3 className="text-base font-semibold">{__("Two-factor authentication")}</h3>
           {status.enabled && !codes && (
-            <span className="text-xs font-medium px-2 py-0.5 rounded bg-teal-100 text-teal-800">Enabled</span>
+            <span className="text-xs font-medium px-2 py-0.5 rounded bg-teal-100 text-teal-800">{__("Enabled")}</span>
           )}
         </div>
         <p className="text-sm text-muted-foreground">
-          Protect your account with a code from an authenticator app (Google Authenticator,
-          Microsoft Authenticator, 1Password, Authy…) on top of your password.
+          {__("Protect your account with a code from an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Authy…) on top of your password.")}
         </p>
       </div>
 
@@ -196,13 +195,13 @@ const MfaSettings = () => {
         <RecoveryCodes codes={codes} onDone={done} />
       ) : setup ? (
         <form onSubmit={enable} className="flex flex-col gap-3">
-          <p className="text-sm">1. Scan this QR code with your authenticator app.</p>
-          <img src={setup.qr} alt="QR code for the authenticator app" width={220} height={220} className="rounded-md border bg-white p-2" />
+          <p className="text-sm">{__("1. Scan this QR code with your authenticator app.")}</p>
+          <img src={setup.qr} alt={__("QR code for the authenticator app")} width={220} height={220} className="rounded-md border bg-white p-2" />
           <p className="text-xs text-muted-foreground">
-            Can't scan it? Enter this key manually:{" "}
+            {__("Can't scan it? Enter this key manually:")}{" "}
             <code className="font-mono select-all break-all">{setup.secret.replace(/(.{4})/g, "$1 ").trim()}</code>
           </p>
-          <p className="text-sm">2. Enter the 6-digit code the app shows.</p>
+          <p className="text-sm">{__("2. Enter the 6-digit code the app shows.")}</p>
           <Input
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -213,8 +212,8 @@ const MfaSettings = () => {
             autoFocus
           />
           <div className="flex gap-2">
-            <Button type="submit" disabled={busy || code.length !== 6}>Verify and enable</Button>
-            <Button type="button" variant="ghost" onClick={() => setSetup(null)}>Cancel</Button>
+            <Button type="submit" disabled={busy || code.length !== 6}>{__("Verify and enable")}</Button>
+            <Button type="button" variant="ghost" onClick={() => setSetup(null)}>{__("Cancel")}</Button>
           </div>
         </form>
       ) : status.enabled ? (
@@ -231,17 +230,17 @@ const MfaSettings = () => {
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-sm">
-              Recovery codes left: <strong>{status.recovery_codes_left}</strong>
+              {__("Recovery codes left:")} <strong>{status.recovery_codes_left}</strong>
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={() => setPrompt("regenerate")}>New recovery codes</Button>
-              <Button type="button" variant="destructive" onClick={() => setPrompt("disable")}>Turn off</Button>
+              <Button type="button" variant="outline" onClick={() => setPrompt("regenerate")}>{__("New recovery codes")}</Button>
+              <Button type="button" variant="destructive" onClick={() => setPrompt("disable")}>{__("Turn off")}</Button>
             </div>
           </div>
         )
       ) : (
         <div>
-          <Button type="button" onClick={start} disabled={busy}>Turn on two-factor authentication</Button>
+          <Button type="button" onClick={start} disabled={busy}>{__("Turn on two-factor authentication")}</Button>
         </div>
       )}
     </div>
@@ -250,9 +249,31 @@ const MfaSettings = () => {
 
 export const config = { canUpdate: false, hasHeader: false };
 
+/** Outcome of the email-change confirmation link (/auth/confirmEmailChange). */
+const EMAIL_CHANGE_MESSAGES = {
+  invalid: "That confirmation link is not valid.",
+  expired_or_used: "That confirmation link expired or was already used. Request the change again.",
+  in_use: "That email address is already in use.",
+};
+
 export default function ProfileForm() {
   const { Document } = useDocument();
   const user = Document?.data || {};
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const changed = params.get("email_changed") === "1";
+    const failed = params.get("email_change");
+    if (!changed && !failed) return;
+    // After the toaster mounts (it listens from the workspace shell).
+    const t = setTimeout(() => {
+      loopar.notify(changed
+        ? { type: "success", message: __("Your email address was updated.") }
+        : { type: "error", message: __(EMAIL_CHANGE_MESSAGES[failed] || EMAIL_CHANGE_MESSAGES.invalid) });
+    }, 400);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <FormLayout

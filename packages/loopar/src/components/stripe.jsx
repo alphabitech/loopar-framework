@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import loopar from "loopar";
 import { Modal } from "@dialog";
+import { __ } from "@global/i18n";
 
 const STRIPE_JS = "https://js.stripe.com/v3/";
 
@@ -89,17 +90,16 @@ export default function Stripe({ data = {}, designer, buttonClassName, onClose }
         onClose={() => { setOpen(false); onClose?.(); }}
       >
         <small className="text-muted">
-          Your payment is secure with us. We've partnered with Stripe, a trusted
-          and industry-leading payment platform.
+          {__("Your payment is secure with us. We've partnered with Stripe, a trusted and industry-leading payment platform.")}
         </small>
         <form className="card-form" onSubmit={pay}>
           <div className="card-body">
             <div className="form-group">
-              <input ref={nameRef} className="form-control" name="name" type="text" placeholder="Name on card" aria-label="Name on card" />
+              <input ref={nameRef} className="form-control" name="name" type="text" placeholder={__("Name on card")} aria-label={__("Name on card")} />
             </div>
             <div className="form-group">
               <div className="form-control" style={{ height: 55 }}>
-                <div ref={cardRef} aria-label="Credit or debit card" />
+                <div ref={cardRef} aria-label={__("Credit or debit card")} />
               </div>
             </div>
             <div className="form-group">

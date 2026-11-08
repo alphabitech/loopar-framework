@@ -12,9 +12,11 @@ import { LogOutIcon, UserRoundCogIcon } from "lucide-react";
 import { MainNav, MenuItems } from "./main-nav";
 import { Logo } from "./logo";
 import { ThemeToggle } from "@workspace/theme-toggle";
+import { LanguageSwitcher } from "./language-switcher";
 import { BaseIcon } from "@base-icons";
 import { useWorkspace } from "@workspace/workspace-provider";
 import { AnnouncementBar, useAnnouncementScroll } from "./announcement-bar";
+import { __ } from "@global/i18n";
 
 function UserMenu({ onOpenLogin, onOpenProfile }) {
   // `user` is reactive (WorkspaceProvider refreshes it on `auth:changed`), so
@@ -39,7 +41,7 @@ function UserMenu({ onOpenLogin, onOpenProfile }) {
         inModal
         className={`${buttonVariants({ size: "sm", variant: "ghost" })} hover:text-primary`}
       >
-        Sign in
+        {__("Sign in")}
       </Link>
     );
   }
@@ -52,7 +54,7 @@ function UserMenu({ onOpenLogin, onOpenProfile }) {
       <DropdownMenuTrigger asChild>
         <button
           className={`${buttonVariants({ size: "icon", variant: "ghost" })} cursor-pointer rounded-full overflow-hidden`}
-          aria-label="User menu"
+          aria-label={__("User menu")}
         >
           {me.profilePicture ? (
             <img
@@ -79,14 +81,14 @@ function UserMenu({ onOpenLogin, onOpenProfile }) {
               onClick={onOpenProfile}
               className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`}
             >
-              <UserRoundCogIcon className="mr-2 h-4 w-4" /> Profile
+              <UserRoundCogIcon className="mr-2 h-4 w-4" /> {__("Profile")}
             </button>
           )}
           <button
             onClick={handleLogout}
             className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`}
           >
-            <LogOutIcon className="mr-2 h-4 w-4" /> Log Out
+            <LogOutIcon className="mr-2 h-4 w-4" /> {__("Log Out")}
           </button>
         </div>
       </DropdownMenuContent>
@@ -112,9 +114,9 @@ function MenuActions({ menuActions = [], onOpenLogin, onOpenProfile }) {
           return (
             <span key={key} className="contents">
               <a href={action.action} {...target} className={cn(buttonVariants({ size: "sm" }), "hidden lg:inline-flex mr-2")}>
-                {action.label}
+                {__(action.label)}
               </a>
-              <a href={action.action} {...target} className="hover:text-primary lg:hidden" aria-label={action.label}>
+              <a href={action.action} {...target} className="hover:text-primary lg:hidden" aria-label={__(action.label)}>
                 <div className={`${classVariant} hover:text-primary`}>
                   <BaseIcon icon={action.icon} className="h-5 w-5" />
                 </div>
@@ -137,6 +139,7 @@ function MenuActions({ menuActions = [], onOpenLogin, onOpenProfile }) {
           </a>
         );
       })}
+      <LanguageSwitcher />
       <ThemeToggle />
       <UserMenu onOpenLogin={onOpenLogin} onOpenProfile={onOpenProfile} />
     </nav>

@@ -1,5 +1,6 @@
 'use strict'
 
+import { __ } from '../global/i18n.js';
 import BaseController from './base-controller.js';
 import { loopar } from "loopar";
 import {parseDocStructure} from '../document/tools.js';
@@ -177,7 +178,7 @@ export default class SingleController extends BaseController {
         require_login_to_comment: loopar.utils.trueToBinary(pageRef.require_login_to_comment),
       },
       activeParentMenu: await this.getParent(),
-      __DOCUMENT_TITLE__: requestContext._detailTitle || menu?.link || this.document,
+      __DOCUMENT_TITLE__: requestContext._detailTitle || (menu?.link ? __(menu.link) : this.document),
       exactTitle: requestContext._detailTitle || seoTitle(document.__ENTITY__?.doc_structure) || null,
       ...(detailSlug? { __DETAIL_SLUG__: detailSlug } : {}),
       ...data,

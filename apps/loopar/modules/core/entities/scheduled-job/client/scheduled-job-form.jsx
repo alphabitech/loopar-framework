@@ -4,6 +4,7 @@ import { useForm, FormLayout } from '@loopar/form';
 import { loopar } from 'loopar';
 import { Button } from '@cn/components/ui/button';
 import { Play } from 'lucide-react';
+import { __ } from "loopar";
 
 export default function ScheduledJobForm() {
   const { getValue } = useForm();
@@ -25,7 +26,7 @@ export default function ScheduledJobForm() {
 
   return (
     <FormLayout
-      actions={name ? { runNow: <Button variant="secondary" onClick={runNow}><Play className="mr-2 size-4" /> Run now</Button> } : {}}
+      actions={name ? { runNow: <Button variant="secondary" onClick={runNow}><Play className="mr-2 size-4" /> {__("Run now")}</Button> } : {}}
     />
   );
 }

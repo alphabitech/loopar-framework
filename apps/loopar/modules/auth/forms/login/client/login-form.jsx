@@ -7,6 +7,7 @@ import {useNavigate} from 'react-router';
 import loopar from 'loopar';
 import { Button } from '@cn/components/ui/button';
 import { Input } from '@cn/components/ui/input';
+import { __ } from "loopar";
 
 /** Inline brand logos, keyed by provider. Avoids any icon-package dependency. */
 const ProviderIcons = {
@@ -146,7 +147,7 @@ function OAuthButtons({ inModal, onClose, onMfaRequired }) {
     <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', opacity: 0.55, fontSize: '0.8rem' }}>
         <span style={{ flex: 1, height: 1, background: 'currentColor', opacity: 0.25 }} />
-        or
+        {__("or")}
         <span style={{ flex: 1, height: 1, background: 'currentColor', opacity: 0.25 }} />
       </div>
       {error && (
@@ -255,7 +256,7 @@ function MfaStep({ inModal, onClose, onBack }) {
       className="flex flex-col gap-4 p-6"
     >
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">Two-factor authentication</h2>
+        <h2 className="text-lg font-semibold">{__("Two-factor authentication")}</h2>
         <p className="text-sm text-muted-foreground">
           {mode === 'code'
             ? 'Enter the 6-digit code from your authenticator app.'
@@ -296,7 +297,7 @@ function MfaStep({ inModal, onClose, onBack }) {
           className="underline-offset-4 hover:underline text-muted-foreground"
           onClick={back}
         >
-          Back to sign in
+          {__("Back to sign in")}
         </button>
       </div>
     </form>

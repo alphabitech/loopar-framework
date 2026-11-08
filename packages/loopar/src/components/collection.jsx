@@ -3,6 +3,7 @@ import { loopar } from "loopar";
 import { ChevronLeftIcon, ChevronRightIcon, Loader2 } from "lucide-react";
 
 import DefaultCard from "./collection/default-card.jsx";
+import { __ } from "@global/i18n";
 
 const cardModules = import.meta.glob("./*-card.jsx", { eager: true });
 
@@ -55,7 +56,7 @@ function Pagination({ page, totalPages, onChange }) {
 
   return (
     <div className="flex items-center justify-center gap-1 mt-8">
-      <button type="button" onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className={`${btn(false)} disabled:opacity-40 disabled:cursor-not-allowed`} aria-label="Previous page">
+      <button type="button" onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className={`${btn(false)} disabled:opacity-40 disabled:cursor-not-allowed`} aria-label={__("Previous page")}>
         <ChevronLeftIcon className="w-4 h-4 inline" />
       </button>
       {pages.map((p, i) =>
@@ -65,7 +66,7 @@ function Pagination({ page, totalPages, onChange }) {
           <button type="button" key={p} onClick={() => onChange(p)} className={btn(p === page)}>{p}</button>
         )
       )}
-      <button type="button" onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className={`${btn(false)} disabled:opacity-40 disabled:cursor-not-allowed`} aria-label="Next page">
+      <button type="button" onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className={`${btn(false)} disabled:opacity-40 disabled:cursor-not-allowed`} aria-label={__("Next page")}>
         <ChevronRightIcon className="w-4 h-4 inline" />
       </button>
     </div>
@@ -150,7 +151,7 @@ export default function Collection({ data = {} }) {
     return (
       <section className="w-full py-12 px-4 min-h-section-min">
         <div className="max-w-3xl mx-auto text-center text-sm text-muted-foreground">
-          Collection has no entity configured. Set the <code>options</code> field.
+          {__("Collection has no entity configured. Set the")} <code>options</code> {__("field.")}
         </div>
       </section>
     );

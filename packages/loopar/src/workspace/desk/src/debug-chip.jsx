@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@cn/components/ui/dropdown-menu";
 import { BugIcon } from "lucide-react";
+import { __ } from "@global/i18n";
 
 /**
  * Debugger chip (desk header) — the Yii/Laravel debug toolbar, folded into
@@ -67,16 +68,16 @@ export function DebugChip() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          title="Debugger — your latest request"
+          title={__("Debugger — your latest request")}
           className={`inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 font-mono text-[11px] hover:bg-accent ${tone(last, state.errors)}`}
         >
           <BugIcon className="h-3.5 w-3.5" />
-          {last ? <span>{ms(last.durationMs)} · {last.queryCount}q</span> : <span>debug</span>}
+          {last ? <span>{ms(last.durationMs)} · {last.queryCount}q</span> : <span>{__("debug")}</span>}
           {state.errors > 0 && <span className="rounded bg-red-500 px-1 text-white">{state.errors}</span>}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[26rem] bg-card p-1">
-        <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Your latest requests</div>
+        <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{__("Your latest requests")}</div>
         {(state.recent || []).map((r) => (
           <Link
             key={r.id}
@@ -91,10 +92,10 @@ export function DebugChip() {
             <span className="w-8 text-right">{r.queryCount}q</span>
           </Link>
         ))}
-        {!state.recent?.length && <div className="px-2 py-2 text-xs text-muted-foreground">Nothing recorded yet.</div>}
+        {!state.recent?.length && <div className="px-2 py-2 text-xs text-muted-foreground">{__("Nothing recorded yet.")}</div>}
         <div className="mt-1 border-t border-border pt-1">
           <Link to="/desk/Debugger/view" variant="ghost" className="block rounded px-2 py-1 text-xs hover:bg-accent">
-            Open Debugger{state.errors > 0 ? ` · ${state.errors} new error${state.errors > 1 ? "s" : ""}` : ""}
+            {__("Open Debugger")}{state.errors > 0 ? ` · ${state.errors} new error${state.errors > 1 ? "s" : ""}` : ""}
           </Link>
         </div>
       </DropdownMenuContent>

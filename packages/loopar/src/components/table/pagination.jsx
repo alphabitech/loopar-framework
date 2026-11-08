@@ -2,6 +2,7 @@ import { Button } from "@cn/components/ui/button";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useId } from "react";
 import { useTable } from "./TableContext"
+import { __ } from "@global/i18n";
 
 export function Pagination() {
   const { pagination, setPage } = useTable();
@@ -52,7 +53,7 @@ export function Pagination() {
   return (
     <div className="flex-col-2 justify-content flex flex-row border bg-slate-100/80 py-2 pr-2 dark:bg-slate-900/60">
       <div className="w-full p-3 pt-4">
-        Showing {initial} to {final} of {totalRecords} entries
+        {__("Showing {0} to {1} of {2} entries", [initial, final, totalRecords])}
       </div>
       <div className="w-full">
         <ul

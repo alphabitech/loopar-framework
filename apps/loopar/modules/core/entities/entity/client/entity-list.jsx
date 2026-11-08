@@ -20,6 +20,7 @@ import {
   SlidersHorizontalIcon,
   TextCursorInputIcon,
 } from 'lucide-react';
+import { __ } from "loopar";
 
 /** Avatar icon per document type (what the card opens). */
 const TYPE_ICONS = {
@@ -139,7 +140,7 @@ function CardTemplate({ row }) {
           {canCreate && (
             <IconLink to={`/desk/${row.name}/create`} title={`New ${row.name}`}><PlusIcon /></IconLink>
           )}
-          <IconLink to={definitionUrl} title="Edit definition"><BrushIcon /></IconLink>
+          <IconLink to={definitionUrl} title={__("Edit definition")}><BrushIcon /></IconLink>
         </div>
       </div>
 

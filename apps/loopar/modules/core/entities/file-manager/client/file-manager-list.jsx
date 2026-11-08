@@ -16,6 +16,7 @@ import { useTable } from "@@table/TableContext";
 import { useDialogContext} from "@dialog";
 import Emitter from '@services/emitter/emitter';
 import { useEffect, useState } from "react";
+import { __ } from "loopar";
 
 const ListenerSelect = ({onSelect}) => {
   useEffect(() => {
@@ -175,7 +176,7 @@ export default function FileManagerList() {
       }}
     >
       <UploadIcon className="pr-1" />
-      Upload
+      {__("Upload")}
     </Button>
   );
 

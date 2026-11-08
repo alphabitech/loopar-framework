@@ -1,6 +1,6 @@
 'use strict';
 
-import { BaseDocument, loopar } from 'loopar';
+import { BaseDocument, loopar, invalidateRegional } from 'loopar';
 import { usesCompanyBrand } from '../system-settings/theme-css.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -26,6 +26,7 @@ export default class Company extends BaseDocument {
 
   async save() {
     await super.save(...arguments);
+    invalidateRegional();
     await Company.refreshBrandThemes();
   }
 

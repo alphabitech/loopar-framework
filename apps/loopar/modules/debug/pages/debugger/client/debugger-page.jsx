@@ -11,6 +11,7 @@ import { RequestsPanel, RequestDetail, clearBuffer } from "../../../ui/requests.
 import { DatabasePanel, LogsPanel, ErrorsPanel, StatusPanel } from "../../../ui/panels.jsx";
 import { TestsPanel } from "../../../ui/tests.jsx";
 import { ApiPanel } from "../../../ui/tokens.jsx";
+import { __ } from "loopar";
 
 const TABS = [
   { key: "requests", label: "Requests" },
@@ -71,35 +72,35 @@ function Debugger({ data }) {
         <div className="flex items-center gap-3">
           <BugIcon className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="text-xl font-bold text-foreground">Debugger</h1>
+            <h1 className="text-xl font-bold text-foreground">{__("Debugger")}</h1>
             <div className="mt-0.5 flex flex-wrap gap-1.5">
               <Pill tone={enabled ? "success" : "muted"}>{enabled ? "recording" : "off"}</Pill>
               <Pill tone={f.mode === "production" ? "warning" : "info"}>{f.mode}</Pill>
-              {f.build && <Pill>build {f.build}</Pill>}
+              {f.build && <Pill>{__("build")} {f.build}</Pill>}
               <Pill>{f.name} {f.version}</Pill>
-              <Pill>node {f.node}</Pill>
-              <Pill>up {fmtDuration(f.uptimeSec)}</Pill>
+              <Pill>{__("node")} {f.node}</Pill>
+              <Pill>{__("up")} {fmtDuration(f.uptimeSec)}</Pill>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {LIVE_TABS.has(tab) && (
-            <Button size="sm" variant={live ? "secondary" : "outline"} onClick={() => setLive((l) => !l)} title="New requests, logs and errors stream in over the realtime socket">
+            <Button size="sm" variant={live ? "secondary" : "outline"} onClick={() => setLive((l) => !l)} title={__("New requests, logs and errors stream in over the realtime socket")}>
               {live ? <PauseIcon className="mr-1 h-3.5 w-3.5" /> : <PlayIcon className="mr-1 h-3.5 w-3.5" />}{live ? "Live" : "Paused"}
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={() => setRefreshKey((k) => k + 1)}><RefreshCwIcon className="mr-1 h-3.5 w-3.5" />Refresh</Button>
+          <Button size="sm" variant="outline" onClick={() => setRefreshKey((k) => k + 1)}><RefreshCwIcon className="mr-1 h-3.5 w-3.5" />{__("Refresh")}</Button>
           <Button size="sm" variant="outline" onClick={async () => { await clearBuffer().catch(() => {}); setSelected(null); setRefreshKey((k) => k + 1); }}>
-            <Trash2Icon className="mr-1 h-3.5 w-3.5" />Clear
+            <Trash2Icon className="mr-1 h-3.5 w-3.5" />{__("Clear")}
           </Button>
         </div>
       </header>
 
       {!enabled && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-          The collector is off (the default in production). To record requests, SQL, logs and errors set
-          <code className="mx-1 rounded bg-background px-1">"debug": true</code> in <code className="rounded bg-background px-1">config/core.json</code>
-          (or <code className="rounded bg-background px-1">LOOPAR_DEBUG=1</code>) and restart the core. Status, Tests and API access work regardless.
+          {__("The collector is off (the default in production). To record requests, SQL, logs and errors set")}
+          <code className="mx-1 rounded bg-background px-1">"debug": true</code> {__("in")} <code className="rounded bg-background px-1">config/core.json</code>
+          {__("(or")} <code className="rounded bg-background px-1">LOOPAR_DEBUG=1</code>{__(") and restart the core. Status, Tests and API access work regardless.")}
         </div>
       )}
 

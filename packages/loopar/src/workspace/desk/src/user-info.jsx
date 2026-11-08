@@ -8,6 +8,7 @@ import {
 import { Link } from "@link"
 import { buttonVariants } from "@cn/components/ui/button"
 import { User2Icon, UserRoundCogIcon, LogOutIcon, Globe2Icon } from "lucide-react"
+import { __ } from "@global/i18n";
 
 const MakeButton = ({ Icon, text, link, notControlled, onClick, ...props }) => (
   <Link
@@ -33,7 +34,7 @@ export function UserInfo() {
           })} cursor-pointer`}
         >
           <User2Icon />
-          <span className="sr-only">User</span>
+          <span className="sr-only">{__("User")}</span>
         </div>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

@@ -39,6 +39,7 @@
     "activate": "node bin/build/activate-staging.js",
     "watch": "node bin/cli/index.js watch",
     "deps": "yarn install --immutable --inline-builds",
+    "i18n:extract": "node packages/loopar/bin/i18n/extract.js",
     "test": "node --test --test-force-exit \"test/**/*.test.js\"",
     "test:unit": "node --test \"test/unit/**/*.test.js\""
   }

@@ -1,6 +1,7 @@
 import MarkdownPreview from '@uiw/react-markdown-preview';
 import remarkMdxHtml from 'markdown/remark-mdx-html';
 import { ErrorBoundary } from 'react-error-boundary';
+import { __ } from "@global/i18n";
 
 /**
  * Read-only markdown rendering. Kept apart from markdown.jsx on purpose:
@@ -13,7 +14,7 @@ const remarkPlugins = [remarkMdxHtml];
 
 const ParseError = ({ error, source }) => (
   <div className="wmde-markdown wmde-markdown-color">
-    <p className="text-destructive text-sm">Markdown error: {error.message}</p>
+    <p className="text-destructive text-sm">{__("Markdown error:")} {error.message}</p>
     <pre style={{ whiteSpace: 'pre-wrap' }}>{source}</pre>
   </div>
 );

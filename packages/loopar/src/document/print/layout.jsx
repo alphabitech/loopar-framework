@@ -10,6 +10,7 @@ import { LetterheadBlock, LetterheadFooter } from "./letterhead";
 import { usePersist } from "@services/persist-state";
 import { Button } from "@cn/components/ui/button";
 import { PrinterIcon } from "lucide-react";
+import { __ } from "@global/i18n";
 
 export const PAPER_SIZES = {
   letter: { label: "Letter", css: "letter", width: "8.5in", height: "11in" },
@@ -74,26 +75,26 @@ export const PrintLayout = defineLayout("PrintLayout", ({ ctrl, children }) => {
     printFormat: formats.length > 0 && Document.name ? (
       <select
         key="printFormat"
-        aria-label="Print format"
+        aria-label={__("Print format")}
         className={selectClass}
         value={format?.name || STANDARD}
         onChange={(e) => loopar.navigate(printUrl(e.target.value))}
       >
-        <option value={STANDARD}>Standard</option>
+        <option value={STANDARD}>{__("Standard")}</option>
         {formats.map((f) => <option key={f.name} value={f.name}>{f.name}{f.is_default ? " (default)" : ""}</option>)}
       </select>
     ) : null,
     printPaper: (
-      <select key="printPaper" aria-label="Paper size" className={selectClass} value={paper}
+      <select key="printPaper" aria-label={__("Paper size")} className={selectClass} value={paper}
         disabled={!!format?.paper_size} onChange={(e) => setPaper(e.target.value)}>
         {Object.entries(PAPER_SIZES).map(([key, p]) => <option key={key} value={key}>{p.label}</option>)}
       </select>
     ),
     printOrientation: (
-      <select key="printOrientation" aria-label="Orientation" className={selectClass} value={orientation}
+      <select key="printOrientation" aria-label={__("Orientation")} className={selectClass} value={orientation}
         disabled={!!format?.orientation} onChange={(e) => setOrientation(e.target.value)}>
-        <option value="portrait">Portrait</option>
-        <option value="landscape">Landscape</option>
+        <option value="portrait">{__("Portrait")}</option>
+        <option value="landscape">{__("Landscape")}</option>
       </select>
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -103,7 +104,7 @@ export const PrintLayout = defineLayout("PrintLayout", ({ ctrl, children }) => {
   const printNow = (
     <Button key="printNow" onClick={() => window.print()}>
       <PrinterIcon className="pr-1" />
-      Print
+      {__("Print")}
     </Button>
   );
 

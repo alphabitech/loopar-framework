@@ -40,36 +40,30 @@ export default class AI extends BaseDocument {
     };
   }
 
-  async prompt(data) {
-    const { prompt, document_type } = data;
-    const current = loopar.utils.isJSON(data.current) ? JSON.parse(data.current) : null;
+  /**
+   * One chat completion that must answer JSON, with the degradation ladder
+   * every caller needs: strict json_schema (OpenAI, Ollama) → json_object
+   * (DeepSeek) → unconstrained. chat.completions is the surface every
+   * OpenAI-compatible provider implements; /responses is OpenAI-only.
+   * Returns the raw text of the answer (callers parse it tolerantly).
+   */
+  async completeJSON({ system, user, schema = null, name = "response" }) {
     const { model, apiKey, baseURL, params } = await this.getSettings();
-
     const client = new OpenAI({ apiKey, baseURL });
-    const p = AIPrompt(prompt, document_type, current);
-    const format = AIStructureSchema(document_type);
-
-    // chat.completions is the surface every OpenAI-compatible provider
-    // implements (DeepSeek, Ollama, Anthropic/Google compat); /responses is OpenAI-only.
     const messages = [
-      { role: "system", content: p.system.content },
-      { role: "user", content: p.user.content }
+      { role: "system", content: system },
+      { role: "user", content: user }
     ];
 
     const call = (extra = {}) => client.chat.completions.create({ model, messages, ...extra, ...params });
 
-    // Degradation ladder: strict json_schema (OpenAI, Ollama) -> json_object
-    // (DeepSeek) -> unconstrained. Parsing below tolerates any of the three.
     let response;
     try {
-      response = await call({
-        response_format: {
-          type: "json_schema",
-          json_schema: { name: format.name, schema: format.schema, strict: true }
-        }
-      });
+      response = schema
+        ? await call({ response_format: { type: "json_schema", json_schema: { name, schema, strict: true } } })
+        : await call({ response_format: { type: "json_object" } });
     } catch (error) {
-      console.warn("AI: provider rejected json_schema, trying json_object:", error.message);
+      console.warn("AI: provider rejected the structured format, trying json_object:", error.message);
       try {
         response = await call({ response_format: { type: "json_object" } });
       } catch (error2) {
@@ -78,9 +72,21 @@ export default class AI extends BaseDocument {
       }
     }
 
-    console.log(["AI Provider R", response.choices[0].message.content])
+    return response.choices[0].message.content || "";
+  }
 
-    const content = response.choices[0].message.content;
+  async prompt(data) {
+    const { prompt, document_type } = data;
+    const current = loopar.utils.isJSON(data.current) ? JSON.parse(data.current) : null;
+    const p = AIPrompt(prompt, document_type, current);
+    const format = AIStructureSchema(document_type);
+
+    const content = await this.completeJSON({
+      system: p.system.content,
+      user: p.user.content,
+      schema: format.schema,
+      name: format.name,
+    });
 
     let elements;
     try {

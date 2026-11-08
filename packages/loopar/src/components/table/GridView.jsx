@@ -15,6 +15,7 @@ import { TableSearch } from "./TableSearch";
 import { EmptyTable } from "./EmptyTable";
 import { DropdownListGridActions } from "./DropdownListGridActions";
 import { RowMenu } from "./RowMenu.jsx";
+import { __ } from "@global/i18n";
 
 const MAX_DETAILS = 4;
 
@@ -24,8 +25,8 @@ const isEmpty = (v) => v === null || v === undefined || v === "";
 function DetailValue({ col, value }) {
   if ([SWITCH, CHECKBOX].includes(col.element)) {
     return loopar.utils.trueValue(value)
-      ? <CheckIcon className="h-3.5 w-3.5 text-emerald-500" aria-label="Yes" />
-      : <span className="text-muted-foreground" aria-label="No">—</span>;
+      ? <CheckIcon className="h-3.5 w-3.5 text-emerald-500" aria-label={__("Yes")} />
+      : <span className="text-muted-foreground" aria-label={__("No")}>—</span>;
   }
   if (col.element === ICON_INPUT) {
     return isEmpty(value) ? <span className="text-muted-foreground">—</span> : <DynamicIcon className="h-4 w-4" icon={value} />;

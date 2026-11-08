@@ -11,6 +11,7 @@ import { isEqual } from 'es-toolkit/predicate';
 import { debounce } from 'es-toolkit/function';
 import { useDocument, useViewOptions } from "@loopar/document";
 import { ReadField, readsAsValue } from "./read-field";
+import { ProtectedField } from "./protected-change";
 
 const inputReducer = (state, action) => {
   switch (action.type) {
@@ -235,8 +236,24 @@ const BaseInput = (props) => {
           }, [field.onChange, isDisabled]);
 
           const elementName = typeof element === "string" ? element : element?.element;
+          // write_policy "protected": shown read-only, changed only through the
+          // verified dialog (the server pins `protected_change` on the field).
+          const withChange = (node) => (!designerMode && [1, "1", true].includes(state.data.protected_change))
+            ? (
+              <ProtectedField
+                entity={ownerDocument?.Entity?.name}
+                name={ownerDocument?.name}
+                field={state.data.name}
+                label={state.data.label}
+                element={elementName}
+              >
+                {node}
+              </ProtectedField>
+            )
+            : node;
+
           if (readMode && readsAsValue(elementName, state.data)) {
-            return (
+            return withChange(
               <ReadField
                 element={elementName}
                 data={state.data}
@@ -247,7 +264,7 @@ const BaseInput = (props) => {
             );
           }
 
-          return (
+          return withChange(
             <FormItem
               className={cn("flex flex-col rounded shadow-sm", readMode && "pointer-events-none", className)}
               aria-readonly={readMode || undefined}
@@ -279,6 +296,8 @@ const BaseInput = (props) => {
     readMode,
     element,
     withoutLabel,
+    designerMode,
+    ownerDocument,
   ]);
 
   if (propRender) {
@@ -308,9 +327,31 @@ BaseInput.metaFields = () => {
         unique: { element: SWITCH },
         set_only_time: { element: SWITCH },
         readonly: { element: SWITCH },
+        write_policy: {
+          element: SELECT,
+          data: {
+            label: "Write policy",
+            options: ["editable", "create_only", "readonly", "protected", "system"],
+            description: "Enforced on the server. editable: any user allowed to save the record. create_only: only when created. readonly: never from a form (server code only). protected: only through the verified \"Change\" dialog (password re-check) — e.g. email, password. system: never from a form nor the dialog (2FA secrets, tokens).",
+          }
+        },
+        write_roles: {
+          element: INPUT,
+          data: {
+            label: "Write roles",
+            description: "Optional, comma separated: only these roles (and the Administrator) may write the field. Enforced on the server.",
+          }
+        },
         in_list_view: { element: SWITCH },
         print_hide: { element: SWITCH },
         searchable: { element: SWITCH },
+        translatable: {
+          element: SWITCH,
+          data: {
+            label: "Translatable",
+            description: "Text fields: the record keeps a value per website language (edited in its Translations section)."
+          }
+        },
         internal: {
           element: SWITCH,
           data: {

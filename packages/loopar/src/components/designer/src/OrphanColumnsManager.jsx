@@ -14,6 +14,7 @@ import {
   ShieldOff,
   ShieldCheck,
 } from "lucide-react";
+import { __ } from "@global/i18n";
 
 const COLUMN_STATES = {
   ORPHAN: "orphan",
@@ -43,7 +44,7 @@ function StatusBadge({ col }) {
       <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded
                        bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
         <ShieldOff size={11} />
-        released
+        {__("released")}
       </span>
     );
   }
@@ -52,7 +53,7 @@ function StatusBadge({ col }) {
       <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded
                        bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
         <ShieldCheck size={11} />
-        pending restore
+        {__("pending restore")}
       </span>
     );
   }
@@ -61,7 +62,7 @@ function StatusBadge({ col }) {
       <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded
                        bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
         <XCircle size={11} />
-        NOT NULL
+        {__("NOT NULL")}
       </span>
     );
   }
@@ -69,7 +70,7 @@ function StatusBadge({ col }) {
     <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded
                      bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
       <CheckCircle2 size={11} />
-      nullable
+      {__("nullable")}
     </span>
   );
 }
@@ -93,9 +94,9 @@ const CONFIRM_CONFIG = {
     body: (col, doc) => (
       <>
         <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">{col.name}</code>
-        {" "}will be permanently removed from{" "}
+        {" "}{__("will be permanently removed from")}{" "}
         <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">{doc}</code>.
-        {" "}<strong className="text-red-500">All data in this column will be lost</strong> and this action cannot be undone.
+        {" "}<strong className="text-red-500">{__("All data in this column will be lost")}</strong> {__("and this action cannot be undone.")}
       </>
     ),
   },
@@ -104,11 +105,11 @@ const CONFIRM_CONFIG = {
     title:      "Release column constraints?",
     body: (col) => (
       <>
-        Removes <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">NOT NULL</code>,{" "}
-        <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">DEFAULT</code> and{" "}
-        <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">UNIQUE</code> from{" "}
+        {__("Removes")} <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">NOT NULL</code>,{" "}
+        <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">DEFAULT</code> {__("and")}{" "}
+        <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">UNIQUE</code> {__("from")}{" "}
         <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">{col.name}</code>.
-        {" "}The column stays in the database and data is preserved.
+        {" "}{__("The column stays in the database and data is preserved.")}
       </>
     ),
   },
@@ -118,9 +119,8 @@ const CONFIRM_CONFIG = {
     body: (col) => (
       <>
         <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">{col.name}</code>
-        {" "}will be re-added to the field structure on the next{" "}
-        <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">makeTable</code> call.
-        Existing data is preserved.
+        {" "}{__("will be re-added to the field structure on the next")}{" "}
+        <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono">makeTable</code> {__("call. Existing data is preserved.")}
       </>
     ),
   },
@@ -132,7 +132,7 @@ function EmptyState() {
     <div className="flex flex-col items-center justify-center py-16 gap-3
                     text-zinc-400 dark:text-zinc-600">
       <Database size={32} strokeWidth={1.25} />
-      <p className="text-sm">No orphan columns found</p>
+      <p className="text-sm">{__("No orphan columns found")}</p>
     </div>
   );
 }
@@ -152,7 +152,7 @@ function ColumnRow({ col, onAction }) {
           </code>
           {col.default !== null && col.default !== undefined && (
             <span className="text-[10px] text-zinc-400 dark:text-zinc-600">
-              default: {String(col.default)}
+              {__("default:")} {String(col.default)}
             </span>
           )}
         </div>
@@ -175,12 +175,12 @@ function ColumnRow({ col, onAction }) {
 
       <td className="py-3 pl-3 pr-4">
         {col.state === COLUMN_STATES.RESTORED ? (
-          <span className="text-xs text-zinc-400 italic">queued</span>
+          <span className="text-xs text-zinc-400 italic">{__("queued")}</span>
         ) : (
           <div className="flex items-center gap-1.5 justify-end">
             <button
               disabled={col.state === COLUMN_STATES.RELEASED}
-              title="Release constraints (NOT NULL, UNIQUE)"
+              title={__("Release constraints (NOT NULL, UNIQUE)")}
               onClick={() => onAction(ACTIONS.RELEASE, col)}
               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg
                          border border-amber-200 dark:border-amber-900/60
@@ -190,11 +190,11 @@ function ColumnRow({ col, onAction }) {
                          transition-colors"
             >
               <Unlock size={12} />
-              Release
+              {__("Release")}
             </button>
 
             <button
-              title="Restore column to field structure"
+              title={__("Restore column to field structure")}
               onClick={() => onAction(ACTIONS.RESTORE, col)}
               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg
                          border border-blue-200 dark:border-blue-900/60
@@ -203,11 +203,11 @@ function ColumnRow({ col, onAction }) {
                          transition-colors"
             >
               <RotateCcw size={12} />
-              Restore
+              {__("Restore")}
             </button>
 
             <button
-              title="Drop column permanently from the table"
+              title={__("Drop column permanently from the table")}
               onClick={() => onAction(ACTIONS.DROP, col)}
               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg
                          border border-red-200 dark:border-red-900/60
@@ -216,7 +216,7 @@ function ColumnRow({ col, onAction }) {
                          transition-colors"
             >
               <Trash2 size={12} />
-              Drop
+              {__("Drop")}
             </button>
           </div>
         )}
@@ -365,10 +365,10 @@ export function OrphanColumnsManager({
             </div>
             <div>
               <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                Orphan columns
+                {__("Orphan columns")}
               </h2>
               <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
-                <code className="font-mono">{doc}</code> — {cols.length} column{cols.length !== 1 ? "s" : ""} removed from field structure
+                <code className="font-mono">{doc}</code> — {cols.length} {__("column")}{cols.length !== 1 ? "s" : ""} {__("removed from field structure")}
               </p>
             </div>
           </div>
@@ -383,7 +383,7 @@ export function OrphanColumnsManager({
                        disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-            Refresh
+            {__("Refresh")}
           </button>
         </div>
 
@@ -394,9 +394,7 @@ export function OrphanColumnsManager({
                           text-red-700 dark:text-red-400">
             <AlertTriangle size={14} className="mt-0.5 shrink-0" />
             <p className="text-xs leading-relaxed">
-              One or more orphan columns still carry <strong>NOT NULL</strong> constraints.
-              New records are currently padded at runtime to avoid constraint errors.
-              Use <strong>Release</strong> to fix the schema, or <strong>Drop</strong> to remove the column.
+              {__("One or more orphan columns still carry")} <strong>{__("NOT NULL")}</strong> {__("constraints. New records are currently padded at runtime to avoid constraint errors. Use")} <strong>{__("Release")}</strong> {__("to fix the schema, or")} <strong>{__("Drop")}</strong> {__("to remove the column.")}
             </p>
           </div>
         )}
@@ -408,8 +406,7 @@ export function OrphanColumnsManager({
                           text-amber-700 dark:text-amber-400">
             <Info size={14} className="mt-0.5 shrink-0" />
             <p className="text-xs leading-relaxed">
-              Released columns have no constraints but still occupy space in the table.
-              Drop them when you are confident the data is no longer needed.
+              {__("Released columns have no constraints but still occupy space in the table. Drop them when you are confident the data is no longer needed.")}
             </p>
           </div>
         )}
@@ -454,9 +451,8 @@ export function OrphanColumnsManager({
 
         {cols.length > 0 && (
           <p className="text-[11px] text-zinc-400 dark:text-zinc-600 leading-relaxed">
-            Orphan columns are detected automatically during{" "}
-            <code className="font-mono">makeTable</code>.
-            Dropped columns cannot be recovered — ensure you have a database backup before dropping.
+            {__("Orphan columns are detected automatically during")}{" "}
+            <code className="font-mono">makeTable</code>{__(". Dropped columns cannot be recovered — ensure you have a database backup before dropping.")}
           </p>
         )}
       </div>

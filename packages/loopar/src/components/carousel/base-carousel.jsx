@@ -11,6 +11,7 @@ import ThumbStrip from "./thumb-strip.jsx";
 import ArrowButton from "./arrow-button.jsx";
 import { makeContainerStyle } from "./utils.js";
 import carouselMetaFields from "./meta-fields.js";
+import { __ } from "@global/i18n";
 
 const VIEW_MODES = ["slides", "gallery", "grid"];
 const CONTENT_EXIT_DURATION = 300;
@@ -55,7 +56,7 @@ const BaseCarousel = (props) => {
         style={makeContainerStyle(data)}
       >
         <div className="absolute inset-0 flex items-center justify-center bg-muted/20">
-          <p className="text-muted-foreground">No slides available</p>
+          <p className="text-muted-foreground">{__("No slides available")}</p>
         </div>
       </div>
     );
@@ -173,7 +174,7 @@ const BaseCarousel = (props) => {
             }}
           >
             <PlusIcon className="w-4 h-4 mr-1" />
-            Add Slide
+            {__("Add Slide")}
           </Button>
 
           <div className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-background/80 backdrop-blur-sm text-sm font-medium shadow-lg">
@@ -222,7 +223,7 @@ const BaseCarousel = (props) => {
           type="button"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); openLightbox(index); }}
           className="absolute top-2 left-2 z-30 inline-flex items-center justify-center w-9 h-9 rounded-full bg-background/70 backdrop-blur text-foreground/80 hover:text-foreground hover:bg-background transition-all opacity-0 hover:opacity-100 group-hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Open fullscreen"
+          aria-label={__("Open fullscreen")}
         >
           <Maximize2Icon className="w-4 h-4" />
         </button>

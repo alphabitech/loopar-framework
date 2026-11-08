@@ -7,6 +7,7 @@ import { Input } from '@cn/components/ui/input';
 import { Textarea } from '@cn/components/ui/textarea';
 import { cn } from '@cn/lib/utils';
 import { CheckCircle2, FileSignature, Loader2, Printer, ShieldCheck, XCircle } from 'lucide-react';
+import { __ } from "loopar";
 
 /** Web page: always opens at the top, never restores the scroll position. */
 export const config = { restoreScroll: false };
@@ -36,11 +37,11 @@ const when = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle
 function SignatureBlock({ request }) {
   return (
     <div className="mt-8 rounded-lg border-2 border-green-600/40 p-5">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">Electronically signed</p>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{__("Electronically signed")}</p>
       <p className="mt-2 font-serif text-2xl italic">{request.signed_name}</p>
       <p className="text-sm">{[request.signed_title, request.signer_email].filter(Boolean).join(' · ')}</p>
       <p className="mt-2 text-xs text-muted-foreground">
-        {when(request.signed_at)} · Document SHA-256 {String(request.content_hash || '').slice(0, 16)}…
+        {when(request.signed_at)} {__("· Document SHA-256")} {String(request.content_hash || '').slice(0, 16)}…
       </p>
     </div>
   );
@@ -66,14 +67,14 @@ function SignForm({ request, token, onDone }) {
   if (declining) {
     return (
       <div className="space-y-3 rounded-xl border p-5 print:hidden">
-        <p className="font-semibold">Decline to sign</p>
-        <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Tell the sender why (optional)" rows={4} />
+        <p className="font-semibold">{__("Decline to sign")}</p>
+        <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={__("Tell the sender why (optional)")} rows={4} />
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex gap-2">
           <Button variant="destructive" disabled={busy} onClick={() => run('decline', { reason })}>
-            {busy && <Loader2 className="mr-2 size-4 animate-spin" />}Decline
+            {busy && <Loader2 className="mr-2 size-4 animate-spin" />}{__("Decline")}
           </Button>
-          <Button variant="ghost" onClick={() => setDeclining(false)}>Back</Button>
+          <Button variant="ghost" onClick={() => setDeclining(false)}>{__("Back")}</Button>
         </div>
       </div>
     );
@@ -81,15 +82,15 @@ function SignForm({ request, token, onDone }) {
 
   return (
     <div className="space-y-4 rounded-xl border p-5 print:hidden">
-      <p className="flex items-center gap-2 font-semibold"><FileSignature className="size-5 text-primary" /> Sign this document</p>
+      <p className="flex items-center gap-2 font-semibold"><FileSignature className="size-5 text-primary" /> {__("Sign this document")}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1.5">
-          <span className="text-sm font-medium">Full name</span>
+          <span className="text-sm font-medium">{__("Full name")}</span>
           <Input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
         </label>
         <label className="space-y-1.5">
-          <span className="text-sm font-medium">Title</span>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Operations Manager" autoComplete="organization-title" />
+          <span className="text-sm font-medium">{__("Title")}</span>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={__("e.g. Operations Manager")} autoComplete="organization-title" />
         </label>
       </div>
       {name.trim() && <p className="font-serif text-2xl italic">{name}</p>}
@@ -100,9 +101,9 @@ function SignForm({ request, token, onDone }) {
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex flex-wrap items-center gap-3">
         <Button disabled={busy || !agree || !name.trim()} onClick={() => run('sign', { signed_name: name, signed_title: title, agree })}>
-          {busy && <Loader2 className="mr-2 size-4 animate-spin" />}Sign document
+          {busy && <Loader2 className="mr-2 size-4 animate-spin" />}{__("Sign document")}
         </Button>
-        <button type="button" className="text-sm text-muted-foreground underline" onClick={() => setDeclining(true)}>Decline</button>
+        <button type="button" className="text-sm text-muted-foreground underline" onClick={() => setDeclining(true)}>{__("Decline")}</button>
       </div>
     </div>
   );
@@ -147,14 +148,14 @@ export default function DocumentSigningPage() {
         <div className="flex items-center gap-2">
           <Status request={request} />
           <Button variant="outline" size="sm" className="print:hidden" onClick={() => window.print()}>
-            <Printer className="mr-2 size-4" /> Print / PDF
+            <Printer className="mr-2 size-4" /> {__("Print / PDF")}
           </Button>
         </div>
       </div>
 
       {request.status === 'Signed' && (
         <p className="mb-6 flex items-center gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-900 dark:bg-green-900/30 dark:text-green-200 print:hidden">
-          <CheckCircle2 className="size-5" /> Signed. A confirmation was emailed to {request.signer_email}. Keep this link to view or print your copy.
+          <CheckCircle2 className="size-5" /> {__("Signed. A confirmation was emailed to")} {request.signer_email}{__(". Keep this link to view or print your copy.")}
         </p>
       )}
 
@@ -170,13 +171,13 @@ export default function DocumentSigningPage() {
         {['Declined', 'Expired', 'Revoked'].includes(request.status) && (
           <p className="rounded-lg bg-muted p-4 text-sm">
             {request.status === 'Declined' ? 'You declined this document. ' : ''}
-            This document can no longer be signed with this link. Contact {request.company} if you need a new one.
+            {__("This document can no longer be signed with this link. Contact")} {request.company} {__("if you need a new one.")}
           </p>
         )}
       </div>
 
       <p className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
-        <ShieldCheck className="size-4" /> Sent to {request.signer_email}. Integrity check: {request.intact ? 'the document is unchanged since it was sent.' : 'FAILED — contact the sender.'}
+        <ShieldCheck className="size-4" /> {__("Sent to")} {request.signer_email}{__(". Integrity check:")} {request.intact ? 'the document is unchanged since it was sent.' : 'FAILED — contact the sender.'}
       </p>
     </div>
   );

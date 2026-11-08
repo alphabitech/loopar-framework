@@ -4,6 +4,7 @@ import { useEffect, useRef, forwardRef, useState } from "react";
 import { Link } from "@link"
 import { Droppable } from "./droppable/droppable";
 import { cn } from "@cn/lib/utils";
+import { __ } from "@global/i18n";
 
 const Section = forwardRef(({ element }, ref) => {
   return (
@@ -295,7 +296,7 @@ export default function MenuContentMeta(props) {
             "overflow-y-auto overflow-x-hidden"
           )}
         >
-          {!isDesigner && <h6 className="px-2 pt-2">ON THIS PAGE</h6>}
+          {!isDesigner && <h6 className="px-2 pt-2">{__("ON THIS PAGE")}</h6>}
           <div className="flex flex-col gap-2 p-2 w-full">
             {elements.map((element, index) => (
               <MenuItem

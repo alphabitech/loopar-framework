@@ -10,6 +10,7 @@ import { useWorkspace } from "@workspace/workspace-provider";
 import { EntryModal } from "@app/entry-modal";
 import { makeUrl } from "./link.jsx";
 import { useDocument } from "@loopar/document";
+import { __ } from "@global/i18n";
 
 export default function MetaSelect(props) {
   const [rows, setRows] = useState([]);
@@ -90,7 +91,7 @@ export default function MetaSelect(props) {
     } else if (typeof opts === "string") {
       return opts.split(/\r?\n/).map((item) => {
         const [value, label] = item.split(":");
-        return { value, label: label || value };
+        return { value, label: __(label || value) };
       });
     } else if (Array.isArray(opts)) {
       return opts.map(item => buildOption(item));

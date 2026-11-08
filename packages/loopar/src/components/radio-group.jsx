@@ -11,6 +11,7 @@ import {
   FormLabel,
   FormMessage
 } from "@cn/components/ui/form";
+import { __ } from "@global/i18n";
 
 export default function MetaRadioGroup(props) {
   const { renderInput, data } = BaseInput(props);
@@ -29,7 +30,7 @@ export default function MetaRadioGroup(props) {
   delete _props.key;
 
   return (
-    <h1 className="p-4 bg-red-500/50">Under construction</h1>
+    <h1 className="p-4 bg-red-500/50">{__("Under construction")}</h1>
   )
   return renderInput((field) => {
     return (
@@ -37,12 +38,12 @@ export default function MetaRadioGroup(props) {
         {!props.dontHaveLabel && <FormLabel>{data.label}</FormLabel>}
         <FormControl>
           <FormItem className="space-y-3">
-            <FormLabel>Notify me about...</FormLabel>
+            <FormLabel>{__("Notify me about...")}</FormLabel>
             <FormControl>
               <RadioGroup.Root
                 className="flex flex-col gap-2.5"
                 defaultValue="default"
-                aria-label="View density"
+                aria-label={__("View density")}
               >
                 <Droppable
                   {...props}

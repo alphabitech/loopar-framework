@@ -15,6 +15,9 @@ import rateLimit from 'express-rate-limit';
 import { RedisStore as RateLimitRedisStore } from 'rate-limit-redis';
 import { redisEnabled, createRedisClient } from '../../redis/redis-client.js';
 import { debugCollector } from '../../debug/collector.js';
+import { parse as parseUrl } from 'node:url';
+import { normalizeLanguage } from '../../global/i18n.js';
+import { siteLanguages, siteDefaultLanguage } from '../i18n.js';
 
 export class Middleware {
   constructor(options) {
@@ -38,6 +41,44 @@ export class Middleware {
       req.__ROUTE_MODE__ = route.mode;
       req.__WORKSPACE_NAME__ = route.workspace;
       req.__IS_AJAX__ = RouterUtils.isAjaxRequest(req);
+      next();
+    };
+  }
+
+  /**
+   * Website language from the URL: `/es/pricing` renders `pricing` in
+   * Spanish when the site publishes `es`. The prefix is removed from
+   * `req.url` so every later step sees the plain page path; `originalUrl`
+   * keeps it (the SSR location matches the browser). The site's default
+   * language has no prefix: `/en/pricing` on an English site redirects to
+   * `/pricing`, so each page has one URL per language.
+   *
+   * Other workspaces resolve their language lazily from the request (see
+   * resolveRequestLanguage in core/server/i18n.js).
+   */
+  setupLanguageMiddleware() {
+    return (req, res, next) => {
+      if (req.__ROUTE_MODE__ !== "rpc" && req.__WORKSPACE_NAME__ === "web" && loopar.__installed__) {
+        const defaultLanguage = siteDefaultLanguage();
+        const pathname = req._parsedUrl?.pathname ?? (req.url || "").split("?")[0];
+        const segments = pathname.split("/");
+        const code = normalizeLanguage(segments[1]);
+        const languages = code ? siteLanguages() : [];
+
+        if (code && languages.includes(code)) {
+          const rest = "/" + segments.slice(2).join("/");
+          const search = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+          if (code === defaultLanguage) {
+            if (req.method === "GET") return res.redirect(301, rest + search);
+          } else {
+            req.url = rest + search;
+            req._parsedUrl = parseUrl(req.url);
+          }
+          req.__LANGUAGE__ = code;
+        } else {
+          req.__LANGUAGE__ = defaultLanguage;
+        }
+      }
       next();
     };
   }
@@ -430,6 +471,11 @@ export class Middleware {
       if (!res || res.headersSent) return;
 
       const redirect = err?.redirect;
+      // loopar.throw(msg, url) redirects are always hard (auth / session /
+      // csrf): keep that flag in the JSON. getHttpError() drops it, and the
+      // client then SOFT-navigated to /auth/login inside the desk SPA
+      // (→ "Module login not found" → GET /auth/login → bounced to /desk).
+      const hardRedirect = err?.hardRedirect !== false;
       const original = err;
       err = getHttpError(err);
       try { debugCollector.recordError(original, { req, status: Number(err.status) || 500 }); } catch { /* never in the way */ }
@@ -467,7 +513,7 @@ export class Middleware {
         if (RouterUtils.isAjaxRequest(req)) {
           // Surface redirect (if any) inside the JSON so the client can
           // navigate after handling the error UX.
-          return this.renderAjax(res, redirect ? { ...err, redirect } : err);
+          return this.renderAjax(res, redirect ? { ...err, redirect, hardRedirect } : err);
         }
 
         if (redirect && req._parsedUrl.pathname !== redirect) {
@@ -556,8 +602,14 @@ export class Middleware {
         'login', 'register',
         'recoverypasswordrequest', 'recoverypassword',
         'recoveryuser', 'mfaverify',
+        // Step-up password/2FA checks of a logged user (protected field changes).
+        'reauthenticate',
       ]);
-      const isRateLimited = req.method === 'POST' && doc === 'auth' && RL_ACTIONS.has(action);
+      const isRateLimited = req.method === 'POST' && (
+        (doc === 'auth' && RL_ACTIONS.has(action)) ||
+        // Protected field changes (may send emails) — any document.
+        action === 'changeprotected'
+      );
 
       if (!isRateLimited) return next();
       return loginLimiter(req, res, next);

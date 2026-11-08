@@ -1,6 +1,7 @@
 'use strict'
 
-import { BaseDocument, loopar, Op } from "loopar";
+import { BaseDocument, loopar, Op, setLanguageCookie } from "loopar";
+import { requestEmailChange, adminSetEmail } from "../../controllers/auth/email-change.js";
 
 export default class User extends BaseDocument {
   constructor(props) {
@@ -77,6 +78,40 @@ export default class User extends BaseDocument {
     }
 
     await super.save(arguments[0]);
+
+    // Saving your own language switches the desk to it on the next load.
+    if (this.name === loopar.auth.authUser()?.name) setLanguageCookie(this.language);
+  }
+
+  /**
+   * `protected` fields of a user (write_policy), reached through
+   * <Entity>/changeProtected AFTER the actor re-authenticated:
+   *  - email: on your own account → confirmation link to the new address
+   *    (the change happens when it is opened); on someone else's (an admin
+   *    with `update` on User) → direct change + notice to the old address.
+   *  - password: new value + confirmation, strength rules apply.
+   */
+  async changeProtectedField(field, value, { confirm, actor } = {}) {
+    if (field === 'email') {
+      return actor === this.name
+        ? await requestEmailChange(this.name, value)
+        : await adminSetEmail(this.name, value);
+    }
+
+    if (field === 'password' || field === 'confirm_password') {
+      const password = String(value ?? '');
+      if (!password || password !== String(confirm ?? '')) {
+        loopar.throw('The password and confirmation password do not match.');
+      }
+      this.validatePasswordStrong(password);
+      this.authorize('password', 'confirm_password');
+      this.password = password;
+      this.confirm_password = password;
+      await this.save();
+      return { message: 'Password updated.' };
+    }
+
+    return null;
   }
 
   async delete() {

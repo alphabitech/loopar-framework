@@ -1,5 +1,6 @@
 'use strict'
 
+import { __ } from '../global/i18n.js';
 import express from "express";
 import AuthController from "../auth/AuthController.js";
 import { loopar } from "loopar";
@@ -120,8 +121,8 @@ export default class CoreController extends AuthController {
     const response = { redirect: url, hardRedirect: hard };
     if (notify) {
       response.notify = typeof notify === "string"
-        ? { type: "success", message: notify }
-        : { type: notify.type || "success", message: notify.message };
+        ? { type: "success", message: __(notify) }
+        : { type: notify.type || "success", message: __(notify.message) };
     }
     return response;
   }
@@ -254,7 +255,7 @@ export default class CoreController extends AuthController {
    */
   async success(message, options = {}) {
     const { notify, ...rest } = options;
-    const text = message || "Success";
+    const text = __(message || "Success");
 
     const response = {
       status: 200,
@@ -279,12 +280,12 @@ export default class CoreController extends AuthController {
    */
   async error(message, options = {}, status) {
     const { notify, ...rest } = options;
-    const text = message || "Error";
+    const text = __(message || "Error");
 
     const response = {
       status: status || 500,
       code: rest.code || 'INTERNAL_ERROR',
-      title: rest.title || 'Error',
+      title: __(rest.title || 'Error'),
       message: text,
       ...rest,
     };

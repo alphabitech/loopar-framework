@@ -5,6 +5,7 @@ import { FormWrapper } from "@form-provider";
 import { Button } from "@cn/components/ui/button";
 import { UploadIcon } from "lucide-react";
 import { useState } from "react";
+import { __ } from "@global/i18n";
 
 const origins = ["Local", "Trash"];
 
@@ -52,7 +53,7 @@ export default function FileUploader(props) {
       <Modal
         position="top"
         size="lg"
-        title="File Uploader"
+        title={__("File Uploader")}
         open={true}
         onClose={() => {
           props.onClose && props.onClose();
@@ -66,7 +67,7 @@ export default function FileUploader(props) {
             onClick={upload}
           >
             <UploadIcon className="w-10 pr-3" />
-            Upload
+            {__("Upload")}
           </Button>
         </div>
       </Modal>

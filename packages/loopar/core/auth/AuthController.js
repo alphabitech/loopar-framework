@@ -4,6 +4,13 @@ import { portalIdentity, customerCondition, isCustomerRecord, customerFieldOf, C
 import { validateCsrfToken } from './csrf.js';
 import { workspaceCapabilities, workspaceRequiresAuth, getWorkspaceName, workspaceServesWebPages } from "../global/router-utils.js";
 
+/**
+ * Actions authorized with the grant of another action: changing a protected
+ * field of a record needs the `update` permission on it (plus a fresh
+ * re-authentication, checked by the action itself).
+ */
+const PERMISSION_ALIASES = Object.freeze({ changeprotected: 'update' });
+
 export default class AuthController {
   async validateCsrf() {
     if (this.method === 'GET') return true;
@@ -231,9 +238,11 @@ export default class AuthController {
 
     if ((this.freeActions || []).includes(this.action)) return true;
 
+    const permissionAction = PERMISSION_ALIASES[String(this.action).toLowerCase()] || this.action;
+
     let scope = PermissionManager.scope(
       this.document,
-      this.action,
+      permissionAction,
       user.name,
     );
 
@@ -243,7 +252,7 @@ export default class AuthController {
       const isViewLike = ['view', 'list'].includes(String(this.action).toLowerCase());
       scope = (isViewLike && this.name && PermissionManager.canAccessModule(this.name, user.name))
         ? SCOPE.ALL
-        : PermissionManager.scope("Module", this.action, user.name);
+        : PermissionManager.scope("Module", permissionAction, user.name);
     }
 
     // Opening a record to edit without the update permission: show it
@@ -357,7 +366,7 @@ export default class AuthController {
     return resolve('You must be logged in to access this page');
   }
 
-  static GET_UNSAFE_ACTIONS = new Set(['delete', 'bulkdelete']);
+  static GET_UNSAFE_ACTIONS = new Set(['delete', 'bulkdelete', 'changeprotected']);
 
   /**
    * On GET/HEAD, block the state-changing actions above. This closes the

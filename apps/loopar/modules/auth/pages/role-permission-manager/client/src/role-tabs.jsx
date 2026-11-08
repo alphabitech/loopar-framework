@@ -6,6 +6,7 @@ import { avatarColor } from "../helper";
 import { Checkbox } from "./Checkbox.jsx";
 import {useEffect, useState} from "react"
 import { loopar } from "loopar";
+import { __ } from "loopar";
 
 export function RoleTabs({ onSelect, role, user, userRoles = new Set(), onToggleUserRole, permissions, onCreateEntity }) {
   const [roles, setRoles] = useState([])
@@ -73,7 +74,7 @@ export function RoleTabs({ onSelect, role, user, userRoles = new Set(), onToggle
       {onCreateEntity && (
         <button onClick={onCreateEntity}
           className="flex-shrink-0 flex items-center gap-1 px-3 py-2 mx-2 text-[11px] font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors cursor-pointer">
-          <Plus size={11} /> Role
+          <Plus size={11} /> {__("Role")}
         </button>
       )}
     </div>

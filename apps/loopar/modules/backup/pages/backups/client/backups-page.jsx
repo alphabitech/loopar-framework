@@ -13,6 +13,7 @@ import {
   LockIcon, ServerIcon, CloudIcon, LoaderCircleIcon, TriangleAlertIcon, CheckCircle2Icon, LinkIcon,
 } from "lucide-react";
 import { Pill, Panel, Empty, fmtDateTime, fieldClass } from "../../../../debug/ui/shared.jsx";
+import { __ } from "loopar";
 
 const call = (action, query = {}, opts = {}) => loopar.call("Backups", action, { query, freeze: false, ...opts });
 
@@ -57,32 +58,30 @@ function RestoreDialog({ row, page, onClose, onStarted }) {
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><RotateCcwIcon className="h-5 w-5" />Restore this backup?</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><RotateCcwIcon className="h-5 w-5" />{__("Restore this backup?")}</DialogTitle>
           <DialogDescription>
             <span className="font-mono text-xs">{row?.file}</span>
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 text-sm">
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed">
-            The data, files and settings of <strong>{page.tenant}</strong> will be replaced by the ones in this backup
-            (from {fmtDateTime(row?.date)}). A snapshot of the current state is taken first, so you can go back.
-            The site is unavailable for a moment and everyone may need to sign in again.
+            {__("The data, files and settings of")} <strong>{page.tenant}</strong> {__("will be replaced by the ones in this backup (from")} {fmtDateTime(row?.date)}{__("). A snapshot of the current state is taken first, so you can go back. The site is unavailable for a moment and everyone may need to sign in again.")}
           </div>
           {needsPassphrase && (
             <label className="block text-xs">
-              <span className="mb-1 block font-medium">Backup passphrase</span>
+              <span className="mb-1 block font-medium">{__("Backup passphrase")}</span>
               <input type="password" className={cn(fieldClass, "w-full")} value={passphrase} onChange={(e) => setPassphrase(e.target.value)} />
             </label>
           )}
           <label className="block text-xs">
-            <span className="mb-1 block font-medium">Type <span className="font-mono">{page.tenant}</span> to confirm</span>
+            <span className="mb-1 block font-medium">{__("Type")} <span className="font-mono">{page.tenant}</span> {__("to confirm")}</span>
             <input className={cn(fieldClass, "w-full")} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoFocus />
           </label>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{__("Cancel")}</Button>
           <Button variant="destructive" disabled={busy || confirm.trim() !== page.tenant || (needsPassphrase && !passphrase)} onClick={start}>
-            {busy ? <LoaderCircleIcon className="mr-1 h-4 w-4 animate-spin" /> : <RotateCcwIcon className="mr-1 h-4 w-4" />}Restore
+            {busy ? <LoaderCircleIcon className="mr-1 h-4 w-4 animate-spin" /> : <RotateCcwIcon className="mr-1 h-4 w-4" />}{__("Restore")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -101,10 +100,10 @@ function RestoreOverlay({ job }) {
         <div className="text-lg font-semibold">{job?.finishedAt && job.ok === false ? "The restore failed" : "Restoring the backup…"}</div>
         <div className="text-sm text-muted-foreground">
           {job?.finishedAt && job.ok === false
-            ? <>Nothing was changed. <span className="block pt-2 font-mono text-xs text-red-600 dark:text-red-400">{job.error}</span></>
-            : <>{STEP[job?.step] || "Working…"} Don't close this tab: the page reloads by itself when the site is back.</>}
+            ? <>{__("Nothing was changed.")} <span className="block pt-2 font-mono text-xs text-red-600 dark:text-red-400">{job.error}</span></>
+            : <>{STEP[job?.step] || "Working…"} {__("Don't close this tab: the page reloads by itself when the site is back.")}</>}
         </div>
-        {job?.finishedAt && job.ok === false && <Button variant="outline" onClick={() => window.location.reload()}>Close</Button>}
+        {job?.finishedAt && job.ok === false && <Button variant="outline" onClick={() => window.location.reload()}>{__("Close")}</Button>}
       </div>
     </div>
   );
@@ -197,27 +196,27 @@ function Backups({ data }) {
         <div className="flex items-center gap-3">
           <DatabaseBackupIcon className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="text-xl font-bold text-foreground">Backups</h1>
+            <h1 className="text-xl font-bold text-foreground">{__("Backups")}</h1>
             <div className="mt-0.5 flex flex-wrap gap-1.5">
               <Pill tone={s.enabled ? "success" : "muted"}>{s.schedule}</Pill>
               <Pill tone={s.destination === "local" ? "muted" : "info"}>{s.destinationLabel}</Pill>
               <Pill tone={s.encrypt && s.passphraseSet ? "success" : "warning"}><LockIcon className="h-3 w-3" />{s.encrypt && s.passphraseSet ? "encrypted" : "not encrypted"}</Pill>
-              <Pill>keeps {s.retention?.daily}d · {s.retention?.weekly}w · {s.retention?.monthly}m</Pill>
+              <Pill>{__("keeps")} {s.retention?.daily}d · {s.retention?.weekly}w · {s.retention?.monthly}m</Pill>
             </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" disabled={!!running} onClick={backupNow}>
-            {running && job.type === "backup" ? <LoaderCircleIcon className="mr-1 h-3.5 w-3.5 animate-spin" /> : <DatabaseBackupIcon className="mr-1 h-3.5 w-3.5" />}Back up now
+            {running && job.type === "backup" ? <LoaderCircleIcon className="mr-1 h-3.5 w-3.5 animate-spin" /> : <DatabaseBackupIcon className="mr-1 h-3.5 w-3.5" />}{__("Back up now")}
           </Button>
           {page.isAdministrator && (
             <>
               <input ref={fileInput} type="file" accept=".gz,.enc" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
-              <Button size="sm" variant="outline" onClick={() => fileInput.current?.click()} title="An archive made on another server, or downloaded earlier (up to 50 MB here; larger ones, or MySQL/PostgreSQL archives from elsewhere, with `yarn backup restore`)"><UploadIcon className="mr-1 h-3.5 w-3.5" />Upload</Button>
+              <Button size="sm" variant="outline" onClick={() => fileInput.current?.click()} title={__("An archive made on another server, or downloaded earlier (up to 50 MB here; larger ones, or MySQL/PostgreSQL archives from elsewhere, with `yarn backup restore`)")}><UploadIcon className="mr-1 h-3.5 w-3.5" />{__("Upload")}</Button>
             </>
           )}
-          <Link to="/desk/Backup Settings/update" variant="outline" className="inline-flex h-9 items-center rounded-md border border-input px-3 text-sm hover:bg-accent"><SettingsIcon className="mr-1 h-3.5 w-3.5" />Settings</Link>
-          <Button size="sm" variant="outline" onClick={reload}><RefreshCwIcon className={cn("mr-1 h-3.5 w-3.5", loading && "animate-spin")} />Refresh</Button>
+          <Link to="/desk/Backup Settings/update" variant="outline" className="inline-flex h-9 items-center rounded-md border border-input px-3 text-sm hover:bg-accent"><SettingsIcon className="mr-1 h-3.5 w-3.5" />{__("Settings")}</Link>
+          <Button size="sm" variant="outline" onClick={reload}><RefreshCwIcon className={cn("mr-1 h-3.5 w-3.5", loading && "animate-spin")} />{__("Refresh")}</Button>
         </div>
       </header>
 
@@ -226,20 +225,20 @@ function Backups({ data }) {
       )}
       {s.destination !== "local" && s.encrypt && !s.passphraseSet && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-          Backups can't be sent to {s.destinationLabel} until an encryption passphrase is set in <Link to="/desk/Backup Settings/update" className="underline">Backup Settings</Link>.
+          {__("Backups can't be sent to")} {s.destinationLabel} {__("until an encryption passphrase is set in")} <Link to="/desk/Backup Settings/update" className="underline">{__("Backup Settings")}</Link>.
         </div>
       )}
       {s.gdrive && !s.gdrive.connected && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm">
           <span>
             {s.gdrive.configured
-              ? <>Google Drive is the destination but it isn't connected yet. Add <code className="rounded bg-background px-1 text-xs">{`${typeof window !== "undefined" ? window.location.origin : ""}/desk/Backups/gdriveCallback`}</code> as an authorized redirect URI of the OAuth client.</>
-              : <>Google Drive needs an OAuth client ID and secret in Backup Settings.</>}
+              ? <>{__("Google Drive is the destination but it isn't connected yet. Add")} <code className="rounded bg-background px-1 text-xs">{`${typeof window !== "undefined" ? window.location.origin : ""}/desk/Backups/gdriveCallback`}</code> {__("as an authorized redirect URI of the OAuth client.")}</>
+              : <>{__("Google Drive needs an OAuth client ID and secret in Backup Settings.")}</>}
           </span>
-          {s.gdrive.configured && page.isAdministrator && <Button size="sm" onClick={connectDrive}><LinkIcon className="mr-1 h-3.5 w-3.5" />Connect Google Drive</Button>}
+          {s.gdrive.configured && page.isAdministrator && <Button size="sm" onClick={connectDrive}><LinkIcon className="mr-1 h-3.5 w-3.5" />{__("Connect Google Drive")}</Button>}
         </div>
       )}
-      {s.gdrive?.connected && <div className="text-xs text-muted-foreground">Google Drive: {s.gdrive.account || "connected"}</div>}
+      {s.gdrive?.connected && <div className="text-xs text-muted-foreground">{__("Google Drive:")} {s.gdrive.account || "connected"}</div>}
       {page.remoteError && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm">
           <strong>{s.destinationLabel}:</strong> {page.remoteError}
@@ -259,7 +258,7 @@ function Backups({ data }) {
       )}
 
       <Panel title={`Backups of ${page.tenant} · ${page.rows?.length ?? 0}`} bodyClassName="p-0">
-        {!page.rows?.length ? <Empty>No backups yet. "Back up now" makes the first one.</Empty> : (
+        {!page.rows?.length ? <Empty>{__("No backups yet. \"Back up now\" makes the first one.")}</Empty> : (
           <div className="overflow-auto">
             <table className="w-full table-fixed text-sm">
               <colgroup>
@@ -267,10 +266,10 @@ function Backups({ data }) {
               </colgroup>
               <thead className="text-left text-xs text-muted-foreground">
                 <tr className="border-b border-border">
-                  <th className="px-4 py-2 font-medium">Date</th>
-                  <th className="px-2 py-2 font-medium">Type</th>
-                  <th className="px-2 py-2 text-right font-medium">Size</th>
-                  <th className="px-3 py-2 font-medium">Stored</th>
+                  <th className="px-4 py-2 font-medium">{__("Date")}</th>
+                  <th className="px-2 py-2 font-medium">{__("Type")}</th>
+                  <th className="px-2 py-2 text-right font-medium">{__("Size")}</th>
+                  <th className="px-3 py-2 font-medium">{__("Stored")}</th>
                   <th className="px-4 py-2 text-right font-medium" />
                 </tr>
               </thead>
@@ -285,19 +284,19 @@ function Backups({ data }) {
                     <td className="px-2 py-2 text-right font-mono text-xs">{fmtSize(r.size)}</td>
                     <td className="px-3 py-2">
                       <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                        {r.local && <span className="inline-flex items-center gap-1"><ServerIcon className="h-3.5 w-3.5" />this server</span>}
+                        {r.local && <span className="inline-flex items-center gap-1"><ServerIcon className="h-3.5 w-3.5" />{__("this server")}</span>}
                         {r.remote && <span className="inline-flex items-center gap-1"><CloudIcon className="h-3.5 w-3.5" />{s.destinationLabel}</span>}
-                        {r.encrypted && <LockIcon className="h-3.5 w-3.5 text-emerald-500" title="Encrypted" />}
-                        {r.apps && <span className="truncate" title={Object.entries(r.apps).map(([a, v]) => `${a} ${v}`).join("\n")}>· {Object.keys(r.apps).length} apps</span>}
+                        {r.encrypted && <LockIcon className="h-3.5 w-3.5 text-emerald-500" title={__("Encrypted")} />}
+                        {r.apps && <span className="truncate" title={Object.entries(r.apps).map(([a, v]) => `${a} ${v}`).join("\n")}>· {Object.keys(r.apps).length} {__("apps")}</span>}
                       </span>
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex justify-end gap-1">
                         {page.isAdministrator && (
                           <>
-                            <a href={`/api/Backups/download?file=${encodeURIComponent(r.file)}`} className="rounded p-1.5 hover:bg-accent" title="Download"><DownloadIcon className="h-4 w-4" /></a>
-                            <button type="button" className="rounded p-1.5 hover:bg-accent" title="Restore" disabled={!!running} onClick={() => setRestoreRow(r)}><RotateCcwIcon className="h-4 w-4" /></button>
-                            <button type="button" className="rounded p-1.5 text-red-600 hover:bg-red-500/10" title="Delete" onClick={() => remove(r)}><Trash2Icon className="h-4 w-4" /></button>
+                            <a href={`/api/Backups/download?file=${encodeURIComponent(r.file)}`} className="rounded p-1.5 hover:bg-accent" title={__("Download")}><DownloadIcon className="h-4 w-4" /></a>
+                            <button type="button" className="rounded p-1.5 hover:bg-accent" title={__("Restore")} disabled={!!running} onClick={() => setRestoreRow(r)}><RotateCcwIcon className="h-4 w-4" /></button>
+                            <button type="button" className="rounded p-1.5 text-red-600 hover:bg-red-500/10" title={__("Delete")} onClick={() => remove(r)}><Trash2Icon className="h-4 w-4" /></button>
                           </>
                         )}
                       </div>
@@ -310,9 +309,7 @@ function Backups({ data }) {
         )}
       </Panel>
       <p className="text-xs text-muted-foreground">
-        Kept on this server under <code>backups/{page.tenant}/</code>{s.destination !== "local" ? ` and copied to ${s.destinationLabel}` : ""}.
-        A snapshot is taken automatically before installing or updating an app and before every restore.
-        From a terminal: <code>yarn backup</code>.
+        {__("Kept on this server under")} <code>backups/{page.tenant}/</code>{s.destination !== "local" ? ` and copied to ${s.destinationLabel}` : ""}{__(". A snapshot is taken automatically before installing or updating an app and before every restore. From a terminal:")} <code>yarn backup</code>.
       </p>
     </div>
   );

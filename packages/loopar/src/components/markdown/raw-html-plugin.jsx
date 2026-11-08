@@ -8,6 +8,7 @@ import {
 } from '@mdxeditor/editor';
 import { toMarkdown } from 'mdast-util-to-markdown';
 import { mdxJsxToMarkdown } from 'mdast-util-mdx-jsx';
+import { __ } from "@global/i18n";
 
 /**
  * MDXEditor can only edit the HTML tags in its `htmlTags` list; an <svg> (or
@@ -41,7 +42,7 @@ function RawHtmlPreview({ mdastNode }) {
   return (
     <div className="my-2 rounded-md border border-dashed border-muted-foreground/40 p-2" contentEditable={false}>
       <div className="mb-1 text-xs text-muted-foreground">
-        &lt;{name}&gt; · edit in Source mode
+        &lt;{name}{__("> · edit in Source mode")}
       </div>
       {showPreview && (
         <div

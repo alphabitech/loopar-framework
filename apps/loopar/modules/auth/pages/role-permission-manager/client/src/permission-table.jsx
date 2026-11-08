@@ -7,6 +7,7 @@ import { Checkbox } from "./Checkbox.jsx";
 import { OwnChip } from "./own-chip.jsx";
 import { AppTabs } from "./app-tabs.jsx";
 import { usePersist } from "@services/persist-state";
+import { __ } from "loopar";
 
 const EMPTY = { direct: [], inherited: {}, denied: [], scopes: {} };
 
@@ -166,7 +167,7 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
   if (loading) return (
     <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
       <div className="w-4 h-4 border border-border border-t-primary rounded-full animate-spin mr-2" />
-      Loading permissions...
+      {__("Loading permissions...")}
     </div>
   );
 
@@ -204,7 +205,7 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
         <div className="sticky top-0 z-10 border-b border-border bg-secondary text-xs">
           <div className="grid bg-secondary" style={{ gridTemplateColumns: gridCols, minWidth: 'max-content' }}>
             <div className="sticky left-0 z-20 bg-secondary px-4 py-2 border-r border-border flex items-center">
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Document</span>
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{__("Document")}</span>
             </div>
             {commonActions.map(a => {
               const state = colState(a);
@@ -218,7 +219,7 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
             })}
             {hasAnyOwn && (
               <div className="px-3 py-2 flex items-center">
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Custom</span>
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{__("Custom")}</span>
               </div>
             )}
           </div>
@@ -229,8 +230,8 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
           <div className="grid border-b border-border bg-primary/[.04] text-xs" style={{ gridTemplateColumns: gridCols, minWidth: 'max-content' }}>
             <div className="sticky left-0 z-[5] bg-primary/[.04] px-3 py-1.5 border-r border-border flex items-center gap-2 font-medium text-foreground whitespace-nowrap">
               <span className="w-4 flex-shrink-0" />
-              <span className="text-[12px]">Whole app</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary">App:{currentApp}</span>
+              <span className="text-[12px]">{__("Whole app")}</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary">{__("App:")}{currentApp}</span>
               <button
                 onClick={() => handleToggleApp('*', !appAll)}
                 title={appAll ? "Remove App:*:* — every action on every document of this app" : "Grant every action on every document of this app (App:*:*)"}
@@ -276,7 +277,7 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
         {/* Rows */}
         {filtered.length === 0 && (search || "").length > 0 ? (
           <div className="flex items-center justify-center p-12 text-sm text-muted-foreground">
-            No documents match <strong className="ml-1">"{search}"</strong>
+            {__("No documents match")} <strong className="ml-1">"{search}"</strong>
           </div>
         ) : (
           filtered.map(([doc, acts]) => {
@@ -311,7 +312,7 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-border text-muted-foreground truncate max-w-[110px]" title={rowVia}>{rowVia}</span>
                     )}
                     {hasOverride && rowVia && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-amber-500/40 text-amber-500">override</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-amber-500/40 text-amber-500">{__("override")}</span>
                     )}
 
                     <button onClick={() => handleToggleAll(doc, !allChecked)}
@@ -376,7 +377,7 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
                 {isExpanded && extras.length > 0 && (
                   <div className="border-b border-border/50 bg-muted/20 flex text-xs" style={{ minWidth: 'max-content' }}>
                     <div className="sticky left-0 z-[5] bg-muted/20 px-6 py-2 border-r border-border flex items-center flex-shrink-0" style={{ width: 260 }}>
-                      <span className="text-[9px] text-muted-foreground italic uppercase tracking-wider">Custom actions</span>
+                      <span className="text-[9px] text-muted-foreground italic uppercase tracking-wider">{__("Custom actions")}</span>
                     </div>
                     <div className="px-3 py-2 flex flex-wrap gap-1.5">
                       {extras.map(action => (
@@ -394,13 +395,13 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
 
       {/* Legend */}
       <div className="flex items-center gap-4 px-4 py-2 border-t border-border bg-secondary/60 text-[11px] text-muted-foreground flex-shrink-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        <span className="flex items-center gap-1.5"><Checkbox checked /> direct</span>
-        <span className="flex items-center gap-1.5"><Checkbox inherited /> inherited (App:x · *:x · role)</span>
-        <span className="flex items-center gap-1.5"><Checkbox checked scope="own" /> own records</span>
-        <span className="flex items-center gap-1.5"><Checkbox inherited scope="own" /> inherited · own</span>
-        <span className="flex items-center gap-1.5"><Checkbox checked scope="customer" /> customer's records (portal)</span>
-        <span className="flex items-center gap-1.5"><Checkbox denied /> denied</span>
-        <span className="ml-auto whitespace-nowrap">click = toggle · pill = scope · hover = source</span>
+        <span className="flex items-center gap-1.5"><Checkbox checked /> {__("direct")}</span>
+        <span className="flex items-center gap-1.5"><Checkbox inherited /> {__("inherited (App:x · *:x · role)")}</span>
+        <span className="flex items-center gap-1.5"><Checkbox checked scope="own" /> {__("own records")}</span>
+        <span className="flex items-center gap-1.5"><Checkbox inherited scope="own" /> {__("inherited · own")}</span>
+        <span className="flex items-center gap-1.5"><Checkbox checked scope="customer" /> {__("customer's records (portal)")}</span>
+        <span className="flex items-center gap-1.5"><Checkbox denied /> {__("denied")}</span>
+        <span className="ml-auto whitespace-nowrap">{__("click = toggle · pill = scope · hover = source")}</span>
       </div>
     </div>
   );

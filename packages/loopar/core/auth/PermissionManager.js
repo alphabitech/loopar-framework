@@ -37,7 +37,7 @@ export const normalizeScope = s => {
 const widest = (a, b) => (!a ? b : !b ? a : (SCOPE_RANK[a] >= SCOPE_RANK[b] ? a : b));
 
 /** Desk writes that a read-only entity (see Entity `read_only`) never allows. */
-export const READ_ONLY_DENIED_ACTIONS = new Set(['create', 'update']);
+export const READ_ONLY_DENIED_ACTIONS = new Set(['create', 'update', 'changeprotected']);
 
 /** Is `action` a hand write on an entity whose records only the app's flows write? */
 export function isReadOnlyWrite(document, action) {

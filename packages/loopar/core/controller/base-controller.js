@@ -7,6 +7,9 @@ import { printPayload } from '../document/print-format.js';
 import { renameEntity } from '../document/entity-rename.js';
 import { readRuntimeMode } from '../server/runtime-mode.js';
 import { applyTransition, workflowFor } from '../document/workflow.js';
+import { sanitizeInput, policyMapOf, currentActor } from '../auth/field-access.js';
+import { hasFreshStepUp, clearStepUp, STEP_UP_REQUIRED_CODE } from '../auth/step-up.js';
+import { canWriteFromInput, WRITE_POLICY } from '../global/field-policy.js';
 
 const HISTORY_TABLE = 'Document History';
 const COMMENT_TABLE = 'Comment';
@@ -48,7 +51,9 @@ export default class BaseController extends CoreController {
   }
 
   async actionCreate() {
-    const document = await loopar.newDocument(this.document, this.data);
+    // Field write policy, layer A: client input never writes system/readonly fields.
+    const input = this.hasData() ? await sanitizeInput(this.document, this.data, { op: 'create' }) : this.data;
+    const document = await loopar.newDocument(this.document, input);
 
     if (document.__ENTITY__.is_single) {
       return loopar.throw({
@@ -106,7 +111,14 @@ export default class BaseController extends CoreController {
   }
 
   async actionUpdate(document) {
-    document ??= await loopar.getDocument(this.document, this.query.name, this.hasData() ? this.data : null);
+    // Field write policy, layer A: protected/system/readonly/create_only fields
+    // are not taken from the form. A caller passing its own `document` built
+    // from raw input is still covered by layer B on save.
+    document ??= await loopar.getDocument(
+      this.document,
+      this.query.name,
+      this.hasData() ? await sanitizeInput(this.document, this.data, { op: 'update' }) : null
+    );
 
     if (this.hasData()) {
       const Entity = document.__ENTITY__;
@@ -136,6 +148,67 @@ export default class BaseController extends CoreController {
       // linkTitles: selects show the linked record's title (not its code) before opening.
       return await this.render({ ...await document.__meta__(), linkTitles: await document.linkTitles(), ...this.response || {} });
     }
+  }
+
+  /**
+   * POST <Entity>/changeProtected?name=<record>   body: { field, value, confirm? }
+   *
+   * The ONLY way a `protected` field (write_policy) changes from the client —
+   * the regular save drops it (field-access, layer A) and refuses it (layer B).
+   * Requires: `update` permission on the record (AuthController maps this
+   * action onto it), the field's write_roles, and a fresh re-authentication
+   * (Auth/reauthenticate → otherwise 428). An entity can take the change over
+   * (User: email confirmation link, password + confirmation) by defining on its
+   * Document `async changeProtectedField(field, value, { confirm, actor })`;
+   * whatever it returns (message string or { message }) ends the request.
+   */
+  /** The record a protected change applies to. Proxies (Profile) override it. */
+  async protectedChangeTarget() {
+    return await loopar.getDocument(this.document, this.query.name ?? this.name);
+  }
+
+  async actionChangeProtected() {
+    if (!this.hasData()) loopar.throw({ code: 400, message: 'Nothing to change.' });
+
+    const { field, value, confirm } = this.data;
+    const map = policyMapOf(this.document);
+    const rule = field ? map[String(field)] : null;
+    if (!rule || rule.policy !== WRITE_POLICY.PROTECTED) {
+      loopar.throw({ code: 400, message: `"${field}" is not a protected field.` });
+    }
+
+    const actor = await currentActor(map);
+    const byRoles = canWriteFromInput({ ...rule, policy: WRITE_POLICY.EDITABLE, name: String(field) }, { op: 'update', actor });
+    if (!byRoles.allowed) loopar.throw({ code: 403, message: 'You do not have permission to change this field.' });
+
+    const user = loopar.auth.user();
+    if (!hasFreshStepUp(user)) {
+      loopar.throw({ code: STEP_UP_REQUIRED_CODE, title: 'Confirm your identity', message: 'Enter your password to change this field.' });
+    }
+
+    const document = await this.protectedChangeTarget();
+
+    let result = null;
+    if (typeof document.changeProtectedField === 'function') {
+      result = await document.changeProtectedField(String(field), value, { confirm, actor: user });
+    }
+
+    if (result === null || result === undefined) {
+      document.authorize(field);
+      document[field] = value;
+      if (rule.element === 'password' && document.fields?.confirm_password && field !== 'confirm_password') {
+        document.authorize('confirm_password');
+        document.confirm_password = confirm ?? value;
+      }
+      await document.save();
+      result = 'Updated successfully';
+    }
+
+    // One re-authentication = one change: the proof is consumed here.
+    clearStepUp();
+    console.info(`[field-policy] protected change ${this.document}/${document.name ?? ''}.${field} by ${user}`);
+    const message = typeof result === 'string' ? result : (result?.message || 'Updated successfully');
+    return this.success(message, { name: document.name });
   }
 
   /**

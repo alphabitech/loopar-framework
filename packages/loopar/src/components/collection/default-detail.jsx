@@ -6,6 +6,8 @@ import ImageCarousel from "./image-carousel.jsx";
 import ImageGrid from "./image-grid.jsx";
 import { Preview as MarkdownPreview } from "../markdown/preview.jsx";
 import DocumentHistory from "../document-history.jsx";
+import { __ } from "@global/i18n";
+import { formatDate, formatNumber } from "@global/format";
 
 function CommentsBlock({ entity, item }) {
   if (!entity || !item?.name) return null;
@@ -16,9 +18,9 @@ function CommentsBlock({ entity, item }) {
         documentName={item.name}
         enableComments
         historyApi={{ entity, action: "comments" }}
-        title="Comments"
+        title={__("Comments")}
         className="border-0 bg-transparent"
-        emptyMessage="No comments yet. Be the first."
+        emptyMessage={__("No comments yet. Be the first.")}
       />
     </section>
   );
@@ -50,31 +52,18 @@ function Loading() {
   );
 }
 
-function fmtDate(value) {
-  if (!value) return null;
-  try {
-    return new Date(value).toLocaleDateString(undefined, { day: "2-digit", month: "long", year: "numeric" });
-  } catch {
-    return String(value);
-  }
-}
-
 function formatValue(field, value) {
   if (value == null || value === "") return null;
   if (field.element === "date" || field.element === "date_time") {
-    return fmtDate(value);
+    return formatDate(value, "long");
   }
   if (field.element === "switch" || field.element === "checkbox") {
-    return value ? (field.label || "Yes") : null;
+    return value ? __(field.label || "Yes") : null;
   }
   if (field.format === "decimal" || field.format === "int" || field.format === "integer") {
     const n = Number(value);
     if (Number.isNaN(n)) return String(value);
-    try {
-      return new Intl.NumberFormat(undefined, {
-        maximumFractionDigits: Number.isInteger(n) ? 0 : 2,
-      }).format(n);
-    } catch { return String(n); }
+    return formatNumber(n, { maximumFractionDigits: Number.isInteger(n) ? 0 : 2 });
   }
   return String(value);
 }
@@ -192,7 +181,7 @@ function DetailArticle({ item, fields, entity, enableComments, backHref, backLab
     return mapped.find(f => f && f.src) || null;
   }, [item, coverField]);
 
-  const date = fmtDate(dateField ? item[dateField.name] : item.__created_at__);
+  const date = formatDate(dateField ? item[dateField.name] : item.__created_at__, "long");
   const minutes = readingMinutes(item, descField);
   const tags = Array.isArray(item.tags) ? item.tags : [];
   const meta = [item.author, date, minutes ? `${minutes} min read` : null].filter(Boolean);
@@ -481,7 +470,7 @@ function DetailGallery({ item, fields, entity, enableComments, backHref, backLab
           <div className="flex flex-col gap-4">
             {item.featured ? (
               <span className="text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-md bg-primary text-primary-foreground w-fit">
-                Featured
+                {__("Featured")}
               </span>
             ) : null}
             <h1 className="text-3xl md:text-4xl font-medium leading-tight">

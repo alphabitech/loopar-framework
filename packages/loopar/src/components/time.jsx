@@ -19,6 +19,7 @@ import {
 import BaseTimePicker from "@@date/time-picker";
 
 import { CalendarIcon } from "lucide-react";
+import { __ } from "@global/i18n";
 
 const toHHmm = (val) => {
   if (!val) return "00:00";
@@ -54,7 +55,7 @@ export default function TimePicker(props) {
                   !display && "text-muted-foreground"
                 )}
               >
-                {display ?? <span>Pick a Time</span>}
+                {display ?? <span>{__("Pick a Time")}</span>}
                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
               </Button>
             </FormControl>

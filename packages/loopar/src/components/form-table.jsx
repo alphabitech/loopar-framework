@@ -36,6 +36,7 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
+import { __ } from "@global/i18n";
 
 const SortableRow = memo(function SortableRow({ index, row, columns }) {
   const { id } = row;
@@ -231,7 +232,7 @@ const FormTable = (props) => {
             }}
           >
             <Trash2Icon className="mr-1" size={16} />
-            Remove
+            {__("Remove")}
           </Button>
         )}
         <Button
@@ -240,7 +241,7 @@ const FormTable = (props) => {
           onClick={handleAppend}
         >
           <PlusIcon className="mr-1" size={16} />
-          Add row
+          {__("Add row")}
         </Button>
       </div>
     </div>

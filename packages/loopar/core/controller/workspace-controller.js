@@ -8,6 +8,8 @@ import { loopar, fileManager, PermissionManager, sidebarDashboards } from "loopa
 import { shouldServeProduction } from "../server/runtime-mode.js";
 import { kioskHeadTags } from "../global/kiosk-manifest.js";
 import { activeAnnouncement } from "../global/announcements.js";
+import { requestLanguage, clientI18nPayload, contentLanguages, siteLanguages, siteDefaultLanguage, translateRecord, loadRegional, availableLanguages } from "../server/i18n.js";
+import { localizePath, splitLanguagePrefix } from "../global/i18n.js";
 import fs from 'fs';
 
 export default class WorkspaceController extends AuthController {
@@ -28,9 +30,17 @@ export default class WorkspaceController extends AuthController {
     if (workspace === "desk") {
       WORKSPACE.menu_data =  await WorkspaceController.sidebarData();
       WORKSPACE.search_index = WorkspaceController.deskSearchIndex();
+      // Base + extra languages of the tenant's websites (translation editors).
+      WORKSPACE.content_languages = contentLanguages();
+      // Languages with a dictionary: the desk's per-element overrides offer them.
+      WORKSPACE.ui_languages = availableLanguages().filter((l) => l !== "en");
     } else if (workspace === "web" || workspace === "kiosk") {
       // Kiosk pages are web pages without the site's navigation: same app (logo, theme).
-      WORKSPACE.web_app = loopar.webApp;
+      // Footer, copyright… in the visitor's language (App translatable fields).
+      WORKSPACE.web_app = translateRecord("App", loopar.webApp);
+      // Languages the site publishes: internal links keep the visitor's
+      // language prefix and the language switcher lists them.
+      WORKSPACE.site_languages = WorkspaceController.siteLanguagesMeta(this.req);
       if (workspace === "web") WORKSPACE.announcement = await activeAnnouncement(loopar.webApp?.name);
     } else if (workspace === "portal") {
       // The portal is the signed-in side of the site: it wears the host's web app (logo, theme).
@@ -48,6 +58,25 @@ export default class WorkspaceController extends AuthController {
         data: this.__DATA__
       }
     }
+  }
+
+  /**
+   * The site's languages for the page: default, published list, and the
+   * alternate URL of the current page in each one (hreflang). The page path
+   * is the request url without its language prefix (stripped by the router).
+   */
+  static siteLanguagesMeta(req) {
+    const def = siteDefaultLanguage();
+    const languages = siteLanguages();
+    const site = { default: def, languages };
+    if (languages.length < 2 || !req) return { ...site, alternates: [] };
+
+    const proto = req.protocol || "https";
+    const origin = `${proto}://${req.get?.("host") || req.headers?.host || ""}`;
+    const path = splitLanguagePrefix((req.originalUrl || "/").split("?")[0], languages).path;
+    const alternates = languages.map((code) => ({ language: code, href: origin + localizePath(path, code, site) }));
+    alternates.push({ language: "x-default", href: origin + localizePath(path, def, site) });
+    return { ...site, alternates };
   }
 
   hasPermission(document, action){
@@ -110,6 +139,12 @@ export default class WorkspaceController extends AuthController {
     } : null;
     __META__.userId = userData?.name;
     __META__.site = loopar.tenantId;
+    // Language the page renders in (URL prefix on sites, user/system on the
+    // desk). The browser gets the same language and dictionary before
+    // hydration (see __LOOPAR_I18N__ below), so SSR and client text match.
+    const language = requestLanguage();
+    __META__.language = language;
+    await loadRegional();
     // Client bundle this page boots with; compared against X-Loopar-Build on
     // every later response to detect a newer deploy (null in development).
     __META__.build = buildId();
@@ -154,7 +189,12 @@ export default class WorkspaceController extends AuthController {
       <link rel="stylesheet" href="/assets/public/theme.css?v=${themeVersion}"/>
     `)
 
+    html = html.replace(/<html([^>]*?)\slang="[^"]*"/, `<html$1 lang="${language}"`);
+
+    // `<` escaped so a translation can never close the script element.
+    const i18nJson = JSON.stringify(clientI18nPayload(language)).replace(/</g, "\\u003c");
     html = html.replace(`<!--__loopar-meta-data__-->`, `
+      <script>window.__LOOPAR_I18N__ = ${i18nJson};</script>
       <script id="__loopar-meta-data__" type="application/json">
         ${JSON.stringify(__META__)}
       </script>

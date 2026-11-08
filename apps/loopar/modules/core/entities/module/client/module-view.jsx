@@ -6,6 +6,7 @@ import { Link } from "@link";
 import { cn } from "@cn/lib/utils";
 import { PlusIcon } from "lucide-react";
 import EntityList from "../../entity/client/entity-list";
+import { __ } from "loopar";
 
 /** The module is fixed by the route (`/desk/<Module>`): no point searching by it. */
 const HIDDEN_SEARCH_FIELDS = ["module"];
@@ -17,7 +18,7 @@ function TypeTabs({ types, current }) {
   if (types.length < 2) return null;
 
   return (
-    <nav aria-label="Document types" className="mb-4 flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-muted/60 p-1">
+    <nav aria-label={__("Document types")} className="mb-4 flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-muted/60 p-1">
       {types.map((t) => {
         const active = t.name === current;
         return (
@@ -32,7 +33,7 @@ function TypeTabs({ types, current }) {
               active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {t.label}
+            {__(t.label)}
             <span className={cn(
               "rounded-full px-1.5 text-xs tabular-nums",
               active ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
@@ -61,7 +62,7 @@ export default function ModuleView() {
       to={`/desk/${currentType.name}/create`}
     >
       <PlusIcon className="pr-1" />
-      New {currentType.singular}
+      {__("New")} {__(currentType.singular)}
     </Link>
   );
 

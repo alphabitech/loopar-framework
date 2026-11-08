@@ -10,6 +10,8 @@ import { getMetaFields } from "@@tools/meta-fields";
 import { DesignerContext, useDesigner } from "@context/designer-context";
 import { FormWrapper } from "@form-provider";
 import { isEqual } from 'es-toolkit/predicate';
+import { __ } from "@global/i18n";
+import { ElementLanguages } from "./element-languages";
 
 function mergeGroups(...arrays) {
   const groupMap = new Map();
@@ -204,10 +206,13 @@ export function ElementEditor() {
             <div className="flex items-baseline gap-2 min-w-0 px-1 pb-1.5">
               <span className="text-sm font-semibold truncate">{loopar.utils.Capitalize(elementName)}</span>
               <span className="text-muted-foreground text-xs truncate">{elementKey}</span>
+              <span className="ml-auto shrink-0">
+                <ElementLanguages elementKey={elementKey} element={elementName} data={updatingElement.data} />
+              </span>
             </div>
             <Input
               type="search"
-              placeholder="Search properties..."
+              placeholder={__("Search properties...")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

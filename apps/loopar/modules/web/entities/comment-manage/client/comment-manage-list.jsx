@@ -4,6 +4,7 @@ import { ListLayout } from '@loopar/list';
 import { loopar } from 'loopar';
 import { useState } from 'react';
 import { Check, X, Loader2 } from 'lucide-react';
+import { __ } from "loopar";
 
 const STATUS = { PENDING: 4, APPROVED: 5, REJECTED: 6 };
 
@@ -58,19 +59,19 @@ function ModerationSwitch({ row }) {
           type="button"
           disabled={loading}
           onClick={() => set(STATUS.REJECTED)}
-          title="Disapprove"
+          title={__("Disapprove")}
           className={`${half} ${rejected ? 'bg-red-500 text-white' : 'bg-secondary text-secondary-foreground hover:bg-red-500/15'}`}
         >
-          <X className="w-3.5 h-3.5" /> Reject
+          <X className="w-3.5 h-3.5" /> {__("Reject")}
         </button>
         <button
           type="button"
           disabled={loading}
           onClick={() => set(STATUS.APPROVED)}
-          title="Approve"
+          title={__("Approve")}
           className={`${half} ${approved ? 'bg-green-600 text-white' : 'bg-secondary text-secondary-foreground hover:bg-green-500/15'}`}
         >
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Approve
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} {__("Approve")}
         </button>
       </div>
       <span

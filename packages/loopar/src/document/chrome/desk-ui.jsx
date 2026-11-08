@@ -4,6 +4,7 @@ import {Button} from "@cn/components/ui/button";
 import { useDocument, useViewOptions } from "@loopar/document";
 import {cn} from "@cn/lib/utils";
 import { SaveButton } from "./app-bar";
+import { __ } from "@global/i18n";
 
 const SIDEBAR_WIDTH = "w-[300px]";
 const DOCUMENT_WIDTH_WITH_SIDEBAR = "lg:w-[calc(100%-300px)] w-full";
@@ -25,7 +26,7 @@ const InnerSidebar = ({ toggleSidebar, ...props }) => {
             tabIndex={0}
             onClick={toggleSidebar}
           >
-            <span className="sr-only">Close navigation</span>
+            <span className="sr-only">{__("Close navigation")}</span>
             <svg viewBox="0 0 10 10" className="h-2.5 w-2.5 overflow-visible">
               <path d="M0 0L10 10M10 0L0 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"></path>
             </svg>

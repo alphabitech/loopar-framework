@@ -1,6 +1,7 @@
 import BaseInput from "./input/base-input.jsx";
 import Select from "@select";
 import { DynamicIcon } from "@icon";
+import { __ } from "@global/i18n";
 
 export { DynamicIcon };
 
@@ -13,7 +14,7 @@ export default function IconInput(props) {
         data={{
           ...data,
           options: "Icon Manager",
-          description: <label>Powered by <a className="text-blue-600 visited:text-purple-600" href="https://lucide.dev/icons/" target="_blank">Lucide</a> & <a className="text-blue-600 visited:text-purple-600" href="https://simpleicons.org/" target="_blank">Simple Icons</a></label>,
+          description: <label>{__("Powered by")} <a className="text-blue-600 visited:text-purple-600" href="https://lucide.dev/icons/" target="_blank">{__("Lucide")}</a> & <a className="text-blue-600 visited:text-purple-600" href="https://simpleicons.org/" target="_blank">{__("Simple Icons")}</a></label>,
         }}
         value={field.value}
         renderOption={(option) => (

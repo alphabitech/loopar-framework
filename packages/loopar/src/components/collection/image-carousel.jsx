@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import fileManager from "@@file/file-manager";
 import CarouselBase from "../carousel/carousel.jsx";
+import { __ } from "@global/i18n";
 
 export default function ImageCarousel({
   images,
@@ -42,7 +43,7 @@ export default function ImageCarousel({
   if (slides.length === 0) {
     return (
       <div className={`bg-secondary text-secondary-foreground ${rounded} ${aspect} flex items-center justify-center text-sm opacity-60 ${className}`}>
-        No images
+        {__("No images")}
       </div>
     );
   }
@@ -65,14 +66,14 @@ export default function ImageCarousel({
 
   const renderArrowLeft = ({ onClick }) =>
     showArrows && slides.length > 1 ? (
-      <button type="button" aria-label="Previous image" onClick={onClick} className={`${arrowBtnCls} left-2`}>
+      <button type="button" aria-label={__("Previous image")} onClick={onClick} className={`${arrowBtnCls} left-2`}>
         <ChevronLeftIcon className="w-5 h-5" />
       </button>
     ) : null;
 
   const renderArrowRight = ({ onClick }) =>
     showArrows && slides.length > 1 ? (
-      <button type="button" aria-label="Next image" onClick={onClick} className={`${arrowBtnCls} right-2`}>
+      <button type="button" aria-label={__("Next image")} onClick={onClick} className={`${arrowBtnCls} right-2`}>
         <ChevronRightIcon className="w-5 h-5" />
       </button>
     ) : null;

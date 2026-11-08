@@ -12,6 +12,11 @@ import {
 
 import { cn } from "@cn/lib/utils"
 import { Label } from "@cn/components/ui/label"
+// @ts-ignore — shared JS module (core/global/i18n.js)
+import { __ } from "@global/i18n"
+
+/** String children render in the page language; anything else as is. */
+const t = (children: React.ReactNode) => (typeof children === "string" ? __(children) : children)
 
 const Form = FormProvider
 
@@ -81,7 +86,7 @@ const FormItem = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>)
 }
 FormItem.displayName = "FormItem"
 
-const FormLabel = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root>) => {
+const FormLabel = ({ className, children, ...props }: React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root>) => {
   const { error, formItemId } = useFormField()
 
   return (
@@ -89,7 +94,9 @@ const FormLabel = ({ className, ...props }: React.ComponentPropsWithoutRef<typeo
       className={cn(error && "text-destructive", className)}
       htmlFor={formItemId}
       {...props}
-    />
+    >
+      {t(children)}
+    </Label>
   )
 }
 FormLabel.displayName = "FormLabel";
@@ -112,7 +119,7 @@ const FormControl = ({ ...props }: React.ComponentPropsWithoutRef<typeof Slot>) 
 }
 FormControl.displayName = "FormControl"
 
-const FormDescription = ({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => {
+const FormDescription = ({ className, children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => {
   const { formDescriptionId } = useFormField()
 
   return (
@@ -120,14 +127,16 @@ const FormDescription = ({ className, ...props }: React.HTMLAttributes<HTMLParag
       id={formDescriptionId}
       className={cn("text-sm text-muted-foreground", className)}
       {...props}
-    />
+    >
+      {t(children)}
+    </p>
   )
 }
 FormDescription.displayName = "FormDescription"
 
 const FormMessage = ({ className, children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => {
   const { error, formMessageId } = useFormField()
-  const body = error ? String(error?.message) : children
+  const body = t(error ? String(error?.message) : children)
 
   if (!body) {
     return null

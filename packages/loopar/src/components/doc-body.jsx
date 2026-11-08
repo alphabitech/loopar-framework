@@ -1,6 +1,7 @@
 import { cn } from "@cn/lib/utils";
 import { usePrintRecord, usePrintDesign } from "@loopar/print/record";
 import { PrintStructure } from "@loopar/print/structure";
+import { __ } from "@global/i18n";
 
 /**
  * Print element: the automatic format's body (every non-empty field of the
@@ -14,7 +15,7 @@ export default function DocBody(props) {
   if (!record) {
     return (
       <div className={cn("lp-placeholder", props.className)}>
-        All fields of {design.entity || "the entity"} (automatic layout)
+        {__("All fields of")} {design.entity || "the entity"} {__("(automatic layout)")}
       </div>
     );
   }

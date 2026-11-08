@@ -2,6 +2,7 @@
 
 import { Search } from "lucide-react";
 import { avatarColor, countAppAssigned, countAppTotal } from "../helper";
+import { __ } from "loopar";
 
 export function AppTabs({ permissions, currentApp, onSelect, search, onSearch }) {
 
@@ -32,7 +33,7 @@ export function AppTabs({ permissions, currentApp, onSelect, search, onSearch })
         <Search size={11} className="text-muted-foreground flex-shrink-0" />
         <input
           className="text-[11px] bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground w-28"
-          placeholder="Filter docs..."
+          placeholder={__("Filter docs...")}
           value={search}
           onChange={e => onSearch(e.target.value)}
         />

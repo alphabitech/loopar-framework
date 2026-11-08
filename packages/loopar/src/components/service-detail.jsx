@@ -3,6 +3,7 @@ import { loopar } from "loopar";
 import fileManager from "@@file/file-manager";
 import { ArrowLeftIcon, Loader2 } from "lucide-react";
 import { Preview as MarkdownPreview } from "./markdown/preview.jsx";
+import { __ } from "@global/i18n";
 
 /**
  * Detail of a Service: what it is (summary, description), what it includes
@@ -77,13 +78,13 @@ export default function ServiceDetail({ slug, app, entity, preloadedItem = null,
           <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {item.deliverables ? (
               <div className="rounded-xl border bg-card p-6">
-                <h2 className="text-lg font-semibold mb-3">What it can include</h2>
+                <h2 className="text-lg font-semibold mb-3">{__("What it can include")}</h2>
                 <MarkdownPreview source={item.deliverables} />
               </div>
             ) : null}
             {item.not_included ? (
               <div className="rounded-xl border bg-card p-6">
-                <h2 className="text-lg font-semibold mb-3">Good to know</h2>
+                <h2 className="text-lg font-semibold mb-3">{__("Good to know")}</h2>
                 <MarkdownPreview source={item.not_included} />
               </div>
             ) : null}

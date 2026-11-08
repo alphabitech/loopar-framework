@@ -6,6 +6,7 @@ import { Button } from '@cn/components/ui/button';
 import { ArrowUp } from 'lucide-react';
 import { useState } from 'react';
 import ThemeCustomizer from '../../system-settings/client/src/theme';
+import { __ } from "loopar";
 
 /**
  * Optional per-app theme, used on the app's site domains. Off = no value, so
@@ -30,7 +31,7 @@ function AppThemeSlot(props) {
             }
           }}
         />
-        Own theme for this app's sites (otherwise the System Settings theme applies)
+        {__("Own theme for this app's sites (otherwise the System Settings theme applies)")}
       </label>
       {own && <ThemeCustomizer {...props} />}
     </div>

@@ -25,6 +25,7 @@ import {cn} from "@cn/lib/utils";
 import { useDialogContext} from "@dialog";
 import { useTable } from "@@table/TableContext"
 import { useWorkspace } from "@workspace/workspace-provider";
+import { __ } from "loopar";
 
 const tenantStatus = (row, site) => {
   return row.status != "online" || site == row.name;
@@ -111,7 +112,7 @@ const NameRender = ({row}) => {
           {row.name.toUpperCase()}
           {!!Number(row.control_plane) && (
             <span className='rounded border border-primary/40 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary'>
-              Control plane
+              {__("Control plane")}
             </span>
           )}
         </span>
@@ -196,7 +197,7 @@ const Buttons = ({row}) => {
     <div className="flex flex-row items-center gap-0">
       <Button
         variant="outline"
-        title="Restart — re-initializes the tenant (fresh re-init, picks up code/env changes)"
+        title={__("Restart — re-initializes the tenant (fresh re-init, picks up code/env changes)")}
         disabled={status != "online" || loading}
         onClick={(e) => {
           e.preventDefault();
@@ -239,10 +240,10 @@ const DangerMenu = ({ row, loading, setUpdateRows }) => {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem onClick={() => dangerAction("reset", row.name, setUpdateRows)}>
-          <RotateCcw className="mr-2 h-4 w-4 text-amber-500" /> Reset (drop database)
+          <RotateCcw className="mr-2 h-4 w-4 text-amber-500" /> {__("Reset (drop database)")}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => dangerAction("destroy", row.name, setUpdateRows)} className="text-red-500">
-          <Trash2 className="mr-2 h-4 w-4" /> Delete tenant
+          <Trash2 className="mr-2 h-4 w-4" /> {__("Delete tenant")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -363,7 +364,7 @@ const DeployButton = () => {
         onClick={deployStaging}
         disabled={isRunning}
         className="rounded-r-none"
-        title="Deploy the latest watcher build (from staging) and reload tenants"
+        title={__("Deploy the latest watcher build (from staging) and reload tenants")}
       >
         <RocketIcon className={`mr-2 ${isRunning ? "animate-pulse" : ""}`} />
         {label}
@@ -374,17 +375,17 @@ const DeployButton = () => {
             variant={variant}
             disabled={isRunning}
             className="rounded-l-none border-l border-white/20 px-2"
-            title="Deploy options"
+            title={__("Deploy options")}
           >
             <ChevronDown className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-60">
           <DropdownMenuItem onClick={deployStaging}>
-            <RocketIcon className="mr-2 h-4 w-4" /> Deploy (from staging — fast)
+            <RocketIcon className="mr-2 h-4 w-4" /> {__("Deploy (from staging — fast)")}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={fullRebuild}>
-            <Hammer className="mr-2 h-4 w-4" /> Full rebuild &amp; deploy
+            <Hammer className="mr-2 h-4 w-4" /> {__("Full rebuild & deploy")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -461,7 +462,7 @@ const InstallButton = () => {
       variant={running ? "outline" : "secondary"}
       onClick={onClick}
       disabled={running}
-      title="Install dependencies (yarn install) — run when libraries changed, before building"
+      title={__("Install dependencies (yarn install) — run when libraries changed, before building")}
     >
       <PackageIcon className={`mr-2 ${running ? "animate-pulse" : ""}`} />
       {running ? "Installing…" : "Install"}

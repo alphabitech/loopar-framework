@@ -12,6 +12,7 @@ import {
 
 import { Checkbox } from "@cn/components/ui/checkbox";
 import { ChevronDownIcon } from "lucide-react";
+import { __ } from "@global/i18n";
 
 export function DropdownListGridActions(props) {
   const {bulkRemove, selectAllVisibleRows, selectedCount, rowsCount, selectorAllStatus} = useTable();
@@ -30,7 +31,7 @@ export function DropdownListGridActions(props) {
             <div className="flex flex-row pl-2 items-center">
               {selectedCount > 0 && (
                 <p className="flex items-center justify-center">
-                  Selected {selectedCount}
+                  {__("Selected")} {selectedCount}
                 </p>
               )}
               <ChevronDownIcon className="ml-1" />
@@ -39,20 +40,20 @@ export function DropdownListGridActions(props) {
         </>
       </div>
       <DropdownMenuContent className="w-56">
-        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+        <DropdownMenuLabel>{__("Actions")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem
             disabled={rowsCount === selectedCount}
             onClick={() => selectAllVisibleRows(true)}
           >
-            Select All
+            {__("Select All")}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={selectedCount <= 0}
             onClick={() => selectAllVisibleRows(false)}
           >
-            Unselect All
+            {__("Unselect All")}
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -63,7 +64,7 @@ export function DropdownListGridActions(props) {
               bulkRemove(props.deleteOnServer);
             }}
           >
-            Bulk Remove
+            {__("Bulk Remove")}
           </DropdownMenuItem>}
         </DropdownMenuGroup>
       </DropdownMenuContent>

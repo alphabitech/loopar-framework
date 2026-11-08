@@ -6,6 +6,7 @@ import { MoreHorizontalIcon, PencilIcon, EyeIcon, PrinterIcon, Trash2Icon } from
 import { canOn } from "@context/auth-context";
 import { useViewOptions } from "@loopar/document";
 import { cn } from "@cn/lib/utils";
+import { __ } from "@global/i18n";
 
 const Entry = ({ children, className = "" }) => (
   <div className={cn("lp-toolbar-menu-item flex empty:hidden [&>*]:w-full [&>*]:justify-start", className)}>{children}</div>
@@ -33,8 +34,8 @@ export function RowMenu({ row, Entity = {}, onDelete }) {
             "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100",
             "focus-visible:opacity-100 data-[state=open]:opacity-100",
           )}
-          aria-label="Row actions"
-          title="Actions"
+          aria-label={__("Row actions")}
+          title={__("Actions")}
         >
           <MoreHorizontalIcon />
         </Button>
@@ -51,20 +52,20 @@ export function RowMenu({ row, Entity = {}, onDelete }) {
 
         <Entry>
           {canEdit ? (
-            <Link variant="ghost" to={`update?name=${name}`}><PencilIcon />Edit</Link>
+            <Link variant="ghost" to={`update?name=${name}`}><PencilIcon />{__("Edit")}</Link>
           ) : (
-            <Link variant="ghost" to={`view?name=${name}`}><EyeIcon />View</Link>
+            <Link variant="ghost" to={`view?name=${name}`}><EyeIcon />{__("View")}</Link>
           )}
         </Entry>
         {canPrint && (
           <Entry>
-            <Link variant="ghost" to={`print?name=${name}`}><PrinterIcon />Print</Link>
+            <Link variant="ghost" to={`print?name=${name}`}><PrinterIcon />{__("Print")}</Link>
           </Entry>
         )}
         {canDelete && (
           <Entry>
             <Button variant="ghost" className="text-red-500 hover:text-red-500" onClick={(e) => { e.preventDefault(); onDelete?.(row); }}>
-              <Trash2Icon />Delete
+              <Trash2Icon />{__("Delete")}
             </Button>
           </Entry>
         )}

@@ -1,3 +1,4 @@
+import { __ } from './i18n.js';
 import {getTime, isValidDate} from './date-utils.js';
 
 export const TYPES = Object.freeze({
@@ -360,7 +361,10 @@ export const elementsDefinition = {
     // base hash, conflict UI) — the generic form draft must leave it alone.
     { element: "designer", icon: "Brush", type: TYPES.longtext, ownsDraft: true },
     { element: "slot", icon: "Plug"},
-    { element: "metadata", icon: "Code", type: TYPES.json}
+    { element: "metadata", icon: "Code", type: TYPES.json},
+    // Texts of a page (or any doc_structure field) in the site's other
+    // languages; edits the record's `translations` (see global/i18n-content.js).
+    { element: "content_translations", icon: "Languages", type: TYPES.longtext, show_in_design: false }
   ],
   // Read the record being printed (src/document/print/record.jsx); outside a
   // print they render a design placeholder.
@@ -634,12 +638,12 @@ class DataInterface {
     if (required && consent && ['checkbox', 'switch'].includes(this.element)) {
       return {
         valid: [true, 'true', 1, '1'].includes(this.value),
-        message: `${this.__label()} is required`
+        message: __("{0} is required", [this.__label()])
       }
     }
     return {
       valid: !required || !this.isEmptyValue(),
-      message: `${this.__label()} is required`
+      message: __("{0} is required", [this.__label()])
     }
   }
 
@@ -669,8 +673,8 @@ class DataInterface {
     // field for context, instead of the raw "'<value>' is not a valid value".
     if (!validatorRules.valid) {
       validatorRules.message = validatorRules.message
-        ? `${this.__label()}: ${validatorRules.message}`
-        : `'${this.value}' is not a valid value in ${this.__label()}`;
+        ? `${this.__label()}: ${__(validatorRules.message)}`
+        : __("'{0}' is not a valid value in {1}", [this.value, this.__label()]);
     }
 
     return this.#validatorMessage(validatorRules);
@@ -684,9 +688,9 @@ class DataInterface {
   }
 
   __label() {
-    if (this.data.label) return this.data.label;
+    if (this.data.label) return __(this.data.label);
     const name = String(this.data.name || "").replace(/_/g, " ").trim();
-    return name ? name.charAt(0).toUpperCase() + name.slice(1) : "This field";
+    return __(name ? name.charAt(0).toUpperCase() + name.slice(1) : "This field");
   }
 }
 

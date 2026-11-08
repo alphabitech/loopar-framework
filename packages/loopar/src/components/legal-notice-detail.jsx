@@ -2,12 +2,11 @@ import { useEffect, useState } from "react";
 import { loopar } from "loopar";
 import { Loader2 } from "lucide-react";
 import { Preview as MarkdownPreview } from "./markdown/preview.jsx";
+import { formatDate } from "@global/format";
 
 function fmtDate(value) {
   if (!value) return null;
-  const date = new Date(`${String(value).slice(0, 10)}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
+  return formatDate(String(value).slice(0, 10), "long");
 }
 
 /**

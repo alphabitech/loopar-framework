@@ -1,3 +1,4 @@
+import { __ } from "@global/i18n";
 export const MetaLoadError = ({ element, error }) => {
   const isDev = process.env.NODE_ENV !== "production";
   const detail = isDev && error?.message ? String(error.message) : null;
@@ -7,17 +8,17 @@ export const MetaLoadError = ({ element, error }) => {
       <div className="mb-1 flex items-center gap-2">
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
         <span className="font-mono text-xs tracking-wide text-destructive">
-          COMPONENT FAILED{element ? ` · ${element}` : ""}
+          {__("COMPONENT FAILED")}{element ? ` · ${element}` : ""}
         </span>
       </div>
       <p className="text-sm text-muted-foreground">
-        The component{" "}
+        {__("The component")}{" "}
         {element ? (
           <code className="font-mono text-foreground">{element}</code>
         ) : (
           "requested here"
         )}{" "}
-        could not be loaded.
+        {__("could not be loaded.")}
       </p>
       {detail ? (
         <pre

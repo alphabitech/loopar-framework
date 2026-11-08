@@ -1,5 +1,6 @@
 'use strict'
 
+import { __ } from '../global/i18n.js';
 import CoreDocument from './core-document.js';
 import { loopar } from '../loopar.js';
 import { Op } from 'db-env';
@@ -80,9 +81,9 @@ export default class BaseDocument extends CoreDocument {
   }
 
   getFieldListLabels() {
-    const labels = this.getFieldProperties('label');
+    const labels = this.getFieldProperties('label').map((l) => __(l));
 
-    return labels.length === 0 ? ['Name'] : labels;
+    return labels.length === 0 ? [__('Name')] : labels;
   }
 
   buildCondition(q = null){

@@ -20,6 +20,7 @@ import {OrphanColumnsManager} from "./src/OrphanColumnsManager.jsx"
 import { ElementStore, ElementStoreContext } from "./element-store.js";
 import { getNodeKey, pruneDocStructure } from "@global/prune-doc-structure";
 import Emitter from "@services/emitter/emitter";
+import { __ } from "@global/i18n";
 
 const updateE = (structure, data, node, merge) => {
   return structure.map((el) => {
@@ -109,19 +110,19 @@ const DesignerButton = () => {
   const { sidebarOpen, name } = useDocument();
 
   if (!designerMode || designerModeType == "preview") {
-    return <><BrushIcon className="mr-2" /> Design</>
+    return <><BrushIcon className="mr-2" /> {__("Design")}</>
   }
 
   if (designerModeType == "editor") {
     if (sidebarOpen) {
-      return <><BrushIcon className="mr-2" /> Design</>
+      return <><BrushIcon className="mr-2" /> {__("Design")}</>
     } else {
-      return <><EyeIcon className="mr-2" /> Preview</>
+      return <><EyeIcon className="mr-2" /> {__("Preview")}</>
     }
   }
 
   if (designerModeType == "designer") {
-    return <><EyeIcon className="mr-2" /> Preview</>
+    return <><EyeIcon className="mr-2" /> {__("Preview")}</>
   }
 }
 
@@ -731,22 +732,22 @@ export const BaseDesigner = (props) => {
               <h2 className="text-3xl">{data.label}</h2>
               {draftConflict ? (
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-destructive">
-                  <span>A local draft from an earlier version was found (the server content has changed).</span>
-                  <button type="button" className="underline" onClick={() => applyDraft(conflictDraftRef.current)}>Restore anyway</button>
-                  <button type="button" className="underline" onClick={discardDraft}>Discard</button>
+                  <span>{__("A local draft from an earlier version was found (the server content has changed).")}</span>
+                  <button type="button" className="underline" onClick={() => applyDraft(conflictDraftRef.current)}>{__("Restore anyway")}</button>
+                  <button type="button" className="underline" onClick={discardDraft}>{__("Discard")}</button>
                 </div>
               ) : hasUnsavedChanges ? (
                 <div className="mt-1 flex items-center gap-1.5 text-xs text-amber-600">
                   <span className="h-2 w-2 rounded-full bg-amber-500" />
-                  <span>Unsaved changes</span>
+                  <span>{__("Unsaved changes")}</span>
                 </div>
               ) : null}
             </div>
             <div className="space-x-1">
-              <Button variant="secondary" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={undo}>
+              <Button variant="secondary" title={__("Undo (Ctrl+Z)")} disabled={!canUndo} onClick={undo}>
                 <Undo2/>
               </Button>
-              <Button variant="secondary" title="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}>
+              <Button variant="secondary" title={__("Redo (Ctrl+Shift+Z)")} disabled={!canRedo} onClick={redo}>
                 <Redo2/>
               </Button>
               {/* <Button
@@ -769,14 +770,14 @@ export const BaseDesigner = (props) => {
               </Button>
               <Button variant="secondary" onClick={handleSetMeta}>
                 <BracesIcon className="mr-2" />
-                META
+                {__("META")}
               </Button>
               <Button
                 variant="secondary"
                 onClick={() => setSendingPrompt(true)}
               >
                 <SparkleIcon className="mr-2" />
-                Design AI
+                {__("Design AI")}
               </Button>
             </div>
           </div>
@@ -787,7 +788,7 @@ export const BaseDesigner = (props) => {
             canCustomize={false}
           >
             <Tab
-              label={<div className="flex"><BrushIcon className="h-6 w-6 pr-2" /> Designer</div>}
+              label={<div className="flex"><BrushIcon className="h-6 w-6 pr-2" /> {__("Designer")}</div>}
               name={`${selfKey}-designer_tab`}
               key={`${selfKey}-designer_tab`}
             >
@@ -805,7 +806,7 @@ export const BaseDesigner = (props) => {
               </div>
             </Tab>
             <Tab
-              label={<div className="flex"><BracesIcon className="h-6 w-6 pr-2" /> META</div>}
+              label={<div className="flex"><BracesIcon className="h-6 w-6 pr-2" /> {__("META")}</div>}
               name={`${selfKey}-meta_tab`}
               key={`${selfKey}-meta_tab`}
             >
@@ -818,7 +819,7 @@ export const BaseDesigner = (props) => {
               </div>
             </Tab>
             <Tab
-              label={<div className="flex"><BrushCleaning className="h-6 w-6 pr-2" /> Clean</div>}
+              label={<div className="flex"><BrushCleaning className="h-6 w-6 pr-2" /> {__("Clean")}</div>}
               name={`${selfKey}-clean_tab`}
               key={`${selfKey}-clean_tab`}
             >
@@ -859,23 +860,23 @@ export const Designer = (props) => {
         <div className="space-x-1 pointer-events-none">
           <Button variant="secondary">
             <BrushIcon className="mr-2" />
-            Design
+            {__("Design")}
           </Button>
           <Button variant="secondary">
             <BracesIcon className="mr-2" />
-            META
+            {__("META")}
           </Button>
           <Button
             variant="secondary"
           >
             <SparkleIcon className="mr-2" />
-            Design AI
+            {__("Design AI")}
           </Button>
         </div>
       </div>
       <div className="w-full p-2">
         <div className="flex items-center bg-slate-700/50 justify-center h-[60px]">
-          <h1 className="text-center text-2xl font-bold">Design area</h1>
+          <h1 className="text-center text-2xl font-bold">{__("Design area")}</h1>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { getWorkspaceName, workspaceRequiresAuth } from "@global/router-utils";
 import { navTrace } from "./nav-trace.js";
+import { currentLanguage } from "@global/i18n";
 
 export default class HTTP {
   #ui = {
@@ -94,6 +95,8 @@ export default class HTTP {
    *  - X-Workspace-Token is the signed browsing context (RPC URLs carry no
    *    workspace segment).
    *  - X-CSRF-Token is the double-submit CSRF check for mutations.
+   *  - X-Loopar-Language is the language of the page, so server messages
+   *    (errors, notifications) come back in it.
    */
   #buildFetchOptions({ method = 'POST', body, signal }) {
     const csrf = this.getCsrfToken();
@@ -103,6 +106,7 @@ export default class HTTP {
       'X-Requested-With': 'XMLHttpRequest',
       ...(wsToken ? { 'X-Workspace-Token': wsToken } : {}),
       ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+      'X-Loopar-Language': currentLanguage(),
     };
 
     const init = {
@@ -247,8 +251,10 @@ export default class HTTP {
 
       if (error?.redirect) {
         const dest = this.#withReturnUrl(error.redirect);
-        navTrace('error-redirect', { request: url, to: dest, hard: !!error.hardRedirect, code: error.code, message: error.message });
-        if (error.hardRedirect) {
+        // /auth/* is another workspace: never a soft (in-SPA) navigation.
+        const hard = !!error.hardRedirect || /^\/auth(\/|\?|$)/.test(String(dest));
+        navTrace('error-redirect', { request: url, to: dest, hard, code: error.code, message: error.message });
+        if (hard) {
           window.location.replace(dest);
         } else {
           this.navigate(dest, { replace: true });

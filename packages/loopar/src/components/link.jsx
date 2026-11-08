@@ -9,6 +9,7 @@ import { useDesigner } from "@context/designer-context";
 import { VARIANTS } from "./base/ComponentDefaults";
 import { RouteParsing, setDefaultParams, buildUrl } from "@global/router-utils";
 import { EntryModal } from "@app/entry-modal";
+import { currentLanguage, localizePath } from "@global/i18n";
 
 const HEADER_OFFSET = 15;
 
@@ -16,11 +17,14 @@ const parseParams = (pathname, workspaceName = 'desk') =>
   RouteParsing.parseParams(pathname, workspaceName);
 
 export const useMakeUrl = (href) => {
-  const { pathname } = useWorkspace();
+  const { pathname, workspace, __META__ } = useWorkspace();
+  const site = __META__?.site_languages;
 
   return useMemo(() => {
-    return buildUrl(href, pathname);
-  }, [href, pathname]);
+    const url = buildUrl(href, pathname);
+    // Website links stay in the visitor's language (/es/pricing).
+    return workspace === "web" && site ? localizePath(url, currentLanguage(), site) : url;
+  }, [href, pathname, workspace, site]);
 };
 
 export const makeUrl = (href) => {

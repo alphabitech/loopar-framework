@@ -7,6 +7,7 @@ import { usePersist } from "@services/persist-state";
 import { PermissionTable } from "./permission-table.jsx";
 import { SubjectRail } from "./subject-rail.jsx";
 import { SubjectHeader } from "./subject-header.jsx";
+import { __ } from "loopar";
 
 /**
  * Roles & permissions manager.
@@ -104,7 +105,7 @@ export function RolePermissionManager({ manager = "general", role: initialRole, 
 
   const body = !subject ? (
     <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground py-24 flex-1">
-      <p className="text-sm">Select a role or a user to manage its permissions</p>
+      <p className="text-sm">{__("Select a role or a user to manage its permissions")}</p>
     </div>
   ) : (
     <PermissionTable

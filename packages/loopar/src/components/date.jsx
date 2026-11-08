@@ -19,6 +19,7 @@ import {
 } from "@cn/components/ui/popover"
 
 import { CalendarIcon } from "lucide-react";
+import { __ } from "@global/i18n";
 
 export default function DatePicker(props) {
   const { renderInput, data } = BaseInput(props);
@@ -62,7 +63,7 @@ export default function DatePicker(props) {
                 {isValid ? (
                   format(fieldDate, "PPP")
                 ) : (
-                  <span>Pick a date</span>
+                  <span>{__("Pick a date")}</span>
                 )}
                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
               </Button>

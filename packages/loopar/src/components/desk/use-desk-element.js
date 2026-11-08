@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import loopar from "loopar";
 import { useDocument } from "@loopar/document";
 import { useDesigner } from "@context/designer-context";
+import { formatCurrency, formatNumber as formatRegionalNumber } from "@global/format";
 
 /**
  * Data of a desk page element, read by node key from the page's controller
@@ -42,8 +43,8 @@ export const deskLink = (target, action) => {
 
 export const formatNumber = (value, format) => {
   const n = Number(value || 0);
-  if (format === "currency") return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (format === "currency") return formatCurrency(n);
+  return formatRegionalNumber(n, { maximumFractionDigits: 2 });
 };
 
 /** Filter field of the element editor (a function: element globals load later). */

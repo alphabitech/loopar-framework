@@ -14,6 +14,7 @@ import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { keymap } from '@codemirror/view';
 import { Highlight, themes } from 'prism-react-renderer';
 import MetaComponent from "@meta-component";
+import { __ } from "@global/i18n";
 
 function CodeMirrorEditor({ value, onChange }) {
   const editorRef = useRef(null);
@@ -197,7 +198,7 @@ export default function ExampleViewer(props) {
           ) : (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Code className="w-4 h-4" />
-              <span>Model JSON</span>
+              <span>{__("Model JSON")}</span>
             </div>
           )}
         </div>
@@ -209,12 +210,12 @@ export default function ExampleViewer(props) {
           {copied ? (
             <>
               <Check className="w-3.5 h-3.5 text-green-500" />
-              <span className="text-green-500">Copied!</span>
+              <span className="text-green-500">{__("Copied!")}</span>
             </>
           ) : (
             <>
               <Copy className="w-3.5 h-3.5" />
-              <span>Copy</span>
+              <span>{__("Copy")}</span>
             </>
           )}
         </button>

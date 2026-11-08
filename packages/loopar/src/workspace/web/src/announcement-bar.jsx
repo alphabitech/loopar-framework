@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { XIcon, ArrowRightIcon } from "lucide-react";
 import { cn } from "@cn/lib/utils";
+import { __ } from "@global/i18n";
 
 /** Cookie of the announcement a visitor closed (read by the server too). */
 const CLOSED_COOKIE = "loopar_announcement_closed";
@@ -47,7 +48,7 @@ export function AnnouncementBar({ announcement, onClose }) {
   return (
     <div
       role="region"
-      aria-label="Announcement"
+      aria-label={__("Announcement")}
       className={cn("relative flex items-center justify-center px-10 text-xs sm:text-sm", variant.bar)}
       style={{ height: ANNOUNCEMENT_HEIGHT }}
     >
@@ -69,7 +70,7 @@ export function AnnouncementBar({ announcement, onClose }) {
         <button
           type="button"
           onClick={close}
-          aria-label="Close announcement"
+          aria-label={__("Close announcement")}
           className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 opacity-70 hover:opacity-100"
         >
           <XIcon className="h-4 w-4" />

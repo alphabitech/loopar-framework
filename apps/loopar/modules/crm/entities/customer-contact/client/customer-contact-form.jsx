@@ -6,6 +6,7 @@ import { FormLayout } from '@loopar/form';
 import { useActions, useDocument } from '@loopar/document';
 import { Button } from '@cn/components/ui/button';
 import { KeyRound, UserX } from 'lucide-react';
+import { __ } from "loopar";
 
 const call = (action, name) => new Promise((resolve, reject) => {
   loopar.call('Customer Contact', action, { query: { name }, freeze: true, success: resolve, error: reject });
@@ -26,11 +27,11 @@ export default function CustomerContactForm() {
       title: 'Portal access',
       content: r?.password ? (
         <div className="space-y-2 text-sm">
-          <p>User: <b>{r.user}</b></p>
-          <p>Temporary password: <b className="font-mono text-base">{r.password}</b></p>
-          <p className="text-muted-foreground">Share it with the contact; they will be asked to change it. It won't be shown again.</p>
+          <p>{__("User:")} <b>{r.user}</b></p>
+          <p>{__("Temporary password:")} <b className="font-mono text-base">{r.password}</b></p>
+          <p className="text-muted-foreground">{__("Share it with the contact; they will be asked to change it. It won't be shown again.")}</p>
         </div>
-      ) : <p className="text-sm">The contact is linked to the Web user <b>{r?.user}</b>.</p>,
+      ) : <p className="text-sm">{__("The contact is linked to the Web user")} <b>{r?.user}</b>.</p>,
     });
   };
 
@@ -41,8 +42,8 @@ export default function CustomerContactForm() {
 
   useActions(Document.isNew ? {} : {
     crm_portal: data.user
-      ? <Button key="revoke" variant="secondary" onClick={(e) => { e.preventDefault(); revoke(); }}><UserX className="w-4 h-4 mr-1" />Remove portal access</Button>
-      : <Button key="grant" variant="secondary" onClick={(e) => { e.preventDefault(); grant().catch(() => {}); }}><KeyRound className="w-4 h-4 mr-1" />Give portal access</Button>,
+      ? <Button key="revoke" variant="secondary" onClick={(e) => { e.preventDefault(); revoke(); }}><UserX className="w-4 h-4 mr-1" />{__("Remove portal access")}</Button>
+      : <Button key="grant" variant="secondary" onClick={(e) => { e.preventDefault(); grant().catch(() => {}); }}><KeyRound className="w-4 h-4 mr-1" />{__("Give portal access")}</Button>,
   });
 
   return <FormLayout />;

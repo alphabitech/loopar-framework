@@ -9,6 +9,7 @@ import { useContext } from "react";
 import { useFormState } from "react-hook-form";
 import { BaseFormContext } from "@form-context";
 import { nextListView } from "../list/views";
+import { __ } from "@global/i18n";
 
 /** Save. Filled (`default`) in the header — the one primary action; callers may pass another variant. */
 export const SaveButton = ({ variant = "default" }) => {
@@ -26,7 +27,7 @@ export const SaveButton = ({ variant = "default" }) => {
       }}
     >
       <SaveIcon className="pr-1" />
-      Save
+      {__("Save")}
     </Button>
   )
 }
@@ -48,7 +49,7 @@ function goToTarget(Document) {
 const GoToAction = ({ to, name }) => (
   <Link variant="secondary" to={to}>
     <ArrowBigRight className="pr-1" />
-    Go to {loopar.utils.Capitalize(name)}
+    {__("Go to {0}", [__(loopar.utils.Capitalize(name))])}
   </Link>
 );
 
@@ -69,7 +70,7 @@ const RenameAction = ({ Document }) => {
   ].filter(Boolean).join("\n");
 
   const run = () => loopar.prompt({
-    title: `Rename ${Entity.name}`,
+    title: __("Rename {0}", [Entity.name]),
     label: `New name for "${name}"`,
     placeholder: name,
     validate: (value) => {
@@ -79,7 +80,7 @@ const RenameAction = ({ Document }) => {
     ok: async (newName) => {
       const { rename: plan } = await loopar.call(Entity.name, "rename", { body: { name, new_name: newName.trim(), dry_run: 1 } });
       loopar.confirm({
-        title: `Rename "${plan.from}" → "${plan.to}"?`,
+        title: __("Rename \"{0}\" → \"{1}\"?", [plan.from, plan.to]),
         content: <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs">{describe(plan)}</pre>,
       }, async () => {
         const { rename: done } = await loopar.call(Entity.name, "rename", { body: { name, new_name: plan.to } });
@@ -91,7 +92,7 @@ const RenameAction = ({ Document }) => {
   return (
     <Button variant="ghost" className="w-full justify-start" onClick={run}>
       <TextCursorInputIcon className="pr-1" />
-      Rename
+      {__("Rename")}
     </Button>
   );
 };
@@ -129,14 +130,14 @@ function PrintToggle({ Document }) {
 
   if (meta.action === "print" && name) {
     return (
-      <Link variant="secondary" className="px-2" to={recordUrl(Document)} aria-label="Back to the document" title="Back to the document">
+      <Link variant="secondary" className="px-2" to={recordUrl(Document)} aria-label={__("Back to the document")} title={__("Back to the document")}>
         <FileTextIcon />
       </Link>
     );
   }
   if (!canPrint(Document)) return null;
   return (
-    <Link variant="secondary" className="px-2" to={`/desk/${Entity.name}/print?name=${encodeURIComponent(name)}`} aria-label="Print" title="Print">
+    <Link variant="secondary" className="px-2" to={`/desk/${Entity.name}/print?name=${encodeURIComponent(name)}`} aria-label={__("Print")} title={__("Print")}>
       <PrinterIcon />
     </Link>
   );
@@ -151,7 +152,7 @@ const Pill = ({ children }) => (
 /** Live dirty state of the desk form — the same signal as "No changes to save". */
 const DirtyPill = ({ control }) => {
   const { dirtyFields } = useFormState({ control });
-  return dirtyFields && Object.keys(dirtyFields).length > 0 ? <Pill>Unsaved</Pill> : null;
+  return dirtyFields && Object.keys(dirtyFields).length > 0 ? <Pill>{__("Unsaved")}</Pill> : null;
 };
 
 /**
@@ -162,7 +163,7 @@ const SaveState = ({ Document }) => {
   const form = useContext(BaseFormContext);
   const { canUpdate } = useViewOptions();
   if (!form || !canUpdate || !["create", "update"].includes(Document?.meta?.action)) return null;
-  if (Document.isNew) return <Pill>Not saved</Pill>;
+  if (Document.isNew) return <Pill>{__("Not saved")}</Pill>;
   return <DirtyPill control={form.control} />;
 };
 
@@ -179,18 +180,18 @@ function headerTexts(Document, contextName) {
   const { Entity = {}, data = {} } = Document;
 
   // Module pages render the "Module" entity: show the module itself.
-  if (Document.__MODULE__) return { title: Document.__MODULE__.description || Document.__MODULE__.name, subtitle: null };
-  if (contextName === "module") return { title: Entity.name, subtitle: null };
-  if (contextName === "list" || Entity.is_single || Document.isNew) return { title: Entity.name, subtitle: null };
+  if (Document.__MODULE__) return { title: __(Document.__MODULE__.description || Document.__MODULE__.name), subtitle: null };
+  if (contextName === "module") return { title: __(Entity.name), subtitle: null };
+  if (contextName === "list" || Entity.is_single || Document.isNew) return { title: __(Entity.name), subtitle: null };
   const name = Document.name || data.name;
-  return { title: Entity.name, subtitle: name && name !== Entity.name ? name : null };
+  return { title: __(Entity.name), subtitle: name && name !== Entity.name ? name : null };
 }
 
 /** Toggle button: shows the view it switches to. */
 const VIEW_BUTTON = {
-  List: { icon: <MenuIcon />, label: "List view" },
-  Grid: { icon: <GridIcon />, label: "Grid view" },
-  Kanban: { icon: <KanbanIcon />, label: "Board view" },
+  List: { icon: <MenuIcon />, label: __("List view") },
+  Grid: { icon: <GridIcon />, label: __("Grid view") },
+  Kanban: { icon: <KanbanIcon />, label: __("Board view") },
 };
 
 export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...props}) {
@@ -214,7 +215,7 @@ export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...prop
     ...(goTo ? [["__goto", <GoToAction key="__goto" to={goTo} name={Document.data?.name} />]] : []),
     ...(isList && onlyGrid !== true && onlyList !== true ? [[
       "__viewtype",
-      <Button key="__viewtype" className="px-2" variant="secondary" onClick={viewTypeToggle} title="Toggle view">
+      <Button key="__viewtype" className="px-2" variant="secondary" onClick={viewTypeToggle} title={__("Toggle view")}>
         {VIEW_BUTTON[nextListView(Document, viewType)].icon}
         <span className="lp-menu-label pl-1">{VIEW_BUTTON[nextListView(Document, viewType)].label}</span>
       </Button>,
@@ -228,13 +229,13 @@ export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...prop
     : isList ? (
       <Link variant="default" className="text-primary-foreground hover:text-primary-foreground" tabIndex="0" to={`/desk/${Entity.name}/create`}>
         <PlusIcon className="pr-1" />
-        New
+        {__("New")}
       </Link>
     ) : edit ? (
       // Read-only view: Edit takes Save's place.
       <Link variant="default" className="text-primary-foreground hover:text-primary-foreground" to={edit}>
         <PencilIcon className="pr-1" />
-        Edit
+        {__("Edit")}
       </Link>
     ) : <SaveButton />;
 
@@ -248,7 +249,7 @@ export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...prop
     >
       <div className="flex min-w-0 flex-1 flex-row items-center gap-2">
         {back && (
-          <Link variant="ghost" className="-ml-1 h-8 w-8 shrink-0 p-0" to={back} aria-label="Back" title="Back">
+          <Link variant="ghost" className="-ml-1 h-8 w-8 shrink-0 p-0" to={back} aria-label={__("Back")} title={__("Back")}>
             <ArrowLeftIcon />
           </Link>
         )}

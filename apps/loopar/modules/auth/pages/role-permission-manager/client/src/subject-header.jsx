@@ -3,6 +3,7 @@
 import { Link } from "@link";
 import { avatarColor } from "../helper";
 import { Checkbox } from "./Checkbox.jsx";
+import { __ } from "loopar";
 
 /**
  * Header for the selected subject. Role: name, kind, description, counts.
@@ -33,7 +34,7 @@ export function SubjectHeader({ subject, roleInfo, userInfo, allRoles = [], user
             <span className="text-[17px] font-semibold text-foreground truncate">{subject.name}</span>
             <span className="text-[10px] px-2 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary whitespace-nowrap">{kind}</span>
             {roleInfo?.disabled && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-muted-foreground">disabled</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-muted-foreground">{__("disabled")}</span>
             )}
           </div>
           <span className="text-[12px] text-muted-foreground truncate">
@@ -44,25 +45,25 @@ export function SubjectHeader({ subject, roleInfo, userInfo, allRoles = [], user
         <div className="ml-auto flex items-center gap-4 text-[12px] text-muted-foreground whitespace-nowrap">
           {isUser ? (
             <>
-              <span><b className="text-foreground">{userRoles.size}</b> roles</span>
-              <span><b className="text-foreground">{overrides}</b> overrides</span>
+              <span><b className="text-foreground">{userRoles.size}</b> {__("roles")}</span>
+              <span><b className="text-foreground">{overrides}</b> {__("overrides")}</span>
               {overrides > 0 && onClearOverrides && (
                 <button onClick={onClearOverrides}
-                  title="Remove every direct grant and deny of this user, keeping only what its roles provide"
+                  title={__("Remove every direct grant and deny of this user, keeping only what its roles provide")}
                   className="px-3 py-1.5 rounded-md border border-amber-500/40 text-amber-500 hover:bg-amber-500/10 transition-colors">
-                  Clear overrides
+                  {__("Clear overrides")}
                 </button>
               )}
             </>
           ) : (
             <>
-              <span><b className="text-foreground">{roleInfo?.grants ?? 0}</b> grants</span>
-              <span><b className="text-foreground">{roleInfo?.users ?? 0}</b> users</span>
+              <span><b className="text-foreground">{roleInfo?.grants ?? 0}</b> {__("grants")}</span>
+              <span><b className="text-foreground">{roleInfo?.users ?? 0}</b> {__("users")}</span>
               {roleInfo?.system && roleInfo?.app && onResetRole && (
                 <button onClick={onResetRole}
                   title={`Drop every grant of this role and seed again what the ${roleInfo.app} app defines. Users keep the role.`}
                   className="px-3 py-1.5 rounded-md border border-amber-500/40 text-amber-500 hover:bg-amber-500/10 transition-colors">
-                  Reset to defaults
+                  {__("Reset to defaults")}
                 </button>
               )}
             </>
@@ -76,7 +77,7 @@ export function SubjectHeader({ subject, roleInfo, userInfo, allRoles = [], user
 
       {isUser && (
         <div className="flex items-center gap-2 px-5 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mr-1 flex-shrink-0">Roles</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mr-1 flex-shrink-0">{__("Roles")}</span>
           {allRoles.map(r => {
             const on = userRoles.has(r.name);
             return (
@@ -92,7 +93,7 @@ export function SubjectHeader({ subject, roleInfo, userInfo, allRoles = [], user
             );
           })}
           <span className="ml-auto text-[11px] text-muted-foreground/80 whitespace-nowrap pl-4 flex-shrink-0">
-            Inherited from roles shows dashed; unchecking an inherited cell denies it for this user only.
+            {__("Inherited from roles shows dashed; unchecking an inherited cell denies it for this user only.")}
           </span>
         </div>
       )}

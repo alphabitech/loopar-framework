@@ -1,4 +1,6 @@
 import { resolveColumnFormat } from "@global/element-definition";
+import { __ } from "@global/i18n";
+import { regional, formatNumber, formatCurrency, formatDate, formatDateTime } from "@global/format";
 
 /**
  * Value → printable text, by element and column format. Pure (no React), so
@@ -14,7 +16,7 @@ import { resolveColumnFormat } from "@global/element-definition";
  * locales differ — an implicit locale would change the text between the two
  * and break hydration. Callers pass `locale` to override.
  */
-export const DEFAULT_LOCALE = "en-US";
+export const DEFAULT_LOCALE = null; // null → the request's regional locale (core/global/format.js)
 
 const NUMBER_FORMATS = {
   money: { minimumFractionDigits: 2, maximumFractionDigits: 2 },
@@ -63,25 +65,6 @@ export const isEmptyValue = (v) =>
 
 const TRUE_VALUES = new Set([true, 1, "1", "true", "on", "yes"]);
 
-/** "YYYY-MM-DD" → local midnight (new Date("YYYY-MM-DD") is UTC and can shift the day). */
-function toDate(value) {
-  if (value instanceof Date) return isNaN(value) ? null : value;
-  const s = String(value).trim();
-  const iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T00:00:00` : s.replace(" ", "T");
-  const d = new Date(iso);
-  return isNaN(d) ? null : d;
-}
-
-function formatNumber(value, kind, locale) {
-  const n = typeof value === "number" ? value : parseFloat(String(value).replace(/,/g, ""));
-  if (!Number.isFinite(n)) return String(value);
-  try {
-    return new Intl.NumberFormat(locale, NUMBER_FORMATS[kind]).format(n);
-  } catch {
-    return String(n);
-  }
-}
-
 /**
  * @param {string} kind from printKind()
  * @param {*} value raw value as stored (strings from rawValues)
@@ -94,30 +77,29 @@ function formatNumber(value, kind, locale) {
  */
 export function formatPrintValue(kind, value, { data = {}, titles = null, locale = DEFAULT_LOCALE } = {}) {
   if (kind === "skip") return null;
-  if (kind === "bool") return TRUE_VALUES.has(typeof value === "string" ? value.toLowerCase() : value) ? "Yes" : "No";
+  if (kind === "bool") return TRUE_VALUES.has(typeof value === "string" ? value.toLowerCase() : value) ? __("Yes") : __("No");
   if (isEmptyValue(value)) return null;
+
+  // Regional settings of the request (language + Company), the same on the
+  // server and the client; an explicit `locale` overrides only the locale.
+  const r = locale ? { ...regional(), locale } : regional();
 
   switch (kind) {
     case "money":
+      return formatCurrency(value, null, {}, r);
     case "decimal":
     case "int":
-      return formatNumber(value, kind, locale);
-    case "date": {
-      const d = toDate(value);
-      return d ? d.toLocaleDateString(locale, { year: "numeric", month: "short", day: "2-digit" }) : String(value);
-    }
-    case "datetime": {
-      const d = toDate(value);
-      return d
-        ? d.toLocaleString(locale, { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })
-        : String(value);
-    }
+      return formatNumber(value, NUMBER_FORMATS[kind], r);
+    case "date":
+      return formatDate(value, "medium", r);
+    case "datetime":
+      return formatDateTime(value, "medium", r);
     case "time": {
       const m = /^(\d{1,2}):(\d{2})/.exec(String(value));
       return m ? `${m[1].padStart(2, "0")}:${m[2]}` : String(value);
     }
     case "option":
-      return optionLabel(value, data, titles);
+      return __(optionLabel(value, data, titles));
     default:
       return String(value);
   }

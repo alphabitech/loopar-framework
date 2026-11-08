@@ -7,6 +7,7 @@ import { cn } from "@cn/lib/utils";
 import { useDocument } from "@loopar/document";
 import { buildFormData } from "@@tools/build-form-data";
 import { useCaptcha, CaptchaSlot } from "./captcha-widget";
+import { __ } from "@global/i18n";
 
 export default function MetaForm(props) {
   const formRef = useRef(null);
@@ -111,7 +112,7 @@ export default function MetaForm(props) {
             aria-hidden="true"
             style={{ position: "absolute", left: "-9999px", top: "auto", width: "1px", height: "1px", overflow: "hidden" }}
           >
-            <label htmlFor={`form_hp_${props.node || "x"}`}>Website</label>
+            <label htmlFor={`form_hp_${props.node || "x"}`}>{__("Website")}</label>
             <input
               id={`form_hp_${props.node || "x"}`}
               type="text"

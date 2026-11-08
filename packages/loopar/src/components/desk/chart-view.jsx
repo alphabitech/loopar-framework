@@ -5,6 +5,7 @@ import {
   XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from "recharts";
 import { formatNumber } from "./use-desk-element";
+import { __ } from "@global/i18n";
 
 export const CHART_PALETTE = [
   "var(--color-primary)",
@@ -84,7 +85,7 @@ export function ChartView({ data, type, height = 260, format, loading }) {
   }));
 
   if (!rows.length) {
-    return <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>No data</div>;
+    return <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>{__("No data")}</div>;
   }
 
   const axis = { stroke: "var(--color-muted-foreground)", fontSize: 12, tickLine: false, axisLine: false };
@@ -109,7 +110,7 @@ export function ChartView({ data, type, height = 260, format, loading }) {
           </ResponsiveContainer>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-2xl font-semibold tabular-nums">{formatNumber(total, format)}</span>
-            <span className="text-xs text-muted-foreground">Total</span>
+            <span className="text-xs text-muted-foreground">{__("Total")}</span>
           </div>
         </div>
         <ul className="w-full space-y-1.5 text-sm sm:w-1/2">

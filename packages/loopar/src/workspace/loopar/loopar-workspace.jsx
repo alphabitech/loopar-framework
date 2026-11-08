@@ -3,6 +3,7 @@ import { Link } from "@link";
 import { ArrowRightIcon } from "@radix-ui/react-icons";
 import { useWorkspace } from "@workspace/workspace-provider";
 import { AuthBackdrop } from "../auth/auth-workspace";
+import { __ } from "@global/i18n";
 
 /**
  * System pages (install wizard, update): one wide card centered over the
@@ -24,7 +25,7 @@ function SetupLayout({ children }) {
       <div className="relative z-10 pb-6 text-center">
         <Link variant="ghost" className="text-sm text-muted-foreground" _target="_blank" to="https://loopar.build/Doc">
           <ArrowRightIcon className="mr-2" />
-          Documentation
+          {__("Documentation")}
         </Link>
       </div>
     </div>

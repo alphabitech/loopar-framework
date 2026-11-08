@@ -19,6 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@cn/components/ui/popover";
+import { __ } from "@global/i18n";
 
 const PAGE_SIZE = 20;
 
@@ -208,7 +209,7 @@ export function Select({
     }
     return (
       <span className="truncate text-slate-600/70">
-        Select {data.label}
+        {__("Select")} {data.label}
       </span>
     );
   }, [current, data.label]);
@@ -294,7 +295,7 @@ export function Select({
           
           {error && (
             <div className="p-4 text-sm text-destructive">
-              Error: {error}
+              {__("Error:")} {error}
             </div>
           )}
           
@@ -305,7 +306,7 @@ export function Select({
           )}
           
           {!isLoading && !error && visibleRows.length === 0 && (
-            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandEmpty>{__("No results found.")}</CommandEmpty>
           )}
           
           {!error && visibleRows.length > 0 && (
@@ -353,12 +354,12 @@ export function Select({
                     <>
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       <span className="ml-2 text-xs text-muted-foreground">
-                        Loading more...
+                        {__("Loading more...")}
                       </span>
                     </>
                   ) : (
                     <span className="text-xs text-muted-foreground">
-                      Page {paginationInfo.current} of {paginationInfo.total}
+                      {__("Page {0} of {1}", [paginationInfo.current, paginationInfo.total])}
                     </span>
                   )}
                 </div>

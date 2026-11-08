@@ -7,6 +7,7 @@ import { Entity } from "../loader.jsx";
 import { useDocument } from "@loopar/document";
 import { useDesigner } from "@context/designer-context";
 import { SendHorizonalIcon } from "lucide-react";
+import { __ } from "@global/i18n";
 
 export const SendButton = ({ captcha, getBotFields, onSent, onError, children }) => {
   const { docRef } = useDocument();
@@ -105,7 +106,7 @@ export default function ContactForm(props) {
   };
 
   if (!data.entity) {
-    return <h1>No Contact Form set</h1>;
+    return <h1>{__("No Contact Form set")}</h1>;
   }
 
   if (sent) {
@@ -130,7 +131,7 @@ export default function ContactForm(props) {
           aria-hidden="true"
           style={{ position: "absolute", left: "-9999px", top: "auto", width: "1px", height: "1px", overflow: "hidden" }}
         >
-          <label htmlFor={`cf_hp_${formKey}`}>Website</label>
+          <label htmlFor={`cf_hp_${formKey}`}>{__("Website")}</label>
           <input
             id={`cf_hp_${formKey}`}
             type="text"

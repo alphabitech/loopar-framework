@@ -3,6 +3,7 @@ import { HamburgerMenuIcon, Cross1Icon } from '@radix-ui/react-icons';
 import { useWorkspace } from "@workspace/workspace-provider";
 import { Link } from "@link";
 import { useMemo } from "react";
+import { __ } from "@global/i18n";
 
 /**
  * URL segment of a menu link: "About Us" → "about-us". The router matches
@@ -63,7 +64,7 @@ export function MenuItems({ half = null, className = "" }) {
         key={item.id + i}
         to={`/${menuPath(item.link)}`}
       >
-        {item.link}
+        {__(item.link)}
       </Link>
     ));
   }, [menuItems, half, activeParentMenu, solid, rounded]);

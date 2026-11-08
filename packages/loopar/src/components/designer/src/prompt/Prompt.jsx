@@ -6,6 +6,7 @@ import loopar from "loopar";
 import { GeminiSend, GeminiStatus, GeminiContextProvider } from "../AI/local/Gemini.jsx";
 import { AIPrompt, sanitizeAIStructure } from "loopar";
 import {useDocument} from "@loopar/document";
+import { __ } from "@global/i18n";
 
 export const Prompt = ({
   onSend,
@@ -75,15 +76,15 @@ export const Prompt = ({
         {AI === "Remote" && (
           <div>
             <p className="text-sm text-muted-foreground">
-              Works with any OpenAI-compatible provider (OpenAI, Anthropic, Google, Ollama...)
+              {__("Works with any OpenAI-compatible provider (OpenAI, Anthropic, Google, Ollama...)")}
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-               Navigate to <a className="text-blue-500" target="_blanck" href="/desk/integrations">Integrations</a>
+               {__("Navigate to")} <a className="text-blue-500" target="_blanck" href="/desk/integrations">{__("Integrations")}</a>
             </p>
             <ul className="mt-2 ml-4 text-sm list-disc text-muted-foreground">
-              <li>Set your API key and Base URL in AI Provider</li>
-              <li>Create your Models in AI Model</li>
-              <li>Select the default Model in AI</li>
+              <li>{__("Set your API key and Base URL in AI Provider")}</li>
+              <li>{__("Create your Models in AI Model")}</li>
+              <li>{__("Select the default Model in AI")}</li>
             </ul>
           </div>
         )}
@@ -95,21 +96,20 @@ export const Prompt = ({
         {AI === "Browser" && (
           <div>
             <p className="text-sm text-muted-foreground">
-              In this mode, you can copy prompt text and paste
-              into your preferred AI service in the browser.
+              {__("In this mode, you can copy prompt text and paste into your preferred AI service in the browser.")}
             </p>
             <ul className="mt-2 ml-4 text-sm list-disc text-muted-foreground space-y-1">
               <li>
-                Click <span className="font-semibold border rounded-sm bg-primary/70 p-1 text-secondary">&Copy Prompt</span> to prepare your custom prompt.
+                {__("Click")} <span className="font-semibold border rounded-sm bg-primary/70 p-1 text-secondary">{__("&Copy Prompt")}</span> {__("to prepare your custom prompt.")}
               </li>
               <li>
-                Then, paste it into your chosen Chat AI service in the browser:
-                <a className="text-blue-500 pl-2 pr-2" href="https://chatgpt.com/?model=auto">GPT,</a>
-                <a className="text-blue-500 pr-2" href="https://gemini.google.com/">Gemini,</a>
-                <a className="text-blue-500" href="https://grok.com/">Grok</a> ...
+                {__("Then, paste it into your chosen Chat AI service in the browser:")}
+                <a className="text-blue-500 pl-2 pr-2" href="https://chatgpt.com/?model=auto">{__("GPT,")}</a>
+                <a className="text-blue-500 pr-2" href="https://gemini.google.com/">{__("Gemini,")}</a>
+                <a className="text-blue-500" href="https://grok.com/">{__("Grok")}</a> ...
               </li>
               <li>
-                Click <span className="font-semibold border rounded-sm bg-primary/70 p-1 text-secondary">&Eval</span> to process the response
+                {__("Click")} <span className="font-semibold border rounded-sm bg-primary/70 p-1 text-secondary">{__("&Eval")}</span> {__("to process the response")}
               </li>
             </ul>
           </div>
@@ -135,7 +135,7 @@ export const Prompt = ({
         <div className="flex-grow space-y-4">
           <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
             <div className="flex items-center gap-3 mb-3">
-              <label className="text-sm font-semibold">AI:</label>
+              <label className="text-sm font-semibold">{__("AI:")}</label>
               <div className="flex rounded-lg bg-transparent p-1 border border-transparent space-x-2">
                 {["Remote", "Local", "Browser"].map((option) => (
                   <button
@@ -169,14 +169,14 @@ export const Prompt = ({
                 checked={editCurrent}
                 onChange={(e) => setEditCurrent(e.target.checked)}
               />
-              Edit current design (the AI receives the current structure and applies your request to it)
+              {__("Edit current design (the AI receives the current structure and applies your request to it)")}
             </label>
           )}
 
           {!sendingPrompt && (
             <textarea
               className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 flex field-sizing-content min-h-40 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-lg"
-              placeholder="Enter your prompt here..."
+              placeholder={__("Enter your prompt here...")}
               value={currentPrompt}
               onChange={(e) => {
                 handleSetPrompt(e.target.value);
@@ -193,7 +193,7 @@ export const Prompt = ({
                       setSendingPrompt(false);
                     }}
                   >
-                    Rewrite
+                    {__("Rewrite")}
                   </Button>
                 )}
 
@@ -207,7 +207,7 @@ export const Prompt = ({
                           sendPrompt(currentPrompt);
                         }}
                       >
-                        Send
+                        {__("Send")}
                       </Button>
                     )}
                     {AI === "Local" && (

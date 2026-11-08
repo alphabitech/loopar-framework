@@ -1,6 +1,6 @@
 'use strict'
 
-import { BaseController, loopar } from "loopar";
+import { BaseController, loopar, sanitizeInput } from "loopar";
 import { resetMfa } from "../../controllers/auth/mfa.js";
 
 export default class UserController extends BaseController {
@@ -12,7 +12,13 @@ export default class UserController extends BaseController {
 
   async actionUpdate() {
     this.entry ??= 'form';
-    const document = await loopar.getDocument("User", this.name, this.hasData() ? this.data : null);
+    const document = await loopar.getDocument(
+      "User",
+      this.name,
+      // Field write policy (layer A): email/password are `protected` and the
+      // mfa_* / oauth_* / reset fields `system` — never taken from the form.
+      this.hasData() ? await sanitizeInput("User", this.data, { op: "update" }) : null
+    );
 
     if (!this.hasData()) {
       document.password = document.protectedPassword;

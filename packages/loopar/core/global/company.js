@@ -8,6 +8,7 @@
 
 import chroma from 'chroma-js';
 import { loopar } from '../loopar.js';
+import { countryName as localizedCountryName } from './format.js';
 
 export const COMPANY = 'Company';
 
@@ -24,13 +25,9 @@ export function colorToHex(value) {
   }
 }
 
+/** Country name in the request's language ("HN" → "Honduras"). */
 export function countryName(code) {
-  if (!code) return '';
-  try {
-    return new Intl.DisplayNames(['en'], { type: 'region' }).of(String(code).toUpperCase()) || String(code);
-  } catch {
-    return String(code);
-  }
+  return localizedCountryName(code);
 }
 
 /** Postal address as printed: street lines, "City, State ZIP", country. */

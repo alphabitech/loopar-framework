@@ -12,6 +12,7 @@ import {
 import { cn } from "@cn/lib/utils";
 import { Loader2 } from "lucide-react";
 import loopar from "loopar";
+import { __ } from "@global/i18n";
 
 /**
  * <stripe-plans> — Loopar Cloud pricing component.
@@ -325,7 +326,7 @@ export default function StripePlans(props) {
                       "bg-primary text-primary-foreground shadow-sm"
                     )}
                   >
-                    Most Popular
+                    {__("Most Popular")}
                   </span>
                 )}
 
@@ -405,7 +406,7 @@ export default function StripePlans(props) {
               <form onSubmit={handleSubmit} className="space-y-4">
                 {hasMultiple && (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Choose an option</label>
+                    <label className="text-sm font-medium">{__("Choose an option")}</label>
                     <div className="space-y-1">
                       {selectedCard.prices.map((p) => (
                         <label
@@ -435,7 +436,7 @@ export default function StripePlans(props) {
 
                 {needsAmount && (
                   <div className="space-y-1">
-                    <label className="text-sm font-medium">Amount (USD)</label>
+                    <label className="text-sm font-medium">{__("Amount (USD)")}</label>
                     <Input
                       type="number"
                       step="1"
@@ -459,7 +460,7 @@ export default function StripePlans(props) {
 
                 {needsWorkspace && (
                   <div className="space-y-1">
-                    <label className="text-sm font-medium">Workspace name</label>
+                    <label className="text-sm font-medium">{__("Workspace name")}</label>
                     <Input
                       value={workspaceName}
                       onChange={(e) => setWorkspaceName(e.target.value.toLowerCase())}
@@ -469,7 +470,7 @@ export default function StripePlans(props) {
                       disabled={submitting}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Your workspace will be at{" "}
+                      {__("Your workspace will be at")}{" "}
                       <code className="text-foreground">
                         {(workspaceName || "your-name") + domain_suffix}
                       </code>
@@ -478,7 +479,7 @@ export default function StripePlans(props) {
                 )}
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium">Email</label>
+                  <label className="text-sm font-medium">{__("Email")}</label>
                   <Input
                     type="email"
                     value={email}
@@ -500,7 +501,7 @@ export default function StripePlans(props) {
                     onClick={close}
                     disabled={submitting}
                   >
-                    Cancel
+                    {__("Cancel")}
                   </Button>
                   <Button type="submit" disabled={submitting}>
                     {submitting ? "Redirecting…" : submitLabel}

@@ -5,6 +5,7 @@ import { Link } from "@link";
 import { PencilIcon, ExternalLinkIcon } from "lucide-react";
 import { ChartView, useChartData } from "./chart-view";
 import { formatNumber } from "./use-desk-element";
+import { __ } from "@global/i18n";
 
 /** Item width on a 12-column grid (full width on phones). Static classes for Tailwind. */
 const SPAN = {
@@ -83,8 +84,8 @@ export function DashboardBoard({ name, description, items: rawItems, link = "edi
           {href && (
             <Link variant="secondary" to={href}>
               {link === "edit"
-                ? <><PencilIcon className="mr-1 h-4 w-4" /> Edit</>
-                : <><ExternalLinkIcon className="mr-1 h-4 w-4" /> Open</>}
+                ? <><PencilIcon className="mr-1 h-4 w-4" /> {__("Edit")}</>
+                : <><ExternalLinkIcon className="mr-1 h-4 w-4" /> {__("Open")}</>}
             </Link>
           )}
         </div>
@@ -92,7 +93,7 @@ export function DashboardBoard({ name, description, items: rawItems, link = "edi
 
       {items.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          This dashboard has no items yet. Edit it to add charts and numbers.
+          {__("This dashboard has no items yet. Edit it to add charts and numbers.")}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-12">

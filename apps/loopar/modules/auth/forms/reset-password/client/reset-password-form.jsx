@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Clock, XCircle, ArrowRight, ArrowLeft } from "lucide-react";
 import { useWorkspace } from '@workspace/workspace-provider';
 import {Link} from "@link"
+import { __ } from "loopar";
 
 const TokenError = ({ type }) => {
   const isExpired = type === "expired";
@@ -41,7 +42,7 @@ const TokenError = ({ type }) => {
         to="/auth/recoveryPassword" 
         notControlled
       >
-        <ArrowRight size={13} /> Request a new link
+        <ArrowRight size={13} /> {__("Request a new link")}
       </Link>
       <Link
         className="w-full gap-1"
@@ -49,7 +50,7 @@ const TokenError = ({ type }) => {
         to="/auth/login" 
         notControlled
       >
-        <ArrowRight size={13} /> Back to login
+        <ArrowRight size={13} /> {__("Back to login")}
       </Link>
     </div>
   );

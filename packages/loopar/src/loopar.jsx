@@ -7,6 +7,7 @@ import { elementsDict, AIPrompt, AIStructureSchema, sanitizeAIStructure } from "
 import Emitter from '@services/emitter/emitter';
 import { versionWatch } from "@@tools/version/version-watch";
 import animation from "./loopar/animation.js";
+import { __, currentLanguage } from "@global/i18n";
 import { ClientDatabase } from "./loopar/ClientDatabase.js";
 export { useRealtime } from "./loopar/useRealtime.js";
 
@@ -52,6 +53,9 @@ class Loopar {
   _bindSession(user) { this.router._bindSession(user); }
 
   dialog(dialog, callback) {
+    if (typeof dialog.title === "string") dialog.title = __(dialog.title);
+    if (typeof dialog.content === "string") dialog.content = __(dialog.content);
+    if (typeof dialog.message === "string") dialog.message = __(dialog.message);
     const content = dialog.content || dialog.message;
     dialog.id ??= typeof content === "string" ? dialog.content : dialog.title;
     dialog.open = dialog.open !== false;
@@ -81,8 +85,8 @@ class Loopar {
     this.emit('dialog', {
       icon: null,
       type: "confirm",
-      title: "Confirm",
-      content: message,
+      title: __("Confirm"),
+      content: typeof message === "string" ? __(message) : message,
       ok,
       cancel,
       onClose: () => setTimeout(cancel, 0),
@@ -119,7 +123,9 @@ class Loopar {
       normalized = { title: "Error", message: error };
     }
 
-    const { type = "error", title = "Error", message } = normalized;
+    const { type = "error" } = normalized;
+    const title = __(normalized.title || "Error");
+    const message = __(normalized.message);
 
     this.emit('dialog', {
       ...normalized,
@@ -138,8 +144,8 @@ class Loopar {
   notify() {
     const { message, type = "success", title } = loopar.utils.args(["message", "type", "title"], arguments);
     // Default title follows the type — a hardcoded "success" mislabeled error toasts.
-    const resolvedTitle = title || (type.charAt(0).toUpperCase() + type.slice(1));
-    this.emit('notify', { message, type, title: resolvedTitle });
+    const resolvedTitle = __(title || (type.charAt(0).toUpperCase() + type.slice(1)));
+    this.emit('notify', { message: __(message), type, title: resolvedTitle });
   }
 
   emit(event, data) {
@@ -260,6 +266,16 @@ class Loopar {
     }
   }
 
+  /** Translates `text` into the page's language (see core/global/i18n.js). */
+  __(text, args) {
+    return __(text, args);
+  }
+
+  /** Language the page renders in ("en", "es", …). */
+  get language() {
+    return currentLanguage();
+  }
+
   includeCSS(src, callback) {
     return this.scriptManager.loadStylesheet(src, { callback });
   }
@@ -267,4 +283,4 @@ class Loopar {
 
 const loopar = new Loopar();
 export default loopar;
-export { loopar, elementsDict, AIPrompt, AIStructureSchema, sanitizeAIStructure };
+export { loopar, elementsDict, AIPrompt, AIStructureSchema, sanitizeAIStructure, __ };

@@ -3,6 +3,8 @@ import { loopar, useRealtime } from "loopar";
 import {useDocument} from "@loopar/document";
 import { useDesigner} from "@context/designer-context";
 import { useCaptcha, CaptchaSlot } from "./captcha-widget";
+import { __ } from "@global/i18n";
+import { formatDate } from "@global/format";
 
 function getInitials(name = "") {
   return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
@@ -83,7 +85,7 @@ function VoteButtons({ review, entity }) {
 
   return (
     <div className="flex items-center gap-3 mt-2 pt-2 border-t">
-      <span className="text-xs text-muted-foreground">Helpful?</span>
+      <span className="text-xs text-muted-foreground">{__("Helpful?")}</span>
       <button className={btnClass("helpful")}     onClick={() => handleVote("helpful")}     disabled={!!voted || loading}>👍 {helpful}</button>
       <button className={btnClass("not_helpful")} onClick={() => handleVote("not_helpful")} disabled={!!voted || loading}>👎 {notHelpful}</button>
     </div>
@@ -103,7 +105,7 @@ function ReviewCard({ review , entity}) {
       <Stars count={review.rating} />
       <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
       <p className="text-xs text-muted-foreground opacity-60">
-        {new Date(review.creation).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+        {formatDate(review.creation, { month: "long", year: "numeric" })}
       </p>
       <VoteButtons review={review} entity={entity} />
     </div>
@@ -160,7 +162,7 @@ function ReviewForm({ requireCity, requireRating, entity }) {
   if (success) {
     return (
       <div className="bg-secondary text-secondary-foreground rounded-xl p-5 text-sm text-center leading-relaxed">
-        Thank you, <strong>{name}</strong>! Your review has been submitted and will appear once approved.
+        {__("Thank you,")} <strong>{name}</strong>{__("! Your review has been submitted and will appear once approved.")}
       </div>
     );
   }
@@ -169,17 +171,17 @@ function ReviewForm({ requireCity, requireRating, entity }) {
     <div className="bg-card text-card-foreground border rounded-xl p-5 flex flex-col gap-4">
       <div>
         <p className="text-sm font-medium mb-2">
-          Your rating {requireRating && <span className="text-destructive">*</span>}
+          {__("Your rating")} {requireRating && <span className="text-destructive">*</span>}
         </p>
         <Stars count={rating} interactive onChange={setRating} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground">Full name *</label>
+          <label className="text-xs text-muted-foreground">{__("Full name *")}</label>
           <input
             className="bg-secondary text-secondary-foreground rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
-            placeholder="Your name"
+            placeholder={__("Your name")}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
@@ -198,10 +200,10 @@ function ReviewForm({ requireCity, requireRating, entity }) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-muted-foreground">Your review *</label>
+        <label className="text-xs text-muted-foreground">{__("Your review *")}</label>
         <textarea
           className="bg-secondary text-secondary-foreground rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary resize-none h-24"
-          placeholder="Tell us about your experience..."
+          placeholder={__("Tell us about your experience...")}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
         />
@@ -268,19 +270,19 @@ export default function MetaReview({
             <div className="flex flex-col gap-1">
               <Stars count={Math.round(parseFloat(avg))} />
               <span className="text-xs text-muted-foreground">
-                Based on {reviews.length} review{reviews.length !== 1 ? "s" : ""}
+                {reviews.length === 1 ? __("Based on 1 review") : __("Based on {0} reviews", [reviews.length])}
               </span>
             </div>
           </div>
         )}
 
         {loading ? (
-          <div className="text-sm text-muted-foreground text-center py-8">Loading reviews...</div>
+          <div className="text-sm text-muted-foreground text-center py-8">{__("Loading reviews...")}</div>
         ) : error ? (
           <div className="text-sm text-destructive text-center py-8">{error}</div>
         ) : reviews.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-8">
-            No reviews yet. Be the first to leave one!
+            {__("No reviews yet. Be the first to leave one!")}
           </div>
         ) : (
           <>
@@ -294,14 +296,14 @@ export default function MetaReview({
                   onClick={() => setVisible((v) => v + page_size)}
                   className="bg-secondary text-secondary-foreground rounded-lg px-6 py-2.5 text-sm font-medium hover:opacity-80 transition-opacity"
                 >
-                  Load more reviews
+                  {__("Load more reviews")}
                 </button>
               </div>
             )}
 
             {!hasMore && reviews.length > page_size && (
               <p className="text-xs text-muted-foreground text-center">
-                All {reviews.length} reviews loaded
+                {__("All {0} reviews loaded", [reviews.length])}
               </p>
             )}
           </>
@@ -311,7 +313,7 @@ export default function MetaReview({
           <>
             <div className="border-t" />
             <div className="flex flex-col gap-3">
-              <h3 className="text-lg font-medium">Leave a review</h3>
+              <h3 className="text-lg font-medium">{__("Leave a review")}</h3>
               <p className="text-sm text-muted-foreground -mt-2">
                 {data.message}
               </p>

@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { RefreshCw, X } from "lucide-react";
 import { Button } from "@cn/components/ui/button";
 import { versionWatch } from "./version-watch.js";
+import { __ } from "@global/i18n";
 
 export function UpdateBanner() {
   const [latest, setLatest] = useState(null);
@@ -33,17 +34,17 @@ export function UpdateBanner() {
       <div className="pointer-events-auto flex max-w-xl items-center gap-3 rounded-lg border border-border bg-popover px-4 py-3 text-sm text-popover-foreground shadow-lg">
         <RefreshCw className="size-4 shrink-0 text-primary" aria-hidden="true" />
         <div className="flex-1 leading-snug">
-          <p className="font-medium">A new version is available.</p>
-          <p className="text-muted-foreground">Reload to update — any unsaved changes will be kept.</p>
+          <p className="font-medium">{__("A new version is available.")}</p>
+          <p className="text-muted-foreground">{__("Reload to update — any unsaved changes will be kept.")}</p>
         </div>
         <Button size="sm" onClick={() => versionWatch.reload(undefined, "update")}>
-          Reload
+          {__("Reload")}
         </Button>
         <Button
           size="icon"
           variant="ghost"
           className="size-8"
-          aria-label="Dismiss"
+          aria-label={__("Dismiss")}
           onClick={() => setDismissed(latest)}
         >
           <X className="size-4" />

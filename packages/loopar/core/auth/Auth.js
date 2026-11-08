@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { loopar } from '../loopar.js';
 import { CSRF_COOKIE_NAME, generateCsrfToken } from './csrf.js';
 import { getRequest, getTenant } from '../server/router/request-context.js';
+import { setLanguageCookie } from '../server/i18n.js';
 
 const getJWTSecret = () => loopar.jwtSecret;
 const REFRESH_THRESHOLD = 1800;
@@ -228,6 +229,9 @@ export default class Auth {
     loopar.cookie.set(this.tokenName, token, { httpOnly: true, path: '/' });
     loopar.cookie.set(this.loggedCookieName, '1', { httpOnly: false, path: '/' });
     setCsrfCookie(payload.csrfToken);
+    // The user's desk language (empty = system default) travels in its own
+    // cookie, so changing it doesn't need a new session token.
+    if (user && 'language' in user) setLanguageCookie(user.language);
 
     return payload;
   }

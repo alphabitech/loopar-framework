@@ -5,6 +5,7 @@ import { Input } from "@cn/components/ui/input";
 import { ChevronDown } from "lucide-react";
 import loopar from "loopar";
 import { useId, useMemo, useState } from "react";
+import { __ } from "@global/i18n";
 
 const COLLAPSED_KEY = "designer-palette-collapsed";
 
@@ -51,7 +52,7 @@ export function DesignerForm() {
       <div className="sticky top-0 z-10 bg-background dark:bg-background-dark p-2 pb-1">
         <Input
           type="search"
-          placeholder="Search elements..."
+          placeholder={__("Search elements...")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -67,7 +68,7 @@ export function DesignerForm() {
               className="flex w-full items-center justify-between px-3 py-2 text-left"
               onClick={() => toggleGroup(group)}
             >
-              <h2 className="text-2xl">{label} Elements</h2>
+              <h2 className="text-2xl">{label} {__("Elements")}</h2>
               <ChevronDown
                 className={`h-5 w-5 text-muted-foreground transition-transform ${isCollapsed ? "-rotate-90" : ""}`}
               />
@@ -84,7 +85,7 @@ export function DesignerForm() {
       })}
       {query && groups.length === 0 && (
         <p className="p-3 text-sm text-muted-foreground">
-          No elements match "{search.trim()}"
+          {__("No elements match \"")}{search.trim()}"
         </p>
       )}
     </div>

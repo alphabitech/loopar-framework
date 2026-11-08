@@ -5,6 +5,7 @@ import { MetaComponentsLoader } from "@loopar/components-loader";
 import { useEffect, lazy, useState } from "react";
 import { loopar } from "loopar";
 import { LoaderCircleIcon } from "lucide-react";
+import { __ } from "@global/i18n";
 
 
 const Fallback = () => (
@@ -36,35 +37,35 @@ const ErrorMessage = (props) => {
           
           <div className="ml-3 flex-1">
             <h3 className="text-lg font-semibold text-red-800 dark:text-red-400 mb-2">
-              ⚠️ Your View Component Failed to Load
+              {__("⚠️ Your View Component Failed to Load")}
             </h3>
             
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4 mb-4">
               <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-2">
-                <strong>Error:</strong> Unable to load component entry point
+                <strong>{__("Error:")}</strong> {__("Unable to load component entry point")}
               </p>
               <p className="text-sm text-red-700 dark:text-red-400">
-                The component specified in <code className="bg-red-100 dark:bg-red-950 px-1.5 py-0.5 rounded text-xs font-mono text-red-800 dark:text-red-300">.entryPoint</code> could not be found or loaded.
+                {__("The component specified in")} <code className="bg-red-100 dark:bg-red-950 px-1.5 py-0.5 rounded text-xs font-mono text-red-800 dark:text-red-300">.entryPoint</code> {__("could not be found or loaded.")}
               </p>
             </div>
 
             <div className="space-y-3 mb-4">
               <div>
                 <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
-                  🔍 Troubleshooting Steps:
+                  {__("🔍 Troubleshooting Steps:")}
                 </h4>
                 <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1 list-disc list-inside ml-2">
-                  <li>Verify the component path in <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-xs font-mono">.entryPoint</code></li>
-                  <li>Ensure the component file exists and is properly exported</li>
-                  <li>Check for typos in the component name or import path</li>
-                  <li>Confirm all dependencies are installed</li>
+                  <li>{__("Verify the component path in")} <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-xs font-mono">.entryPoint</code></li>
+                  <li>{__("Ensure the component file exists and is properly exported")}</li>
+                  <li>{__("Check for typos in the component name or import path")}</li>
+                  <li>{__("Confirm all dependencies are installed")}</li>
                 </ul>
               </div>
             </div>
 
             <div>
               <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
-                📄 Document Meta Configuration:
+                {__("📄 Document Meta Configuration:")}
               </h4>
               <div className="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-auto max-h-96 border border-gray-700">
                 <pre className="text-xs text-green-400 dark:text-green-300 font-mono">
@@ -75,8 +76,7 @@ const ErrorMessage = (props) => {
 
             <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
               <p className="text-xs text-blue-800 dark:text-blue-300">
-                <strong>💡</strong> If the issue persists after checking the configuration, 
-                try clearing your cache or contact the development team for assistance.
+                <strong>💡</strong> {__("If the issue persists after checking the configuration, try clearing your cache or contact the development team for assistance.")}
               </p>
             </div>
           </div>

@@ -5,6 +5,7 @@ import { useDocument } from '@loopar/document';
 import { loopar } from 'loopar';
 import { Button } from '@cn/components/ui/button';
 import { Ban, Copy, ExternalLink, Send } from 'lucide-react';
+import { __ } from "loopar";
 
 /** The exact document sent to the signer, as stored (sandboxed: no scripts, no navigation). */
 function Preview() {
@@ -12,10 +13,10 @@ function Preview() {
   const { Document } = useDocument();
   // Hidden field: not always registered in the form, the record data has it.
   const html = getValue('content_html') || Document?.data?.content_html;
-  if (!html) return <p className="text-sm text-muted-foreground">No document.</p>;
+  if (!html) return <p className="text-sm text-muted-foreground">{__("No document.")}</p>;
   return (
     <iframe
-      title="Document"
+      title={__("Document")}
       sandbox=""
       srcDoc={`<!doctype html><meta charset="utf-8"><style>body{font:14px/1.6 system-ui,sans-serif;max-width:820px;margin:24px auto;padding:0 16px;color:#111}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:4px 8px;text-align:left}</style>${html}`}
       className="h-[70vh] w-full rounded-md border bg-white"
@@ -31,7 +32,7 @@ function LinkDialog({ url, emailed }) {
     <div className="space-y-3 text-left">
       <p className="text-sm">
         {emailed ? 'A new link was emailed to the signer.' : 'The email could not be sent; share this link with the signer.'}
-        {' '}The previous link no longer works.
+        {' '}{__("The previous link no longer works.")}
       </p>
       <div className="flex gap-2">
         <input readOnly value={url} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs" onFocus={(e) => e.target.select()} />
@@ -71,11 +72,11 @@ export default function SignatureRequestForm() {
   };
 
   const actions = {};
-  if (source) actions.source = <Button variant="link" onClick={open}><ExternalLink className="mr-2 size-4" /> Open {getValue('document')}</Button>;
+  if (source) actions.source = <Button variant="link" onClick={open}><ExternalLink className="mr-2 size-4" /> {__("Open")} {getValue('document')}</Button>;
   if (status === 'Pending' || status === 'Expired') {
-    actions.resend = <Button variant="secondary" onClick={resend}><Send className="mr-2 size-4" /> Send new link</Button>;
+    actions.resend = <Button variant="secondary" onClick={resend}><Send className="mr-2 size-4" /> {__("Send new link")}</Button>;
   }
-  if (status === 'Pending') actions.revoke = <Button variant="destructive" onClick={revoke}><Ban className="mr-2 size-4" /> Revoke</Button>;
+  if (status === 'Pending') actions.revoke = <Button variant="destructive" onClick={revoke}><Ban className="mr-2 size-4" /> {__("Revoke")}</Button>;
 
   return <FormLayout slots={SLOTS} actions={name ? actions : {}} />;
 }

@@ -7,6 +7,7 @@ import {ElementEditor} from "./element-editor";
 import {Separator} from "@cn/components/ui/separator";
 import {useDocument} from "@loopar/document";
 import { getNodeKey } from "@global/prune-doc-structure";
+import { __ } from "@global/i18n";
 
 function Button({...props}){
   return (
@@ -30,7 +31,7 @@ export const Sidebar = memo(() => {
           <Button 
             size="icon" 
             variant="secondary"
-            title="Undo (Ctrl+Z)" 
+            title={__("Undo (Ctrl+Z)")} 
             disabled={!canUndo} 
             onClick={undo}
           >
@@ -39,7 +40,7 @@ export const Sidebar = memo(() => {
           <Button 
             size="icon" 
             variant="secondary"
-            title="Redo (Ctrl+Shift+Z)" 
+            title={__("Redo (Ctrl+Shift+Z)")} 
             disabled={!canRedo} 
             onClick={redo}
           >
@@ -70,7 +71,7 @@ export const Sidebar = memo(() => {
           <Button
             size="icon"
             variant="secondary"
-            title="Save"
+            title={__("Save")}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -83,7 +84,7 @@ export const Sidebar = memo(() => {
             size="icon"
             variant="secondary"
             className="ml-auto"
-            title="Close"
+            title={__("Close")}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();

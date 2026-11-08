@@ -4,6 +4,7 @@ import {Link} from "@link"
 import { ArrowRightIcon } from "@radix-ui/react-icons";
 import { useWorkspace } from "@workspace/workspace-provider";
 import Particles from "@particles";
+import { __ } from "@global/i18n";
 
 const PARTICLES = {
   "particles_settings": JSON.stringify({
@@ -61,10 +62,10 @@ const Layout = (({ ...props }) => {
         <div className="w-full flex-col hidden lg:flex">
           <AuthBackdrop className="absolute w-full h-dvh bg-cover bg-center bg-no-repeat bg-fixed overflow-auto duration-100 ease-in bg-purple-900/5 z-0">
             <div className="relative p-10 sm:p-20 ">
-              <h2 className="text-4xl text-slate-800 dark:text-slate-100 font-bold">Building the Automated Future</h2>
+              <h2 className="text-4xl text-slate-800 dark:text-slate-100 font-bold">{__("Building the Automated Future")}</h2>
               <Link variant="ghost" className="text-lg" _target="_blank" to="https://loopar.build/Doc">
                 <ArrowRightIcon className="mr-2"/>
-                Visit the Documentation
+                {__("Visit the Documentation")}
               </Link>
             </div>
           </AuthBackdrop>

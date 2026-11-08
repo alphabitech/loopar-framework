@@ -29,6 +29,7 @@ import fs from 'node:fs';
 import { tenant } from '../bin/tenant/tenant-builder.js';
 import { deriveSecretKey, encryptSecret, decryptSecret, isEncryptedSecret } from './global/secrets.js';
 import { migratePlaintextSecrets } from './global/secrets-migration.js';
+import { __ } from './global/i18n.js';
 
 
 export class Loopar extends Document {
@@ -421,12 +422,19 @@ export class Loopar extends Document {
    *   code   — domain identifier ('GIT_ERROR', 'DIRTY', …) or legacy numeric code.
    *   title  — short label for the UI.
    */
+  /** Translates `text` into the request's language (see core/global/i18n.js). */
+  __(text, args) {
+    return __(text, args);
+  }
+
   throw(error, redirect = null) {
     error = typeof error === 'string' ? { code: 400, message: error } : error
-    const err = new Error(error.message);
+    // Static messages translate here; dynamic ones are passed already
+    // translated by the caller: loopar.throw(__("{0} is required", [label])).
+    const err = new Error(__(error.message));
     err.status = error.status;
     err.code = error.code;
-    err.title = error.title;
+    err.title = __(error.title);
     err.redirect = redirect;
     // With redirects are always auth / session / csrf failures:
     // force hard reload to discard client state (csrf, user,

@@ -3,6 +3,7 @@ import loopar from "loopar";
 import { cn } from "@cn/lib/utils";
 import { useDesigner } from "@context/designer-context";
 import { DashboardBoard } from "@loopar/components/desk/dashboard-board";
+import { __ } from "@global/i18n";
 
 /** Desk page element: a whole Dashboard record, embedded. */
 export default function Dashboard(props) {
@@ -22,7 +23,7 @@ export default function Dashboard(props) {
   if (designerMode) {
     return (
       <div className={cn("w-full rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground", props.className)}>
-        Dashboard: {data.dashboard || "pick one in the element editor"}
+        {__("Dashboard:")} {data.dashboard || "pick one in the element editor"}
       </div>
     );
   }

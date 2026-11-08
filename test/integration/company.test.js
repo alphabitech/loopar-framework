@@ -12,12 +12,13 @@ after(async () => { await t?.teardown(); });
 
 const company = () => loopar.getDocument("Company");
 
-test("the installer seeds Company and the System Settings language", async () => {
+test("the installer seeds Company; the language belongs to users, not System Settings", async () => {
   await t.run(async () => {
     const c = await getCompany();
     assert.equal(c.company_name, ADMIN.company);
     const settings = await loopar.getDocument("System Settings");
-    assert.equal(settings.languaje, "En");
+    assert.equal((await loopar.db.getValue("User", "language", "Administrator")) || "", "");
+    assert.equal(settings.language, undefined);
   });
 });
 

@@ -348,6 +348,24 @@ async function requireFactor(row, factor) {
   return updates;
 }
 
+/**
+ * Re-authentication (step-up): checks a second factor of a user with 2FA on
+ * and consumes it (a TOTP step or a recovery code is single-use).
+ * → true; throws 401 when invalid. Users without 2FA need no factor: false.
+ */
+export async function verifyFactor(name, factor) {
+  const row = await requireRow(name);
+  if (!isMfaEnabled(row)) return false;
+  const updates = await requireFactor(row, factor);
+  await saveMfa(name, updates);
+  return true;
+}
+
+/** Whether the user has 2FA on (step-up asks for the code only then). */
+export async function hasMfa(name) {
+  return isMfaEnabled(await loadRow(name));
+}
+
 export async function disableMfa(name, factor) {
   const row = await requireRow(name);
   await requireFactor(row, factor);

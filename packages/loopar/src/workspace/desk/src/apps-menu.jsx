@@ -12,6 +12,7 @@ import {
   ComponentIcon, CircuitBoardIcon, FilesIcon, LayoutGridIcon, Settings2Icon, 
   User2Icon, CogIcon, ServerCogIcon, BrushIcon, LockKeyhole, ChartSpline, StarIcon, PrinterIcon, BugIcon, DatabaseBackupIcon
 } from "lucide-react"
+import { __ } from "@global/i18n";
 
 const MakeButton = ({ Icon, text, link}) => (
   <Link
@@ -35,7 +36,7 @@ export function AppsMenu() {
           })} cursor-pointer`}
         >
           <LayoutGridIcon />
-          <span className="sr-only">Home</span>
+          <span className="sr-only">{__("Home")}</span>
         </div>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bg-card">

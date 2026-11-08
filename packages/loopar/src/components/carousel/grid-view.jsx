@@ -3,6 +3,7 @@ import { PlusIcon, Maximize2Icon, Loader2 } from "lucide-react";
 import { Droppable } from "@droppable";
 import { Button } from "@cn/components/ui/button";
 import { getSlideThumbnail } from "./utils.js";
+import { __ } from "@global/i18n";
 
 export const GRID_LAYOUTS = ["uniform", "masonry", "quilted"];
 
@@ -358,12 +359,12 @@ export default function GridView({
           disabled={isLoadingPrev}
           className="w-full py-2 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
           style={{ minHeight: 32 }}
-          aria-label="Load previous items"
+          aria-label={__("Load previous items")}
         >
           {isLoadingPrev ? (
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           ) : (
-            <span className="text-xs text-muted-foreground hover:text-foreground">↑ Load previous</span>
+            <span className="text-xs text-muted-foreground hover:text-foreground">{__("↑ Load previous")}</span>
           )}
         </button>
       ) : null}
@@ -377,7 +378,7 @@ export default function GridView({
           {isLoadingMore ? (
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           ) : (
-            <span className="text-xs text-muted-foreground">Scroll for more…</span>
+            <span className="text-xs text-muted-foreground">{__("Scroll for more…")}</span>
           )}
         </div>
       ) : null}
@@ -389,7 +390,7 @@ export default function GridView({
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); addSlide(); }}
         >
           <PlusIcon className="w-4 h-4 mr-1" />
-          Add Item
+          {__("Add Item")}
         </Button>
       ) : null}
     </div>

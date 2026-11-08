@@ -3,6 +3,7 @@ import {Button} from "@cn/components/ui/button";
 import {useDocument} from "@loopar/document";
 
 import { AIPrompt, AIStructureSchema, sanitizeAIStructure, loopar } from "loopar";
+import { __ } from "@global/i18n";
 
 const GeminiContext = createContext({
   status: "checking"
@@ -133,7 +134,7 @@ export function GeminiSend({inputText, getCurrentDesign, isUserActivated, onStar
   return (
     <Button onClick={doPrompt} disabled={status !== "available" || !isUserActivated || sendingPrompt}>
       {sendingPrompt ? <div className="loader mr-2"/> : null}
-      Send
+      {__("Send")}
     </Button>
   );
 }
@@ -144,9 +145,9 @@ export function GeminiStatus(){
   if(status === "unavailable") {
     return (
       <div className="text-sm text-red-500">
-        Gemini Nano is not available in this browser
+        {__("Gemini Nano is not available in this browser")}
         <br/>
-        <a className="text-blue-500" href="https://developer.chrome.com/docs/ai/built-in-apis" target="_blank" rel="noopener noreferrer">Please see documentation for supported browsers</a>
+        <a className="text-blue-500" href="https://developer.chrome.com/docs/ai/built-in-apis" target="_blank" rel="noopener noreferrer">{__("Please see documentation for supported browsers")}</a>
       </div>
     );
   }
@@ -159,29 +160,29 @@ export function GeminiStatus(){
       {status === "available" ? (
         <div className="text-sm text-success">
           <p>
-            Gemini Nano is available and ready to use.
+            {__("Gemini Nano is available and ready to use.")}
           </p>
           <ul className="mt-2 ml-4 text-sm list-disc text-muted-foreground">
             <li>
               <a href="https://developer.chrome.com/docs/ai/prompt-api" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-500">
-                Learn more about Gemini Nano
+                {__("Learn more about Gemini Nano")}
               </a>
             </li>
-            <li>This model works offline and does not require an internet connection.</li>
+            <li>{__("This model works offline and does not require an internet connection.")}</li>
           </ul>
         </div>
       ) : null}
       {status === "downloadable" ? (
-        <Button onClick={install}>Install Gemini Nano</Button>
+        <Button onClick={install}>{__("Install Gemini Nano")}</Button>
       ) : null}
       {status === "downloading" ? (
         <div className="text-sm text-primary">
-          Downloading Gemini Nano... {downloadprogress.toFixed(2)}%
+          {__("Downloading Gemini Nano...")} {downloadprogress.toFixed(2)}%
         </div>
       ) : null}
       {status === "error" ? (
         <div className="text-sm text-destructive">
-          Error checking Gemini Nano availability. Please try again later.
+          {__("Error checking Gemini Nano availability. Please try again later.")}
         </div>
       ) : null}
     </div>

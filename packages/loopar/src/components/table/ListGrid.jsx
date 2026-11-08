@@ -10,6 +10,8 @@ import {DynamicIcon} from "@icon-input";
 import { CheckIcon } from "lucide-react";
 import { TableSearch } from "./TableSearch";
 import { RowMenu } from "./RowMenu.jsx";
+import { __ } from "@global/i18n";
+import { formatDate, formatDateTime, formatCurrency } from "@global/format";
 
 export function ListGrid(props) {
   const { columns } = useViewOptions();
@@ -39,10 +41,23 @@ export function ListGrid(props) {
           col.render = (row) => (
             <div className="flex justify-center">
               {loopar.utils.trueValue(row[col.data.name])
-                ? <CheckIcon className="h-4 w-4 text-green-500" aria-label="Yes" />
-                : <span className="text-muted-foreground" aria-label="No">—</span>}
+                ? <CheckIcon className="h-4 w-4 text-green-500" aria-label={__("Yes")} />
+                : <span className="text-muted-foreground" aria-label={__("No")}>—</span>}
             </div>
           );
+        }
+
+        // Dates, money and choices in the user's regional format / language.
+        const name = col.data.name;
+        if (col.element === "date") col.render ??= (row) => formatDate(row[name], "short");
+        if (col.element === "date_time") col.render ??= (row) => formatDateTime(row[name], "short");
+        if (col.element === "currency" || col.data.format === "currency") col.render ??= (row) => formatCurrency(row[name]);
+        if (col.element === "select" && typeof col.data.options === "string" && col.data.options.includes("\n")) {
+          const labels = Object.fromEntries(col.data.options.split(/\r?\n/).map((line) => {
+            const i = line.indexOf(":");
+            return i >= 0 ? [line.slice(0, i), line.slice(i + 1)] : [line, line];
+          }));
+          col.render ??= (row) => __(labels[row[name]] ?? row[name]);
         }
 
         return col;
@@ -97,7 +112,7 @@ export function ListGrid(props) {
       {
         data: {
           name: "actions",
-          label: () => <span className="sr-only">Actions</span>,
+          label: () => <span className="sr-only">{__("Actions")}</span>,
         },
         headProps: { className: "w-12 p-2" },
         cellProps: { className: "w-12 py-1 pr-2 text-right align-middle" },

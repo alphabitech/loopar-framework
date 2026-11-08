@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import fileManager from "@@file/file-manager";
 import {Link} from "@link";
+import { __ } from "@global/i18n";
+import { formatDate } from "@global/format";
 
 export default function DefaultCard({ item, fields = [], variant = "default", collectionSlug }) {
   const fieldsByName = useMemo(() => {
@@ -42,7 +44,7 @@ export default function DefaultCard({ item, fields = [], variant = "default", co
   const dateField = firstField(fields, f => f.element === "date" || f.element === "date_time");
   const dateValue = dateField ? item?.[dateField.name] : null;
   const dateLabel = dateValue
-    ? new Date(dateValue).toLocaleDateString(undefined, { month: "short", year: "numeric" })
+    ? formatDate(dateValue, { month: "short", year: "numeric" })
     : null;
 
   const badges = useMemo(() => {
@@ -73,7 +75,7 @@ export default function DefaultCard({ item, fields = [], variant = "default", co
         className="group grid grid-cols-1 sm:grid-cols-[6rem_1fr_auto] gap-1 sm:gap-4 items-baseline py-5 border-t border-border last:border-b"
       >
         <span className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-          {dateValue ? new Date(dateValue).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""}
+          {dateValue ? formatDate(dateValue, "medium") : ""}
         </span>
         <span className="flex flex-col gap-1 min-w-0">
           <span className="text-base md:text-lg font-medium leading-snug group-hover:text-primary transition-colors">
@@ -83,7 +85,7 @@ export default function DefaultCard({ item, fields = [], variant = "default", co
             <span className="text-sm text-muted-foreground leading-relaxed line-clamp-2">{summary}</span>
           ) : null}
           {minutes > 0 ? (
-            <span className="text-xs text-muted-foreground">{minutes} min read</span>
+            <span className="text-xs text-muted-foreground">{__("{0} min read", [minutes])}</span>
           ) : null}
         </span>
         <span className="hidden sm:inline text-primary transition-transform group-hover:translate-x-1" aria-hidden="true">→</span>
@@ -112,7 +114,7 @@ export default function DefaultCard({ item, fields = [], variant = "default", co
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs opacity-60">
-            No cover
+            {__("No cover")}
           </div>
         )}
         {badges.length > 0 ? (

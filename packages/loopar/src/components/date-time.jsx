@@ -21,6 +21,7 @@ import {
 import TimePicker from "@@date/time-picker";
 import { CalendarIcon, TimerIcon } from "lucide-react";
 import { Tabs as BaseTabs, TabsContent, TabsList, TabsTrigger } from "@cn/components/ui/tabs";
+import { __ } from "@global/i18n";
 
 export default function DateTime(props) {
   const { renderInput, data } = BaseInput(props);
@@ -75,7 +76,7 @@ export default function DateTime(props) {
                 {isValid ? (
                   format(baseDate, "PPP HH:mm")
                 ) : (
-                  <span>Pick a date & time</span>
+                  <span>{__("Pick a date & time")}</span>
                 )}
                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
               </Button>
