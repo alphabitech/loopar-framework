@@ -211,7 +211,11 @@ export default function MDXEditorWithTabs(props) {
     setIsMounted(true);
   }, [])
 
-  const handleChange = useCallback((value) => {
+  // `initialMarkdownNormalize`: the editor rewriting the text it was given
+  // (whitespace, list markers…), on mount or on a mode switch. Not an edit,
+  // so it never reaches the form (it would mark the record as unsaved).
+  const handleChange = useCallback((value, initialMarkdownNormalize) => {
+    if (initialMarkdownNormalize) return;
     set("value", value);
     setTimeout(() => {
       props.onChange && props.onChange(value);

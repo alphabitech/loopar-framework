@@ -344,13 +344,20 @@ export default class Entity extends BaseDocument {
       this.#removeField(containerName);
     }
 
-    // Translatable fields keep their other languages in `translations`,
-    // edited through the translation editor (see global/i18n-content.js).
-    let translatable = false;
-    this.#walkDocStructure(f => { if ([1, "1", true, "true"].includes(f?.data?.translatable)) translatable = true; });
-    if (translatable && !this.#getField("translations")) {
+    // Other languages live in a hidden `translations` field (see
+    // global/i18n-content.js), edited from:
+    //   - a designer field (a layout): the designer's "Translations" tab and
+    //     the element editor's "Languages";
+    //   - translatable fields: the translate icon next to each label and the
+    //     form header's "Translations" button.
+    let translatable = false, designer = false;
+    this.#walkDocStructure(f => {
+      if ([1, "1", true, "true"].includes(f?.data?.translatable)) translatable = true;
+      if (f?.element === "designer") designer = true;
+    });
+    if ((translatable || designer) && !this.#getField("translations")) {
       this.#updateOrInsertField({
-        field: { element: "content_translations", data: { name: "translations", label: "Translations", mode: "fields" } },
+        field: { element: "textarea", data: { name: "translations", label: "Translations", hidden: 1 } },
       });
     }
 

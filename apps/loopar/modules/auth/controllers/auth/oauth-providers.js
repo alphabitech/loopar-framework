@@ -40,6 +40,9 @@ export const OAUTH_PROVIDERS = {
   google: {
     label: 'Google',
     usesPKCE: true,
+    // Step-up (re-authentication): ask Google for a fresh sign-in, not the
+    // silent "already signed in" consent.
+    reauthParams: { prompt: 'login', max_age: '0' },
     defaultScopes: ['openid', 'profile', 'email'],
     client: (cfg, redirectURI) => new Google(cfg.client_id, cfg.client_secret, redirectURI),
     authUrl: (client, { state, codeVerifier, scopes }) =>

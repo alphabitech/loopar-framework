@@ -1,9 +1,4 @@
 import { useMemo, useState } from "react";
-import { useWatch } from "react-hook-form";
-import BaseInput from "@base-input";
-import { useFormContext } from "@form-context";
-import { useDocument } from "@loopar/document";
-import { useWorkspace } from "@workspace/workspace-provider";
 import loopar, { elementsDict } from "loopar";
 import { Button } from "@cn/components/ui/button";
 import { Input } from "@cn/components/ui/input";
@@ -11,39 +6,76 @@ import { Textarea } from "@cn/components/ui/textarea";
 import { Badge } from "@cn/components/ui/badge";
 import { Switch } from "@cn/components/ui/switch";
 import { cn } from "@cn/lib/utils";
-import { ChevronDownIcon, LanguagesIcon, LoaderCircleIcon, SparklesIcon } from "lucide-react";
+import { LoaderCircleIcon, SparklesIcon } from "lucide-react";
 import { __, languageName } from "@global/i18n";
 import { contentTexts, parseTranslations, compactTranslations, entryValue, entryState, makeEntry, isMachine } from "@global/i18n-content";
 
-const definitionOf = (element) => elementsDict[element]?.def;
 const LONG_TEXT = 90;
 const LONG_ELEMENTS = new Set(["markdown", "markdown_input", "textarea", "text_editor"]);
-const TRUE = [1, "1", true, "true"];
 
-/** Translatable fields of an entity structure: [{ key: name, label, element }]. */
-function translatableFields(nodes, out = []) {
-  for (const n of Array.isArray(nodes) ? nodes : []) {
-    if (n?.data?.name && TRUE.includes(n.data.translatable)) {
-      out.push({ key: n.data.name, label: n.data.label || n.data.name, element: n.element });
-    }
-    translatableFields(n?.elements, out);
+export const definitionOf = (element) => elementsDict[element]?.def;
+
+/** Builders whose content is website text, written in the site's default language. */
+export const WEBSITE_BUILDERS = new Set(["Page Builder", "Contact Form Builder"]);
+
+/**
+ * Base language and target languages of what is being translated:
+ * website content (pages, contact forms, records shown on the site) is
+ * written in the site's default language and goes to the site's other
+ * languages; desk definitions (entities, forms) are written in English
+ * and go to the languages that have a dictionary.
+ */
+export function translationTargets(meta, website) {
+  return website
+    ? { base: meta?.content_languages?.base || "en", languages: meta?.content_languages?.languages || [] }
+    : { base: "en", languages: meta?.ui_languages || [] };
+}
+
+/** Translatable texts of a layout (doc_structure nodes or its JSON). */
+export function layoutTexts(structure) {
+  try {
+    const nodes = typeof structure === "string" ? JSON.parse(structure || "[]") : structure || [];
+    return contentTexts(nodes, definitionOf);
+  } catch {
+    return [];
   }
-  return out;
+}
+
+/** Languages to show: the targets plus any already present in `value`, never the base. */
+export function panelLanguages(value, base, languages) {
+  return [...new Set([...languages, ...Object.keys(parseTranslations(value))])].filter((l) => l !== base);
+}
+
+/** When there is nothing to translate into. */
+export function NoLanguages({ website }) {
+  return (
+    <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+      {website
+        ? __("To translate this content, add languages to the website: App → Website → Languages.")
+        : __("There is no dictionary in another language yet: add one in the Translator.")}
+    </p>
+  );
 }
 
 /**
- * Translation editor of a page (the `translations` field of Page Builder):
- * every translatable text of the layout next to its translation in the
- * selected language, like a store's "Translate" screen. The layout is
- * edited in the designer, in the site's default language; here only the
- * texts of the other languages.
+ * Translation editor: every text next to its translation in the selected
+ * language, like a store's "Translate" screen. Shared by the designer's
+ * "Translations" tab (layouts: pages, forms, entities) and the
+ * "Translations" section of records with translatable fields.
+ *
+ * @param value     the `translations` value (JSON text or object)
+ * @param onChange  receives the new `translations` JSON text
+ * @param texts     [{ key, prop, value, element, label? }] base texts
+ * @param mode      "layout" (layer[nodeKey][prop]) | "fields" (layer[field])
+ * @param hintFor   optional (text, language) => placeholder (dictionary translation)
+ * @param compact   one or few texts (a single field): no "Pending only" filter
  */
-function Editor({ field, texts, languages, base, mode }) {
-  const [open, setOpen] = useState(false);
+export function TranslationsPanel({ value: stored, onChange, texts, languages, base, mode, hintFor, compact }) {
   const [language, setLanguage] = useState(languages[0]);
   const [onlyMissing, setOnlyMissing] = useState(false);
 
-  const translations = useMemo(() => parseTranslations(field.value), [field.value]);
+  const translations = useMemo(() => parseTranslations(stored), [stored]);
+  if (!languages.includes(language) && languages.length) setLanguage(languages[0]);
 
   const layer = translations[language] || {};
   // Pages: layer[nodeKey][prop]. Records: layer[fieldName].
@@ -67,7 +99,7 @@ function Editor({ field, texts, languages, base, mode }) {
       if (mode === "fields") next[language][t.key] = entry;
       else next[language][t.key] = { ...(next[language][t.key] || {}), [t.prop]: entry };
     }
-    field.onChange({ target: { value: JSON.stringify(compactTranslations(next)) } });
+    onChange(JSON.stringify(compactTranslations(next)));
   };
   const update = (t, value) => updateMany([[t, value]]);
 
@@ -96,23 +128,7 @@ function Editor({ field, texts, languages, base, mode }) {
   };
 
   return (
-    <div className="rounded-lg border">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left"
-      >
-        <LanguagesIcon className="size-4 text-muted-foreground" />
-        <span className="font-medium">{__("Translations")}</span>
-        <span className="text-sm text-muted-foreground">
-          {languages.map((l) => languageName(l)).join(" · ")}
-        </span>
-        <ChevronDownIcon className={cn("ml-auto size-4 transition-transform", open && "rotate-180")} />
-      </button>
-
-      {open && (
-        <div className="flex flex-col gap-3 border-t p-4">
+        <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-3">
             {languages.length > 1 && (
               <div role="tablist" className="flex gap-1 rounded-lg bg-muted/60 p-1">
@@ -142,10 +158,12 @@ function Editor({ field, texts, languages, base, mode }) {
               {aiBusy ? <LoaderCircleIcon className="mr-1 size-4 animate-spin" /> : <SparklesIcon className="mr-1 size-4" />}
               {__("Translate pending with AI")}
             </Button>
-            <label className="ml-auto flex items-center gap-2 text-sm">
-              <Switch checked={onlyMissing} onCheckedChange={setOnlyMissing} />
-              {__("Pending only")}
-            </label>
+            {!compact && (
+              <label className="ml-auto flex items-center gap-2 text-sm">
+                <Switch checked={onlyMissing} onCheckedChange={setOnlyMissing} />
+                {__("Pending only")}
+              </label>
+            )}
           </div>
 
           {rows.length === 0 ? (
@@ -183,13 +201,13 @@ function Editor({ field, texts, languages, base, mode }) {
                       <Textarea
                         value={value}
                         rows={Math.min(12, Math.max(3, Math.ceil(t.value.length / 80)))}
-                        placeholder={__("Translation in {0}", [languageName(language)])}
+                        placeholder={hintFor?.(t, language) || __("Translation in {0}", [languageName(language)])}
                         onChange={(e) => update(t, e.target.value)}
                       />
                     ) : (
                       <Input
                         value={value}
-                        placeholder={__("Translation in {0}", [languageName(language)])}
+                        placeholder={hintFor?.(t, language) || __("Translation in {0}", [languageName(language)])}
                         onChange={(e) => update(t, e.target.value)}
                       />
                     )}
@@ -199,72 +217,6 @@ function Editor({ field, texts, languages, base, mode }) {
             </div>
           )}
         </div>
-      )}
-    </div>
   );
 }
 
-/** Page mode: the texts of the designer field (`data.source`, default doc_structure). */
-function usePageTexts(control, source) {
-  const structure = useWatch({ control, name: source || "doc_structure" });
-  return useMemo(() => {
-    try {
-      const nodes = typeof structure === "string" ? JSON.parse(structure || "[]") : structure || [];
-      return contentTexts(nodes, definitionOf);
-    } catch { return []; }
-  }, [structure]);
-}
-
-/** Fields mode: the record's translatable fields with their current (base) values. */
-function useFieldTexts(control) {
-  const { Document } = useDocument();
-  const fields = useMemo(() => {
-    try { return translatableFields(JSON.parse(Document?.Entity?.doc_structure || "[]")); } catch { return []; }
-  }, [Document?.Entity?.doc_structure]);
-  const values = useWatch({ control, name: fields.map((f) => f.key) });
-  return useMemo(() => fields
-    .map((f, i) => ({ ...f, prop: f.key, value: values?.[i] == null ? "" : String(values[i]) }))
-    .filter((f) => f.value.trim() !== ""), [fields, values]);
-}
-
-function Translations({ props, mode, texts }) {
-  const { __META__ } = useWorkspace();
-  const { base = "en", languages = [] } = __META__?.content_languages || {};
-
-  return (
-    <BaseInput
-      {...props}
-      render={(field) => {
-        // Languages already translated stay editable even if no site publishes them now.
-        const all = [...new Set([...languages, ...Object.keys(parseTranslations(field.value))])].filter((l) => l !== base);
-        if (!all.length) {
-          return (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              {__("To translate this content, add languages to the website: App → Website → Languages.")}
-            </p>
-          );
-        }
-        return <Editor field={field} texts={texts} languages={all} base={base} mode={mode} />;
-      }}
-    />
-  );
-}
-
-const PageTranslations = ({ props }) => {
-  const { control } = useFormContext();
-  return <Translations props={props} mode="page" texts={usePageTexts(control, props.data?.source)} />;
-};
-
-const FieldTranslations = ({ props }) => {
-  const { control } = useFormContext();
-  return <Translations props={props} mode="fields" texts={useFieldTexts(control)} />;
-};
-
-/**
- * `mode: "fields"` translates the record's translatable fields (added by
- * Entity when a field is marked translatable); otherwise the texts of a
- * page layout.
- */
-export default function ContentTranslations(props) {
-  return props.data?.mode === "fields" ? <FieldTranslations props={props} /> : <PageTranslations props={props} />;
-}

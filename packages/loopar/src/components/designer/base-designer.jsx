@@ -1,5 +1,6 @@
 import loopar from "loopar";
-import { BrushIcon, BracesIcon, EyeIcon, SparkleIcon, HandGrab, BrushCleaning, Undo2, Redo2 } from "lucide-react";
+import { BrushIcon, BracesIcon, EyeIcon, SparkleIcon, HandGrab, BrushCleaning, Undo2, Redo2, LanguagesIcon } from "lucide-react";
+import { TranslationsTab, useHasTranslations } from "./translations-tab";
 import { BaseFormContext } from "@form-context";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DesignerContext, useDesigner } from "@context/designer-context";
@@ -131,6 +132,8 @@ export const BaseDesigner = (props) => {
   const [activeId] = useState(null);
   const {designerMode} = useDesigner();
   const {name, entity, sidebarOpen, handleSetSidebarOpen} = useDocument();
+  // The layout's translations live in the document's `translations` field.
+  const hasTranslations = useHasTranslations();
   const [dragEnabled, setDragEnable] = useState(true);
 
   const [updatingElementName, setUpdatingElementName] = usePersist(name + "updatingElementName");
@@ -787,6 +790,7 @@ export const BaseDesigner = (props) => {
             asChild={true}
             canCustomize={false}
           >
+            {[
             <Tab
               label={<div className="flex"><BrushIcon className="h-6 w-6 pr-2" /> {__("Designer")}</div>}
               name={`${selfKey}-designer_tab`}
@@ -804,7 +808,7 @@ export const BaseDesigner = (props) => {
                   {sidebarOpen && <Sidebar/>}
                 </DragAndDropProvider>
               </div>
-            </Tab>
+            </Tab>,
             <Tab
               label={<div className="flex"><BracesIcon className="h-6 w-6 pr-2" /> {__("META")}</div>}
               name={`${selfKey}-meta_tab`}
@@ -817,7 +821,7 @@ export const BaseDesigner = (props) => {
                   <MarkdownPreview source={`\`\`\`jsx\n${JSON.stringify(metaComponents, null, 2)}\n\`\`\``} />
                 </div>
               </div>
-            </Tab>
+            </Tab>,
             <Tab
               label={<div className="flex"><BrushCleaning className="h-6 w-6 pr-2" /> {__("Clean")}</div>}
               name={`${selfKey}-clean_tab`}
@@ -835,6 +839,17 @@ export const BaseDesigner = (props) => {
                 </div>
               </div>
             </Tab>
+              ,
+              hasTranslations && (
+                <Tab
+                  label={<div className="flex"><LanguagesIcon className="h-6 w-6 pr-2" /> {__("Translations")}</div>}
+                  name={`${selfKey}-translations_tab`}
+                  key={`${selfKey}-translations_tab`}
+                >
+                  <TranslationsTab metaComponents={localMetaComponents} />
+                </Tab>
+              ),
+            ].filter(Boolean)}
           </Tabs>
         </div>
       </BaseFormContext.Provider>

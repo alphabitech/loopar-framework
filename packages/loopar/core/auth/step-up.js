@@ -41,6 +41,24 @@ export function clearStepUp() {
   loopar.session.remove(KEY);
 }
 
+const OAUTH_KEY = '__step_up_oauth__';
+
+/**
+ * The user re-signed in with their OAuth provider (password-less accounts:
+ * Google/GitHub sign-up). With 2FA on, that is the first factor only: the
+ * code still has to come through Auth/reauthenticate { via: 'oauth', code }.
+ */
+export function markOauthProof(user) {
+  if (user) loopar.session.set(OAUTH_KEY, { user, at: Date.now() });
+}
+
+/** Consumes a fresh OAuth proof for `user` → true / false. */
+export function takeOauthProof(user, maxAgeMs = STEP_UP_TTL_MS) {
+  const s = loopar.session.get(OAUTH_KEY);
+  loopar.session.remove(OAUTH_KEY);
+  return !!(user && s && s.user === user && Number.isFinite(s.at) && Date.now() - s.at <= maxAgeMs);
+}
+
 export function requireStepUp(user) {
   if (!hasFreshStepUp(user)) {
     loopar.throw({

@@ -10,6 +10,7 @@ import { useFormState } from "react-hook-form";
 import { BaseFormContext } from "@form-context";
 import { nextListView } from "../list/views";
 import { __ } from "@global/i18n";
+import { RecordTranslationsButton, useRecordTranslations } from "../../components/translation/record-translations";
 
 /** Save. Filled (`default`) in the header — the one primary action; callers may pass another variant. */
 export const SaveButton = ({ variant = "default" }) => {
@@ -188,10 +189,12 @@ function headerTexts(Document, contextName) {
 }
 
 /** Toggle button: shows the view it switches to. */
+// Labels are functions: translated on render, in the request's language
+// (a module-level __() would freeze the server's language at import time).
 const VIEW_BUTTON = {
-  List: { icon: <MenuIcon />, label: __("List view") },
-  Grid: { icon: <GridIcon />, label: __("Grid view") },
-  Kanban: { icon: <KanbanIcon />, label: __("Board view") },
+  List: { icon: <MenuIcon />, label: () => __("List view") },
+  Grid: { icon: <GridIcon />, label: () => __("Grid view") },
+  Kanban: { icon: <KanbanIcon />, label: () => __("Board view") },
 };
 
 export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...props}) {
@@ -210,14 +213,17 @@ export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...prop
   const edit = editTarget(Document);
 
   const viewActions = Object.entries(actions).filter(([, node]) => node);
+  // Records with translatable fields: all their translations at once.
+  const recordTranslations = useRecordTranslations();
 
   const defaults = [
     ...(goTo ? [["__goto", <GoToAction key="__goto" to={goTo} name={Document.data?.name} />]] : []),
+    ...(recordTranslations && canUpdate ? [["__translations", <RecordTranslationsButton key="__translations" />]] : []),
     ...(isList && onlyGrid !== true && onlyList !== true ? [[
       "__viewtype",
       <Button key="__viewtype" className="px-2" variant="secondary" onClick={viewTypeToggle} title={__("Toggle view")}>
         {VIEW_BUTTON[nextListView(Document, viewType)].icon}
-        <span className="lp-menu-label pl-1">{VIEW_BUTTON[nextListView(Document, viewType)].label}</span>
+        <span className="lp-menu-label pl-1">{VIEW_BUTTON[nextListView(Document, viewType)].label()}</span>
       </Button>,
     ]] : []),
   ];

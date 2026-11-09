@@ -1,6 +1,9 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { loopar, sanitizeInput, hasFreshStepUp } from "loopar";
+import {
+  loopar, sanitizeInput, trustedInput, requestContext,
+  hasFreshStepUp, markStepUp, clearStepUp, markOauthProof, takeOauthProof,
+} from "loopar";
 import { bootTestTenant } from "../support/tenant.js";
 
 /**
@@ -118,6 +121,69 @@ test("layer B: editable fields and unchanged guarded fields save normally", asyn
     const doc = await openUser(name, { first_name: "Maria", email: `${name}@policy.test`, mfa_enabled: 0 });
     await doc.save();
     assert.equal((await loopar.db.query("User").where({ name }).first("first_name")).first_name, "Maria");
+  });
+});
+
+/** Runs `fn` as if inside an HTTP request (guest, empty session). */
+const asRequest = (fn) => requestContext.run(
+  { tenant: { name: t.name }, req: { headers: {}, cookies: {}, session: {} } },
+  fn,
+);
+
+test("in a request, getDocument() filters its input by itself (no controller code)", async () => {
+  await t.run(() => makeUser("policy-a1"));
+  await asRequest(async () => {
+    const doc = await loopar.getDocument("User", "policy-a1", {
+      first_name: "Lucia", mfa_enabled: 1, oauth_sub: "attacker", email: "evil@x.test",
+    });
+    assert.equal(doc.first_name, "Lucia");
+    assert.ok(!loopar.utils.trueValue(doc.mfa_enabled));   // stored value kept
+    assert.equal(doc.oauth_sub || "", "");
+    assert.equal(doc.email, "policy-a1@policy.test");
+    doc.password = doc.protectedPassword;
+    doc.confirm_password = doc.protectedPassword;
+    await doc.save();                                       // nothing guarded changed
+  });
+  await t.run(async () => {
+    const row = await loopar.db.query("User").where({ name: "policy-a1" }).first("first_name", "email");
+    assert.deepEqual({ ...row }, { first_name: "Lucia", email: "policy-a1@policy.test" });
+  });
+});
+
+test("in a request, newDocument() drops system fields from its data", async () => {
+  await asRequest(async () => {
+    const doc = await loopar.newDocument("User", {
+      name: "policy-a2", email: "a2@policy.test", password: PASSWORD, confirm_password: PASSWORD, mfa_enabled: 1,
+    });
+    assert.ok(!loopar.utils.trueValue(doc.mfa_enabled));
+    assert.equal(doc.email, "a2@policy.test");            // protected is fine on create
+  });
+});
+
+test("trustedInput() marks constructor data built by server code", async () => {
+  await asRequest(async () => {
+    const doc = await loopar.newDocument("User", trustedInput({
+      name: "policy-a3", email: "a3@policy.test", password: PASSWORD, confirm_password: PASSWORD, must_change_password: 1,
+    }));
+    assert.ok(loopar.utils.trueValue(doc.must_change_password));
+  });
+});
+
+test("step-up proof lives in the session, bound to the user, consumed on use", async () => {
+  await asRequest(async () => {
+    assert.equal(hasFreshStepUp("ana"), false);
+    markStepUp("ana");
+    assert.equal(hasFreshStepUp("ana"), true);
+    assert.equal(hasFreshStepUp("bob"), false);
+    clearStepUp();
+    assert.equal(hasFreshStepUp("ana"), false);
+
+    markOauthProof("ana");
+    assert.equal(takeOauthProof("bob"), false);   // wrong user — and consumed
+    assert.equal(takeOauthProof("ana"), false);
+    markOauthProof("ana");
+    assert.equal(takeOauthProof("ana"), true);
+    assert.equal(takeOauthProof("ana"), false);   // single use
   });
 });
 

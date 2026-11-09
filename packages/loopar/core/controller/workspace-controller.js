@@ -37,7 +37,9 @@ export default class WorkspaceController extends AuthController {
     } else if (workspace === "web" || workspace === "kiosk") {
       // Kiosk pages are web pages without the site's navigation: same app (logo, theme).
       // Footer, copyright… in the visitor's language (App translatable fields).
-      WORKSPACE.web_app = translateRecord("App", loopar.webApp);
+      // `translations` stays on the server: the page only needs the shown texts.
+      const { translations, ...webApp } = translateRecord("App", loopar.webApp, { parsed: true }) || {};
+      WORKSPACE.web_app = loopar.webApp ? webApp : loopar.webApp;
       // Languages the site publishes: internal links keep the visitor's
       // language prefix and the language switcher lists them.
       WORKSPACE.site_languages = WorkspaceController.siteLanguagesMeta(this.req);

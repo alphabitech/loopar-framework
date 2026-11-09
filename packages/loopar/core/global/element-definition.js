@@ -362,9 +362,6 @@ export const elementsDefinition = {
     { element: "designer", icon: "Brush", type: TYPES.longtext, ownsDraft: true },
     { element: "slot", icon: "Plug"},
     { element: "metadata", icon: "Code", type: TYPES.json},
-    // Texts of a page (or any doc_structure field) in the site's other
-    // languages; edits the record's `translations` (see global/i18n-content.js).
-    { element: "content_translations", icon: "Languages", type: TYPES.longtext, show_in_design: false }
   ],
   // Read the record being printed (src/document/print/record.jsx); outside a
   // print they render a design placeholder.

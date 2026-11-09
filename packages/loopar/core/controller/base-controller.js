@@ -7,9 +7,10 @@ import { printPayload } from '../document/print-format.js';
 import { renameEntity } from '../document/entity-rename.js';
 import { readRuntimeMode } from '../server/runtime-mode.js';
 import { applyTransition, workflowFor } from '../document/workflow.js';
-import { sanitizeInput, policyMapOf, currentActor } from '../auth/field-access.js';
+import { policyMapOf, currentActor } from '../auth/field-access.js';
 import { hasFreshStepUp, clearStepUp, STEP_UP_REQUIRED_CODE } from '../auth/step-up.js';
 import { canWriteFromInput, WRITE_POLICY } from '../global/field-policy.js';
+import { titleize } from "inflection";
 
 const HISTORY_TABLE = 'Document History';
 const COMMENT_TABLE = 'Comment';
@@ -51,9 +52,8 @@ export default class BaseController extends CoreController {
   }
 
   async actionCreate() {
-    // Field write policy, layer A: client input never writes system/readonly fields.
-    const input = this.hasData() ? await sanitizeInput(this.document, this.data, { op: 'create' }) : this.data;
-    const document = await loopar.newDocument(this.document, input);
+    // Field write policy, layer A: applied by newDocument itself (request input).
+    const document = await loopar.newDocument(this.document, this.data);
 
     if (document.__ENTITY__.is_single) {
       return loopar.throw({
@@ -111,14 +111,9 @@ export default class BaseController extends CoreController {
   }
 
   async actionUpdate(document) {
-    // Field write policy, layer A: protected/system/readonly/create_only fields
-    // are not taken from the form. A caller passing its own `document` built
-    // from raw input is still covered by layer B on save.
-    document ??= await loopar.getDocument(
-      this.document,
-      this.query.name,
-      this.hasData() ? await sanitizeInput(this.document, this.data, { op: 'update' }) : null
-    );
+    // Field write policy, layer A: getDocument filters the request input itself
+    // (protected/system/readonly/create_only fields keep their stored value).
+    document ??= await loopar.getDocument(this.document, this.query.name, this.hasData() ? this.data : null);
 
     if (this.hasData()) {
       const Entity = document.__ENTITY__;
@@ -139,6 +134,11 @@ export default class BaseController extends CoreController {
           : null;
         return {
           instance: this.getInstance(),
+          // The URL instance ignores ?name=, so the cached meta belongs to the
+          // FIRST record opened here: the record's identity must travel with
+          // the data (AppBar subtitle, <title>, history, rename, print/edit links).
+          name: document.name,
+          meta: { title: titleize(String(document.name ?? this.document)), action: this.action },
           data: await document.values(),
           linkTitles: await document.linkTitles(),
           ...(recordMeta?.workflow ? { workflow: recordMeta.workflow } : {}),

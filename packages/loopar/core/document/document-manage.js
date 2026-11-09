@@ -8,6 +8,7 @@ import { loopar } from '../loopar.js';
 import { fileManage } from "../file-manage.js";
 import { parseDocStructure } from "./tools.js";
 import { elementsDict } from '../global/element-definition.js';
+import { guardConstructorInput, trustedInput } from '../auth/field-access.js';
 
 class DocumentManage {
   constructor(props) {
@@ -23,12 +24,16 @@ class DocumentManage {
     const databaseData = (missingName || ENTITY.is_virtual) ? null : await loopar.db.getDoc(ENTITY, name, ENTITY.__REF__.__FIELDS__);
 
     if (databaseData) {
+      // Field write policy, layer A: in a request, `data` is client input —
+      // the fields this actor may not write keep their stored value.
+      const input = await guardConstructorInput(ENTITY.name, data, { op: 'update', original: databaseData });
       // Pass the pre-parsed ENTITY through so newDocument doesn't trigger
       // a second parseDocStructure pass (which would re-execute side
       // effects like COLLECTION preload — losing the requestContext).
       // `databaseData` rides along as the stored baseline: save() checks the
       // protected/system fields against it (field write policy, layer B).
-      return await this.newDocument(document, { ...databaseData, ...(data || {}) }, name, parse, ENTITY, undefined, { ...databaseData });
+      // The merge is already filtered: trusted for newDocument.
+      return await this.newDocument(document, trustedInput({ ...databaseData, ...(input || {}) }), name, parse, ENTITY, undefined, { ...databaseData });
     } else {
       if(ENTITY.is_virtual){
         return await this.newDocument(document, data, name, parse, ENTITY, ifNotFound);
@@ -51,6 +56,9 @@ class DocumentManage {
     // request-scoped state in field.data.preloaded). Falls back to a
     // fresh parse for standalone callers — which is the original behaviour.
     const ENTITY = preParsedEntity || await this.#GET_ENTITY(document);
+    // Field write policy, layer A: in a request, constructor data is client
+    // input (unless trustedInput()) — a controller can't skip the filter.
+    data = await guardConstructorInput(ENTITY.name, data, { op: original ? 'update' : 'create', original });
     const DOCUMENT = await this.#importDocument(ENTITY);
     const spacing = loopar.__installed__ && ENTITY.__REF__.is_child != 1 ?
       await loopar.db.getDoc("App", ENTITY.__REF__.__APP__, ["gap", "col_padding"]) : {};

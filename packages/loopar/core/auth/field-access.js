@@ -1,14 +1,20 @@
 /**
  * loopar-aware side of the field write policy (pure rules in
  * global/field-policy.js): who the actor is, the entity's policy map, and the
- * input sanitizer every request boundary uses.
+ * input filter.
  *
- *   const input = await sanitizeInput('User', this.data, { op: 'update' });
- *   const doc = await loopar.getDocument('User', name, input);
+ * Layer A is applied by the DOCUMENT, not by controllers: during an HTTP
+ * request, the `data` handed to loopar.newDocument() / loopar.getDocument()
+ * is treated as client input and filtered by the entity's policy
+ * (guardConstructorInput, called from document-manage.js). A controller can't
+ * forget it. What server code assigns afterwards (`doc.field = value`) is
+ * trusted; `protected` / `system` fields are verified again on save (layer B,
+ * CoreDocument): changing one needs `doc.authorize(field)`.
  *
- * Server code that assigns `doc.field = value` after that is trusted (layer A
- * only filters CLIENT input). `protected` / `system` fields are verified again
- * on save (layer B, CoreDocument): changing one needs `doc.authorize(field)`.
+ * Constructor data built by server code that must keep restricted fields:
+ *   loopar.newDocument('X', trustedInput({ status: 'Approved', ... }))
+ * or assign those fields after construction. Outside requests (jobs, CLI,
+ * installer) constructor data is server code and is not filtered.
  */
 import { loopar } from '../loopar.js';
 import { getRequest } from '../server/router/request-context.js';
@@ -48,6 +54,17 @@ export async function currentActor(map = null, user = loopar.auth?.user?.()) {
   return { user, isAdmin: false, roles };
 }
 
+// Objects server code vouches for (identity based: a spread copy is not trusted).
+const TRUSTED = new WeakSet();
+
+/** Marks constructor data as built by server code: no layer-A filtering. */
+export function trustedInput(data) {
+  if (data && typeof data === 'object') TRUSTED.add(data);
+  return data;
+}
+
+export const isTrustedInput = (data) => !!data && typeof data === 'object' && TRUSTED.has(data);
+
 const debug = () => ['1', 'true'].includes(String(process.env.LOOPAR_FIELD_POLICY_DEBUG || '').toLowerCase());
 
 /**
@@ -64,6 +81,36 @@ export async function sanitizeInput(entity, data, { op = 'update', authorized = 
   const { data: clean, dropped } = filterInput(map, data, { op, actor, authorized, passwordMask: PASSWORD_MASK });
 
   if (dropped.length && debug()) {
+    const name = typeof entity === 'string' ? entity : entity?.name;
+    console.warn(`[field-policy] ${name} (${op}) input dropped: ${dropped.map((d) => `${d.field}:${d.reason}`).join(', ')} — user=${actor.user || 'guest'}`);
+  }
+  return clean;
+}
+
+/**
+ * Layer A at the document boundary (document-manage newDocument/getDocument).
+ * Inside an HTTP request, constructor `data` is client input unless marked
+ * with trustedInput(). Dropped fields fall back to the stored value when the
+ * record exists (`original`), so a filtered update never blanks a column.
+ */
+export async function guardConstructorInput(entity, data, { op = 'create', original = null } = {}) {
+  if (!data || typeof data !== 'object' || TRUSTED.has(data)) return data;
+  if (loopar.installing || !getRequest()) return data;
+
+  const map = policyMapOf(entity);
+  if (!Object.keys(map).length) return data;
+
+  const actor = await currentActor(map);
+  const { data: clean, dropped } = filterInput(map, data, { op, actor, passwordMask: PASSWORD_MASK });
+  if (!dropped.length) return data;
+
+  if (original) {
+    for (const { field } of dropped) {
+      if (map[field]?.element !== 'password' && field in original) clean[field] = original[field];
+    }
+  }
+
+  if (debug()) {
     const name = typeof entity === 'string' ? entity : entity?.name;
     console.warn(`[field-policy] ${name} (${op}) input dropped: ${dropped.map((d) => `${d.field}:${d.reason}`).join(', ')} — user=${actor.user || 'guest'}`);
   }

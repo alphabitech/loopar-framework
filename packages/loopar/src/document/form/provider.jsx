@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef } from "react";
 import { FormWrapper } from "@form-provider";
+import { RecordTranslations } from "../../components/translation/record-translations";
 
 /** Form middleware: react-hook-form (FormWrapper) + the controller's form API for `useForm()`. */
 const FormContext = createContext(null);
@@ -63,7 +64,10 @@ export function FormProvider({ ctrl, schema = true, children }) {
         STRUCTURE={schema ? ctrl.__STRUCTURE__ : undefined}
         docRef={ctrl}
       >
-        {children}
+        {/* Translate icons on translatable fields (record forms only). */}
+        {["create", "update"].includes(ctrl.Document?.meta?.action)
+          ? <RecordTranslations entity={ctrl.Document?.Entity}>{children}</RecordTranslations>
+          : children}
       </FormWrapper>
     </FormContext.Provider>
   );

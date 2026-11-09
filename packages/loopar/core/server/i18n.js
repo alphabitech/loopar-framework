@@ -21,6 +21,7 @@ import path from "node:path";
 import { loopar } from "../loopar.js";
 import { getRequest, getTenant } from "./router/request-context.js";
 import { applyRecordLayer } from "../global/i18n-content.js";
+import { parseDocument } from "../document/tools.js";
 import {
   DEFAULT_LANGUAGE,
   baseLanguage,
@@ -341,14 +342,44 @@ export function contentLanguages() {
  * translation, when there is one. In the site's default language, or for
  * entities without translatable fields, the row comes back as is.
  * Only for display: never save a row that went through here.
+ *
+ * `parsed`: the row is a parsed document (db.getParseDoc), whose markdown
+ * fields already hold HTML; translated markdown fields are rendered too.
  */
-export function translateRecord(entity, row, language = requestLanguage()) {
+export function translateRecord(entity, row, { language = requestLanguage(), parsed = false } = {}) {
   if (!row || language === siteDefaultLanguage()) return row;
   const fields = loopar.getRef(entity, false)?.__TRANSLATABLE__;
-  return fields?.length ? applyRecordLayer(row, fields, language) : row;
+  if (!fields?.length) return row;
+  const shown = applyRecordLayer(row, fields, language);
+  if (!parsed || shown === row) return shown;
+  const changed = fields.filter((f) => shown[f] !== row[f]);
+  return { ...shown, ...renderedMarkdown(entity, changed, shown) };
 }
 
-export function translateRecords(entity, rows, language = requestLanguage()) {
+export function translateRecords(entity, rows, { language = requestLanguage() } = {}) {
   if (!Array.isArray(rows) || language === siteDefaultLanguage()) return rows;
-  return rows.map((row) => translateRecord(entity, row, language));
+  return rows.map((row) => translateRecord(entity, row, { language }));
+}
+
+/** Translated markdown rendered once per text (the footer is rendered on every page). */
+const RENDERED = new Map();
+const RENDERED_MAX = 500;
+
+function renderedMarkdown(entity, fields, row) {
+  const out = {};
+  const pending = {};
+  for (const f of fields) {
+    const key = `${entity}\u0000${f}\u0000${row[f]}`;
+    if (RENDERED.has(key)) out[f] = RENDERED.get(key);
+    else pending[f] = row[f];
+  }
+  if (!Object.keys(pending).length) return out;
+  // parseDocument renders the markdown_input fields and leaves the rest as is.
+  const rendered = parseDocument(entity, { ...pending });
+  for (const f of Object.keys(pending)) {
+    if (RENDERED.size >= RENDERED_MAX) RENDERED.delete(RENDERED.keys().next().value);
+    RENDERED.set(`${entity}\u0000${f}\u0000${pending[f]}`, rendered[f]);
+    out[f] = rendered[f];
+  }
+  return out;
 }

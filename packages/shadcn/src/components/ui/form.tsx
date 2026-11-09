@@ -86,10 +86,20 @@ const FormItem = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>)
 }
 FormItem.displayName = "FormItem"
 
-const FormLabel = ({ className, children, ...props }: React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root>) => {
-  const { error, formItemId } = useFormField()
+/**
+ * Optional adornment rendered at the end of a field's label row, by field
+ * name (e.g. a "translate" button on translatable fields). Provided by the
+ * app around a form; null by default.
+ */
+type FormLabelAddon = (name: string) => React.ReactNode
+const FormLabelAddonContext = React.createContext<FormLabelAddon | null>(null)
 
-  return (
+const FormLabel = ({ className, children, ...props }: React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root>) => {
+  const { error, formItemId, name } = useFormField()
+  const addonFor = React.useContext(FormLabelAddonContext)
+  const addon = name && addonFor ? addonFor(name) : null
+
+  const label = (
     <Label
       className={cn(error && "text-destructive", className)}
       htmlFor={formItemId}
@@ -98,6 +108,13 @@ const FormLabel = ({ className, children, ...props }: React.ComponentPropsWithou
       {t(children)}
     </Label>
   )
+
+  return addon ? (
+    <div className="flex items-center justify-between gap-2">
+      {label}
+      {addon}
+    </div>
+  ) : label
 }
 FormLabel.displayName = "FormLabel";
 
@@ -156,6 +173,7 @@ FormMessage.displayName = "FormMessage"
 
 export {
   useFormField,
+  FormLabelAddonContext,
   Form,
   FormItem,
   FormLabel,

@@ -8,14 +8,13 @@ import { Textarea } from "@cn/components/ui/textarea";
 import { Badge } from "@cn/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@cn/components/ui/dialog";
 import { LanguagesIcon, LoaderCircleIcon, SparklesIcon } from "lucide-react";
+import { WEBSITE_BUILDERS, translationTargets } from "../translation/translations-panel";
 import loopar from "loopar";
 import { __, currentLanguage, languageName } from "@global/i18n";
 import {
   contentTextProps, parseTranslations, compactTranslations, entryValue, entryState, makeEntry, isMachine,
 } from "@global/i18n-content";
 
-/** Builders whose content is website text, written in the site's default language. */
-const WEBSITE_BUILDERS = new Set(["Page Builder", "Contact Form Builder"]);
 const LONG_TEXT = 90;
 
 /**
@@ -41,9 +40,7 @@ export function ElementLanguages({ elementKey, element, data }) {
     [Document?.Entity?.doc_structure]
   );
 
-  const { base, languages } = website
-    ? { base: __META__?.content_languages?.base || "en", languages: __META__?.content_languages?.languages || [] }
-    : { base: "en", languages: __META__?.ui_languages || [] };
+  const { base, languages } = translationTargets(__META__, website);
 
   const props = contentTextProps(element, elementsDict[element]?.def)
     .filter((p) => typeof data?.[p] === "string" && data[p].trim() !== "");

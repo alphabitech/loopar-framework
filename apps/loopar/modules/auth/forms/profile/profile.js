@@ -1,7 +1,7 @@
 
 'use strict';
 
-import {BaseDocument, loopar, sanitizeInput} from 'loopar';
+import {BaseDocument, loopar} from 'loopar';
 
 export default class Profile extends BaseDocument {
   constructor(props){
@@ -99,11 +99,9 @@ export default class Profile extends BaseDocument {
     if (data.__REQ_FILES__) picked.__REQ_FILES__ = data.__REQ_FILES__;
     if (data.__REMOTE_FILES__) picked.__REMOTE_FILES__ = data.__REMOTE_FILES__;
 
-    // ...and of those, what User's write policy lets this user write
-    // (email is `protected`: it changes through the verified flow only).
-    const safeData = await sanitizeInput('User', picked, { op: 'update' });
-
-    const user = await loopar.getDocument('User', loopar.auth.user(), safeData);
+    // ...and of those, getDocument keeps only what User's write policy lets
+    // this user write (email is `protected`: verified flow only).
+    const user = await loopar.getDocument('User', loopar.auth.user(), picked);
     user.password = this.protectedPassword;
     user.confirm_password = this.protectedPassword;
     await user.save();

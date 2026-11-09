@@ -68,6 +68,9 @@ export const FileDrop = (props) => {
   const [loaded, setLoaded] = useState(false);
   const inputRef = useRef(null);
   const [files, setFiles] = useState(fileManager.getMappedFiles(props.files));
+  // Only the person's changes (add, remove, clear) reach the form: loading the
+  // current files into previews is not an edit and must not mark it dirty.
+  const touched = useRef(false);
   const {designerMode} = useDesigner();
 
   const accept = data.accept || "/*";
@@ -146,7 +149,7 @@ export const FileDrop = (props) => {
   }, [files]);
 
   useEffect(() => {
-    loaded && props.onChange && props.onChange({target: {value: previews}});
+    loaded && touched.current && props.onChange && props.onChange({target: {value: previews}});
   }, [previews, loaded]);
 
   const mergeFiles = (files = [], newFiles) => {
@@ -160,6 +163,7 @@ export const FileDrop = (props) => {
   
   const setFile = (file) => {
     if (file) {
+      touched.current = true;
       if (Array.isArray(file)) {
         file.forEach((f) => setFile(f));
         return;
@@ -183,6 +187,7 @@ export const FileDrop = (props) => {
 
   const handleClearFiles = () => {
     loopar.confirm('Are you sure you want to delete all files?', () => {
+      touched.current = true;
       setFiles([]);
     });
   };
@@ -291,6 +296,7 @@ export const FileDrop = (props) => {
                 key={file.name}
                 file={file}
                 onDelete={() => {
+                  touched.current = true;
                   setFiles(files.filter((f) => f.name !== file.name));
                 }}
               />

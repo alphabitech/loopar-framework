@@ -1,7 +1,7 @@
 
 'use strict';
 
-import {loopar, BaseController, markStepUp, stepUpLocked, registerStepUpFailure} from 'loopar';
+import {loopar, BaseController, markStepUp, stepUpLocked, registerStepUpFailure, markOauthProof, takeOauthProof} from 'loopar';
 import {validatePasswordResetToken, generatePasswordResetToken, resetPassword} from "./recovery.js"
 import {sendPasswordResetEmail} from "./recovery-email.js"
 import {getProvider, providerKeys, providerLabel, generateState, generateCodeVerifier} from "./oauth-providers.js"
@@ -14,7 +14,7 @@ export default class AuthController extends BaseController {
   // Mutations: never reachable over GET.
   static postOnlyActions = ['mfaVerify', 'mfaCancel', 'reauthenticate'];
   // Any logged user may re-authenticate themselves (no role grant needed).
-  static freeActions = ['reauthenticate'];
+  static freeActions = ['reauthenticate', 'stepUpOptions'];
   
   constructor(props){
     super(props);
@@ -240,16 +240,29 @@ export default class AuthController extends BaseController {
       loopar.throw({ code: 429, title: 'Too many attempts', message: 'Too many failed attempts. Try again in a few minutes.' });
     }
 
-    const { password, code, recovery_code } = this.body || {};
-    const row = await loopar.db.query('User').where({ name }).select('name', 'password').first();
-    if (!row || !password || !(await loopar.verifyHash(String(password), row.password))) {
-      registerStepUpFailure();
-      loopar.throw({ code: 401, title: 'Verification failed', message: 'Incorrect password.' });
+    const { password, code, recovery_code, via } = this.body || {};
+
+    if (via === 'oauth') {
+      // First factor = the OAuth re-sign-in just completed in the popup
+      // (publicActionOauthCallback, step-up mode); only reached with 2FA on.
+      if (!takeOauthProof(name)) {
+        loopar.throw({ code: 401, title: 'Verification expired', message: 'Sign in with your provider again.' });
+      }
+    } else {
+      const row = await loopar.db.query('User').where({ name }).select('name', 'password').first();
+      if (!row || !password || !(await loopar.verifyHash(String(password), row.password))) {
+        registerStepUpFailure();
+        loopar.throw({ code: 401, title: 'Verification failed', message: 'Incorrect password.' });
+      }
     }
 
     if (await hasMfa(name)) {
       // Plain objects (no `message`): the client needs the flags.
-      if (!code && !recovery_code) return { mfa_required: true };
+      if (!code && !recovery_code) {
+        // Keep the OAuth first factor for the call that brings the code.
+        if (via === 'oauth') markOauthProof(name);
+        return { mfa_required: true };
+      }
       try {
         await verifyFactor(name, { code, recovery_code });
       } catch (err) {
@@ -260,6 +273,25 @@ export default class AuthController extends BaseController {
 
     markStepUp(name);
     return { verified: true };
+  }
+
+  /**
+   * POST Auth/stepUpOptions — how the logged user can re-authenticate:
+   * always the password; plus the OAuth provider their account is linked to
+   * (Google/GitHub sign-ups never knew a password) when it is configured.
+   *   → { password: true, oauth: [{ provider, label }], mfa: bool }
+   */
+  async actionStepUpOptions() {
+    const name = loopar.auth.user();
+    if (!name) loopar.throw({ code: 401, message: 'You must be logged in.' });
+
+    const row = await loopar.db.query('User').where({ name }).select('oauth_provider').first();
+    const oauth = [];
+    const key = String(row?.oauth_provider || '').toLowerCase();
+    if (key && getProvider(key) && await loadProviderConfig(key)) {
+      oauth.push({ provider: key, label: providerLabel(key) });
+    }
+    return { password: true, oauth, mfa: await hasMfa(name) };
   }
 
   /**
@@ -314,6 +346,11 @@ export default class AuthController extends BaseController {
     // `popup=1` marks a window.open flow: the callback then answers with the
     // popup-close page (postMessage + close) instead of navigating.
     const popup = this.query?.popup === '1' || this.query?.popup === 1;
+    // `stepup=1`: re-authenticate the LOGGED user (protected field change)
+    // instead of signing in. Popup only, and only for a live session.
+    const stepUp = this.query?.stepup === '1' || this.query?.stepup === 1;
+    const stepUpUser = stepUp ? loopar.auth.user() : null;
+    if (stepUp && (!popup || !stepUpUser)) return this.#oauthFinish({ popup: true }, { ok: false, reason: 'stepup_unavailable' });
     const provider = getProvider(providerKey);
     if (!provider) return this.redirect('/auth/login?oauth=unknown_provider');
 
@@ -334,7 +371,11 @@ export default class AuthController extends BaseController {
       url = provider.authUrl(client, { state, scopes });
     }
 
-    setOauthTx({ provider: providerKey, state, codeVerifier, popup });
+    if (stepUp && provider.reauthParams) {
+      for (const [k, v] of Object.entries(provider.reauthParams)) url.searchParams.set(k, v);
+    }
+
+    setOauthTx({ provider: providerKey, state, codeVerifier, popup, stepUpUser });
     return this.redirect(url.toString(), { hard: true });
   }
 
@@ -347,7 +388,7 @@ export default class AuthController extends BaseController {
    * When the tx cookie is missing/expired we can't know the flow — fall back
    * to redirect (worst case the login page renders inside the popup).
    */
-  #oauthFinish(tx, { ok, landing = null, reason = null }) {
+  #oauthFinish(tx, { ok, landing = null, reason = null, extra = null }) {
     if (!tx?.popup) {
       // Second factor pending: the login page resumes at the code step.
       if (reason === 'mfa_required') return this.redirect('/auth/login?mfa=1');
@@ -361,6 +402,7 @@ export default class AuthController extends BaseController {
       ok: !!ok,
       landing: ok ? landing : null,
       reason: ok ? null : (reason || 'login_failed'),
+      ...(extra || {}),
     }).replace(/</g, '\\u003c');
 
     // Fallback when the window can't close itself (opener gone / opened as a
@@ -388,6 +430,32 @@ export default class AuthController extends BaseController {
 })();
 </script>
 </body></html>`);
+  }
+
+  /**
+   * Step-up through the provider: the identity that just signed in must be
+   * the logged user's own (linked provider+sub, or their verified email).
+   * No session is opened or changed; the proof goes to the session store.
+   */
+  async #oauthStepUp(tx, profile) {
+    const fail = (reason) => this.#oauthFinish(tx, { ok: false, reason, extra: { stepup: true } });
+
+    const current = loopar.auth.user();
+    if (!current || current !== tx.stepUpUser) return fail('session_mismatch');
+
+    const row = await loopar.db.query('User').where({ name: current })
+      .select('name', 'email', 'oauth_provider', 'oauth_sub').first();
+    const sameSub = row?.oauth_sub && row.oauth_provider === tx.provider && String(row.oauth_sub) === String(profile.sub);
+    const sameEmail = row?.email && String(row.email).toLowerCase() === String(profile.email).toLowerCase();
+    if (!sameSub && !sameEmail) return fail('identity_mismatch');
+
+    if (await hasMfa(current)) {
+      markOauthProof(current);
+      return this.#oauthFinish(tx, { ok: true, extra: { stepup: true, mfa_required: true } });
+    }
+
+    markStepUp(current);
+    return this.#oauthFinish(tx, { ok: true, extra: { stepup: true } });
   }
 
   /**
@@ -445,6 +513,8 @@ export default class AuthController extends BaseController {
     if (!profile?.email || !profile.email_verified) {
       return this.#oauthFinish(tx, { ok: false, reason: 'email_unverified' });
     }
+
+    if (tx.stepUpUser) return await this.#oauthStepUp(tx, profile);
 
     let user, reason;
     try {

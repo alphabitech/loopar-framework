@@ -612,7 +612,8 @@ function sendAppAction(appName, action, optsOrSlide = false) {
 }
 
 
-const ACTIONS = {
+// Built on render: their labels are translated in the request's language.
+const actions = () => ({
   addApp: (
     <Link
       variant="secondary"
@@ -633,12 +634,12 @@ const ACTIONS = {
       <DownloadIcon className="mr-2"/> {__("Get App")}
     </Button>
   ),
-};
+});
 
 const gridTemplate = (app) => <AppCard app={app} action={sendAppAction} />;
 
 export const config = { onlyGrid: true, hasSearchForm: false, hasSelectAll: false, hasSelectRow: false };
 
 export default function AppManagerView() {
-  return <ListLayout actions={ACTIONS} gridTemplate={gridTemplate} />;
+  return <ListLayout actions={actions()} gridTemplate={gridTemplate} />;
 }
