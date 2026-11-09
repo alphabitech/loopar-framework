@@ -42,5 +42,8 @@
     "i18n:extract": "node packages/loopar/bin/i18n/extract.js",
     "test": "node --test --test-force-exit \"test/**/*.test.js\"",
     "test:unit": "node --test \"test/unit/**/*.test.js\""
+  },
+  "resolutions": {
+    "@azure/msal-node": "7.1.0"
   }
 }
