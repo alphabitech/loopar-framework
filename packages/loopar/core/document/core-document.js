@@ -504,7 +504,7 @@ export default class CoreDocument {
 
     if (this.installerApp && !loopar.installing) {
       const app = await loopar.getDocument("App", this.installerApp, null, { ifNotFound: null });
-      app && app.bump("patch");
+      if (app) await app.bump("patch");
     }
 
     this.#rebaseOriginal();
