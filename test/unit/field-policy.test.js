@@ -8,21 +8,22 @@ import {
 const structure = [
   { element: "tabs", data: {}, elements: [
     { element: "input", data: { name: "first_name" } },
-    { element: "input", data: { name: "name", set_only_time: 1 } },
+    { element: "input", data: { name: "name", write_policy: "create_only" } },
     { element: "input", data: { name: "email", write_policy: "protected" } },
     { element: "password", data: { name: "password", write_policy: "protected" } },
     { element: "select", data: { name: "user_type", write_roles: "System Manager, HR" } },
     { element: "switch", data: { name: "mfa_enabled", write_policy: "system" } },
     { element: "input", data: { name: "total", write_policy: "readonly" } },
-    { element: "input", data: { name: "notes", readonly: 1 } },
+    { element: "input", data: { name: "notes", write_policy: "display_only" } },
   ] },
 ];
 const map = writePolicyMap(structure);
 const user = { isAdmin: false, roles: [] };
 
-test("fieldPolicy: default editable, set_only_time → create_only, unknown → editable", () => {
+test("fieldPolicy: default editable, known policies, unknown → editable", () => {
   assert.equal(fieldPolicy({}), WRITE_POLICY.EDITABLE);
-  assert.equal(fieldPolicy({ set_only_time: 1 }), WRITE_POLICY.CREATE_ONLY);
+  assert.equal(fieldPolicy({ write_policy: "create_only" }), WRITE_POLICY.CREATE_ONLY);
+  assert.equal(fieldPolicy({ write_policy: "display_only" }), WRITE_POLICY.DISPLAY_ONLY);
   assert.equal(fieldPolicy({ write_policy: "SYSTEM" }), WRITE_POLICY.SYSTEM);
   assert.equal(fieldPolicy({ write_policy: "whatever" }), WRITE_POLICY.EDITABLE);
 });
@@ -32,12 +33,11 @@ test("fieldRoles: comma or newline separated, trimmed, unique", () => {
   assert.deepEqual(fieldRoles({}), []);
 });
 
-test("writePolicyMap: only restricted fields, nested, with legacy readonly", () => {
+test("writePolicyMap: only restricted or display-only fields, nested", () => {
   assert.deepEqual(Object.keys(map).sort(),
     ["email", "mfa_enabled", "name", "notes", "password", "total", "user_type"]);
   assert.equal(map.first_name, undefined);
-  assert.equal(map.notes.policy, WRITE_POLICY.EDITABLE);
-  assert.equal(map.notes.legacyReadonly, true);
+  assert.equal(map.notes.policy, WRITE_POLICY.DISPLAY_ONLY);
 });
 
 test("filterInput update: drops system/readonly/protected/create_only/role fields", () => {

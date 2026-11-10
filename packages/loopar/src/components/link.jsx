@@ -10,6 +10,7 @@ import { VARIANTS } from "./base/ComponentDefaults";
 import { RouteParsing, setDefaultParams, buildUrl } from "@global/router-utils";
 import { EntryModal } from "@app/entry-modal";
 import { currentLanguage, localizePath } from "@global/i18n";
+import { DynamicIcon } from "@icon";
 
 const HEADER_OFFSET = 15;
 
@@ -263,19 +264,51 @@ export function Link({
   );
 }
 
+export const BUTTON_SIZES = [
+  { value: "default", label: "Default" },
+  { value: "sm", label: "Small" },
+  { value: "lg", label: "Large" },
+];
+
+/** Label with an optional icon before/after it (links and buttons). */
+export function IconLabel({ icon, position = "start", children }) {
+  if (!icon) return children;
+  const glyph = <DynamicIcon icon={{ value: icon }} className="size-4 shrink-0" />;
+  return (
+    <span className="inline-flex items-center gap-2">
+      {position !== "end" && glyph}
+      {children}
+      {position === "end" && glyph}
+    </span>
+  );
+}
+
+export const iconMetaFields = () => ({
+  icon: { element: ICON_INPUT, data: { label: "Icon" } },
+  icon_position: {
+    element: SELECT,
+    data: {
+      label: "Icon Position",
+      options: [{ value: "start", label: "Before text" }, { value: "end", label: "After text" }],
+    },
+  },
+  size: { element: SELECT, data: { label: "Size", options: BUTTON_SIZES } },
+});
+
 export default function MetaLink({...props}) {
   const data = props.data || {};
-  const { class: dataClass, ...restData } = data;
+  const { class: dataClass, icon, icon_position, size, ...restData } = data;
 
   return (
     <Link
       {...props}
       {...restData}
+      size={BUTTON_SIZES.some(s => s.value === size) ? size : undefined}
       className={cn(props.className, dataClass)}
       variant={VARIANTS[data.variant] || VARIANTS.default}
       key={props.node || data.key || props.to}
     >
-      {data.label || props.children}
+      <IconLabel icon={icon} position={icon_position}>{data.label || props.children}</IconLabel>
     </Link>
   );
 }
@@ -299,5 +332,6 @@ MetaLink.metaFields = () => [{
         options: Object.keys(VARIANTS).map(k => ({ value: VARIANTS[k], label: k })),
       },
     },
+    ...iconMetaFields(),
   },
 }];

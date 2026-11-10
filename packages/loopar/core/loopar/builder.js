@@ -11,8 +11,10 @@ import { writePolicyMap } from "../global/field-policy.js";
 import { deskHomes, listDeskPages } from "../document/desk-page.js";
 import { isAuditableEntity, AUDIT_COLUMN_NAMES, orderChildRows } from "../global/audit.js";
 import { migrateChildPositions } from "../global/child-position-migration.js";
+import { migrateElementsInDatabase } from "../global/element-migration.js";
+import { loadAppElements } from "../global/app-elements.js";
 import {PermissionManager} from "../auth/PermissionManager.js"
-import { existsSync, readdirSync, readFileSync } from "fs";
+import fs, { existsSync, readdirSync, readFileSync } from "fs";
 
 import inflection from "inflection";
 import { shouldRunJobs } from "../config/core-config.js";
@@ -200,7 +202,7 @@ export class Builder {
         if (field.element === ICON_INPUT) {
           acc.push(field.data.name);
         }
-        if (field.element === ICON || field.element === TEXT_BLOCK_ICON) {
+        if ([ICON, FEATURE_CARD, LINK, BUTTON, LIST].includes(field.element)) {
           directIcons.push(field.data.icon);
         }
         if (field.elements) {
@@ -302,6 +304,9 @@ export class Builder {
 
   async build() {
     console.log('......Building Loopar.......');
+
+    // App-provided page elements, before anything reads the definitions (icons, palette).
+    loadAppElements(this.pathRoot);
 
     await this.makeDefaultFolders();
     if (this.installingApp) return;
@@ -405,6 +410,8 @@ export class Builder {
     if (data.__installed__) {
       // Child tables need their position column before anything reads them in order.
       await migrateChildPositions(this);
+      // Stored page trees must not reference removed/renamed elements.
+      await migrateElementsInDatabase(this, { fs, path });
 
       const loadWebApp = async (appName) => {
         const webApp = appName ? await this.db.getParseDoc('App', appName) : null;

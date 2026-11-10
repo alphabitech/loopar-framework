@@ -1,4 +1,5 @@
 'use strict'
+import { selectSource, selectEntity, multipleValues } from '../global/element-definition.js';
 import { translateStructure } from '../global/i18n.js';
 import DynamicField from './dynamic-field.js';
 import { loopar } from '../loopar.js';
@@ -14,7 +15,6 @@ import { acceptsFile } from '../global/file-accept.js';
 import { purgePrivateFiles } from '../global/private-files.js';
 import { guardedChanges, comparable, GUARDED_POLICIES, WRITE_POLICY } from '../global/field-policy.js';
 import { policyMapOf, lockStructure } from '../auth/field-access.js';
-import { getRequest } from '../server/router/request-context.js';
 
 const isTrue = (v) => [1, '1', true, 'true'].includes(v);
 
@@ -125,16 +125,6 @@ export default class CoreDocument {
       });
     }
 
-    // Migration aid: UI-readonly fields changed inside a request.
-    if (getRequest()) {
-      for (const name of names) {
-        const rule = map[name];
-        if (rule.policy !== WRITE_POLICY.EDITABLE || !rule.legacyReadonly) continue;
-        if (original[name] !== current[name]) {
-          console.warn(`[field-policy:audit] ${this.__ENTITY__.name}/${this.__DOCUMENT_NAME__}: field "${name}" is readonly in the form but changed on save. Set write_policy "readonly" to enforce it (or drop the readonly flag).`);
-        }
-      }
-    }
   }
 
   /** After a successful save the stored values are the new baseline. */
@@ -581,7 +571,7 @@ export default class CoreDocument {
    * stays (display resolvers tolerate it).
    */
   async #importUrlFileFields(app) {
-    const FILE_ELEMENTS = new Set([FILE_INPUT, IMAGE_INPUT, FILE_UPLOADER]);
+    const FILE_ELEMENTS = new Set([FILE_INPUT, IMAGE_INPUT]);
     const isRawUrl = (v) => typeof v === 'string' && /^https?:\/\//i.test(v.trim());
 
     const fieldNames = [];
@@ -648,7 +638,7 @@ export default class CoreDocument {
 
   /** The file fields of this entity (file_input, image_input, file_uploader). */
   #fileFields() {
-    const FILE_ELEMENTS = new Set([FILE_INPUT, IMAGE_INPUT, FILE_UPLOADER]);
+    const FILE_ELEMENTS = new Set([FILE_INPUT, IMAGE_INPUT]);
     return loopar.utils.fieldList(this.getDocypeStructure()).filter(f => f?.data?.name && FILE_ELEMENTS.has(f.element));
   }
 
@@ -820,8 +810,9 @@ export default class CoreDocument {
   }
 
   async validate({ skipName = false } = {}) {
+    const values = Object.fromEntries(Object.values(this.#fields).map(field => [field.name, field.formattedValue]));
     const errors = Object.values(this.#fields)
-      .filter(field => field.name !== ID && !(skipName && field.name === "name")).map(e => e.validate())
+      .filter(field => field.name !== ID && !(skipName && field.name === "name")).map(e => e.validate(values))
       .filter(e => !e.valid).map(e => e.message);
 
     const selectTypes = await this.validateLinkDocuments();
@@ -833,34 +824,29 @@ export default class CoreDocument {
   async validateLinkDocuments() {
     const errors = [];
     for (const field of Object.values(this.#fields)) {
-      if (field.element === SELECT && field.options && typeof field.options === 'string') {
-        const value = field.formattedValue;
-        const options = (field.options || "").split("\n");
+      if ([SELECT, RADIO_GROUP].includes(field.element) && field.options && typeof field.options === 'string') {
+        const raw = field.formattedValue;
+        if (!raw || raw === "") continue;
+        const values = loopar.utils.trueValue(field.multiple) ? multipleValues(raw) : [raw];
+        const entity = field.element === RADIO_GROUP ? null : selectEntity(field);
 
-        if (!value || value === "") continue;
-
-        if (options.length > 1) {
-          const keys = options.map(opt => {
-            return opt.split(":")[0]
-          });
-
-          if (!keys.includes(value)) {
-            errors.push(`The value ${value} for ${field.name} can only be one of the list of options`);
+        if (!entity) {
+          const keys = (field.options || "").split(/\r?\n/).map(opt => opt.split(":")[0]);
+          for (const value of values) {
+            if (!keys.includes(String(value))) {
+              errors.push(`The value ${value} for ${field.name} can only be one of the list of options`);
+            }
           }
         } else {
-          const errForNotValidDocument = `The field ${field.name} does not have a valid document configured, please check the document metadata or contact an Administrator.`;
-
-          if (options[0] === "") {
-            errors.push(errForNotValidDocument);
+          const linkedRef = loopar.getRef(entity, false);
+          if (!linkedRef) {
+            errors.push(`The field ${field.name} does not have a valid document configured, please check the document metadata or contact an Administrator.`);
           } else {
-            const linkedRef = loopar.getRef(options[0], false);
-            if (!linkedRef) {
-              errors.push(errForNotValidDocument);
-            } else {
-              // Asked to the linked model: a virtual entity has no table to count.
-              const linked = await loopar.newDocument(options[0]);
+            // Asked to the linked model: a virtual entity has no table to count.
+            const linked = await loopar.newDocument(entity);
+            for (const value of values) {
               if (!await linked.linkExists(value)) {
-                errors.push(`The value ${value} for ${field.name} does not exist in ${field.options} Entity`);
+                errors.push(`The value ${value} for ${field.name} does not exist in ${entity} Entity`);
               }
             }
           }
@@ -916,10 +902,10 @@ export default class CoreDocument {
       
           // value_descriptive needs saved data; child-table meta does not —
           // a new record still has to render its form_table columns.
-          if (!this.__IS_NEW__ && el.element === SELECT) {
+          if (!this.__IS_NEW__ && el.element === SELECT && !loopar.utils.trueValue(data.multiple)) {
             const options = (data.options || "").split("\n");
     
-            if (options.length > 1) {
+            if (selectSource(data) === "static") {
               const [value, label] = (options.find(opt => (opt || "").split(":")[0] === val) || "").split(":");
               el.data.value_descriptive = label || value;
             } else {
@@ -1147,7 +1133,7 @@ export default class CoreDocument {
 
   valuesToSetDataBase(toSave = false) {
     return Object.values(this.#fields).filter(field => {
-      if ((this.__IS_NEW__ && field.set_only_time) || field.element === FORM_TABLE) return false;
+      if (field.element === FORM_TABLE) return false;
 
       if (field.element === PASSWORD) {
         return field.value !== this.protectedPassword;

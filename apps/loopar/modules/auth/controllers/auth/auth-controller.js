@@ -2,8 +2,8 @@
 'use strict';
 
 import {loopar, BaseController, markStepUp, stepUpLocked, registerStepUpFailure, markOauthProof, takeOauthProof} from 'loopar';
-import {validatePasswordResetToken, generatePasswordResetToken, resetPassword} from "./recovery.js"
-import {sendPasswordResetEmail} from "./recovery-email.js"
+import {validatePasswordResetToken, generatePasswordResetToken, resetPassword, findAccountByEmail} from "./recovery.js"
+import {sendPasswordResetEmail, sendUsernameReminderEmail} from "./recovery-email.js"
 import {getProvider, providerKeys, providerLabel, generateState, generateCodeVerifier} from "./oauth-providers.js"
 import {setOauthTx, readOauthTx, clearOauthTx, oauthRedirectUri, loadProviderConfig, parseScopes, linkUser} from "./oauth.js"
 import {completeLogin, verifyChallenge, cancelChallenge, verifyFactor, hasMfa} from "./mfa.js"
@@ -23,7 +23,10 @@ export default class AuthController extends BaseController {
   async publicActionLogin() {
     return await this.#makeAction('Login', async (form) => {
       const user = await form.verifyCredentials();
-      const result = await completeLogin(user, { landing: (row) => this.#postLoginDestination(row) });
+      const result = await completeLogin(user, {
+        landing: (row) => this.#postLoginDestination(row),
+        remember: loopar.utils.trueValue(this.body?.keep_me_sign_in),
+      });
 
       if (result.mfa_locked) {
         loopar.throw({
@@ -74,7 +77,7 @@ export default class AuthController extends BaseController {
     const webLanding = process.env.WEB_LANDING || '/';
     const back = this.#safeReturnUrl(this.query.redirect);
     if (back) return back;
-    return session?.user_type === 'Web' ? webLanding : '/desk/Desk/view';
+    return session?.user_type === 'Web' ? webLanding : '/desk';
   }
 
   /** Anti open-redirect: same-origin absolute paths only, never /auth (would loop). */
@@ -99,19 +102,27 @@ export default class AuthController extends BaseController {
     return await this.#makeAction('Register');
   }
 
+  /**
+   * Forgot username: mails the account's user name to its own address. Same
+   * answer whether or not the email exists (no account enumeration); a send
+   * failure is logged, not surfaced, for the same reason.
+   */
   async publicActionRecoveryUser() {
-    return await this.#makeAction('Reset User');
-  }
+    const self = this;
+    return await this.#makeAction('Reset User', async () => {
+      const email = String(self.body?.email || '').trim();
+      const user = await findAccountByEmail(email);
 
-  async forgotUsername() {
-    const { email } = this.body;
-    const { user } = await getUsernameByEmail(email);
+      if (user && !(user.disabled && user.name !== 'Administrator')) {
+        try {
+          await sendUsernameReminderEmail(user);
+        } catch (err) {
+          console.error('[auth/recoveryUser] failed to send email:', err?.message);
+        }
+      }
 
-    if (user) {
-      await sendUsernameReminderEmail(user);
-    }
-
-    return this.success('Si el correo existe, recibirás tu nombre de usuario.');
+      return `If an account uses ${email}, we sent its username there.`;
+    });
   }
 
   async publicActionRecoveryPasswordRequest() {
@@ -375,7 +386,9 @@ export default class AuthController extends BaseController {
       for (const [k, v] of Object.entries(provider.reauthParams)) url.searchParams.set(k, v);
     }
 
-    setOauthTx({ provider: providerKey, state, codeVerifier, popup, stepUpUser });
+    // "Keep me signed in" checked on the login form when the button was pressed.
+    const remember = !stepUp && (this.query?.remember === '1' || this.query?.remember === 1);
+    setOauthTx({ provider: providerKey, state, codeVerifier, popup, stepUpUser, remember });
     return this.redirect(url.toString(), { hard: true });
   }
 
@@ -530,7 +543,7 @@ export default class AuthController extends BaseController {
 
     // System users → desk; Web users (self-signup) → website.
     const landing = user.user_type === 'Web' ? (process.env.WEB_LANDING || '/') : '/desk';
-    const result = await completeLogin(user, { landing });
+    const result = await completeLogin(user, { landing, remember: !!tx.remember });
     if (result.mfa_locked) return this.#oauthFinish(tx, { ok: false, reason: 'mfa_locked' });
     if (result.mfa_required) return this.#oauthFinish(tx, { ok: false, reason: 'mfa_required' });
     return this.#oauthFinish(tx, { ok: true, landing });
@@ -541,6 +554,10 @@ export default class AuthController extends BaseController {
    * buttons; never exposes secrets.
    */
   async publicActionOauthProviders() {
+    return this.success('ok', { providers: await this.#oauthProviders(), notify: false });
+  }
+
+  async #oauthProviders() {
     const providers = [];
     for (const key of providerKeys()) {
       try {
@@ -550,7 +567,7 @@ export default class AuthController extends BaseController {
         console.error(`[auth/oauthProviders] ${key} check failed:`, err?.message);
       }
     }
-    return this.success('ok', { providers, notify: false });
+    return providers;
   }
 
   /**
@@ -587,7 +604,11 @@ export default class AuthController extends BaseController {
     if (this.hasData()) {
       return await fn(form);
     } else {
-      return await this.render(await form.__meta__());
+      const meta = await form.__meta__();
+      // Login: the OAuth buttons ship with the first render, so the card
+      // doesn't grow (and jump) when they would arrive from a later fetch.
+      if (form.__ENTITY__?.name === 'Login') meta.oauthProviders = await this.#oauthProviders();
+      return await this.render(meta);
     }
   }
 }

@@ -6,6 +6,7 @@ import { ChevronRight, Check } from "lucide-react";
 import { cn } from "@cn/lib/utils";
 import loopar from "loopar";
 import { VARIANTS } from "./base/ComponentDefaults";
+import { IconLabel, iconMetaFields, BUTTON_SIZES } from "@link";
 
 const buttons = {
   primary: "primary",
@@ -179,11 +180,12 @@ export default function MetaButton(props){
     <Button
       {...loopar.utils.renderizableProps(props)}
       variant={getVariant()}
+      size={BUTTON_SIZES.some(s => s.value === data.size) ? data.size : undefined}
       onClick={handleClick}
       disabled={disabled}
       className={props.className}
     >
-      {data.label || "Button"}
+      <IconLabel icon={data.icon} position={data.icon_position}>{data.label || "Button"}</IconLabel>
     </Button>
   );
 }
@@ -205,6 +207,7 @@ MetaButton.metaFields =()=>{
           options: Object.keys(VARIANTS).map(k => ({ value: VARIANTS[k], label: k })),
         },
       },
+      ...iconMetaFields(),
       slide: {
         element: SWITCH,
         data: {

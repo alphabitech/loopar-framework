@@ -3,6 +3,7 @@ import loopar from "loopar";
 import { useDocument } from "@loopar/document";
 import { useDesigner } from "@context/designer-context";
 import { formatCurrency, formatNumber as formatRegionalNumber } from "@global/format";
+import { currentLanguage } from "@global/i18n";
 
 /**
  * Data of a desk page element, read by node key from the page's controller
@@ -56,3 +57,23 @@ export const filterField = () => ({
     description: 'JSON of field: value (equality). Tokens: "@me" current user, "@today" today\'s date.',
   },
 });
+
+const UNITS = [
+  ["year", 365 * 24 * 3600], ["month", 30 * 24 * 3600], ["week", 7 * 24 * 3600],
+  ["day", 24 * 3600], ["hour", 3600], ["minute", 60],
+];
+
+/** "12 minutes ago", "yesterday"… in the desk language; "" for an unreadable date. */
+export function timeAgo(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const seconds = (date.getTime() - Date.now()) / 1000;
+  let rtf;
+  try { rtf = new Intl.RelativeTimeFormat(currentLanguage() || undefined, { numeric: "auto" }); }
+  catch { rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }); }
+  for (const [unit, size] of UNITS) {
+    if (Math.abs(seconds) >= size) return rtf.format(Math.round(seconds / size), unit);
+  }
+  return rtf.format(0, "minute");
+}
+

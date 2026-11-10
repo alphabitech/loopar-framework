@@ -11,7 +11,7 @@
   "enable_history": 0,
   "enable_comments": 0,
   "require_login_to_comment": 0,
-  "doc_structure": "[{\"node\":\"input_ai_name\",\"element\":\"input\",\"data\":{\"label\":\"Name\",\"name\":\"name\",\"type\":\"text\",\"required\":1,\"unique\":1,\"set_only_time\":1,\"in_list_view\":1,\"searchable\":1}},{\"node\":\"row_ai_settings\",\"element\":\"row\",\"data\":{\"label\":\"Row1\",\"layout\":\"[50,50]\"},\"elements\":[{\"node\":\"col_ai_1\",\"element\":\"col\",\"data\":{\"label\":\"Col1\"},\"elements\":[{\"node\":\"select_ai_model\",\"element\":\"select\",\"data\":{\"label\":\"AI Model\",\"name\":\"ai_model\",\"required\":1,\"options\":\"AI Model\"}}]},{\"node\":\"col_ai_2\",\"element\":\"col\",\"data\":{\"label\":\"Col2\"}}]}]",
+  "doc_structure": "[{\"node\":\"input_ai_name\",\"element\":\"input\",\"data\":{\"label\":\"Name\",\"name\":\"name\",\"type\":\"text\",\"required\":1,\"unique\":1,\"in_list_view\":1,\"searchable\":1,\"write_policy\":\"create_only\"}},{\"node\":\"row_ai_settings\",\"element\":\"row\",\"data\":{\"layout\":\"[50,50]\"},\"elements\":[{\"node\":\"col_ai_1\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"select_ai_model\",\"element\":\"select\",\"data\":{\"label\":\"AI Model\",\"name\":\"ai_model\",\"required\":1,\"options\":\"AI Model\",\"options_source\":\"entity\"}}]},{\"node\":\"col_ai_2\",\"element\":\"col\",\"data\":{}}]}]",
   "resources": [],
   "__ENTITY__": "Entity"
 }

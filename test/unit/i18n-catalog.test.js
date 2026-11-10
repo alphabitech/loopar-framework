@@ -65,7 +65,7 @@ test("content entries keep the source they were translated from", () => {
   assert.equal(entryState(t.es.n1.text, "Hello"), "translated");
   assert.equal(entryState(t.es.n1.text, "Hello world"), "outdated");
   assert.equal(entryState(undefined, "Hello"), "missing");
-  const [node] = applyContentLayer([{ node: "n1", element: "title", data: { text: "Hello" } }], t.es);
+  const [node] = applyContentLayer([{ node: "n1", element: "heading", data: { text: "Hello" } }], t.es);
   assert.equal(node.data.text, "Hola");
   assert.deepEqual(contentTextProps("input", { group: "form" }), ["label", "description", "placeholder"]);
 });

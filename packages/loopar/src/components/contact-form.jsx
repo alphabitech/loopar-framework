@@ -1,3 +1,4 @@
+import { withRoot } from "./base/with-root.jsx";
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@cn/components/ui/button';
 import { cn } from '@cn/lib/utils';
@@ -65,7 +66,7 @@ export const SendButton = ({ captcha, getBotFields, onSent, onError, children })
   );
 };
 
-export default function ContactForm(props) {
+function ContactForm(props) {
   const data = props.data;
   const {
     success_message = "Message sent successfully!",
@@ -222,3 +223,5 @@ ContactForm.metaFields = () => {
     }
   ]];
 };
+
+export default withRoot(ContactForm);

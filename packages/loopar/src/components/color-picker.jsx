@@ -118,3 +118,5 @@ export default function PopoverPicker(props) {
     />
   );
 }
+
+PopoverPicker.metaFields = () => BaseInput.metaFields();

@@ -1,3 +1,4 @@
+import { withRoot } from "./base/with-root.jsx";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { ComponentDefaults } from "./base/ComponentDefaults";
 import { Code, Copy, Check } from "lucide-react";
@@ -133,7 +134,7 @@ function CodePreview({ code }) {
   );
 }
 
-export default function ExampleViewer(props) {
+function ExampleViewer(props) {
   const { set, data } = ComponentDefaults(props);
   const [copied, setCopied] = useState(false);
   const [liveValue, setLiveValue] = useState(data.value || "");
@@ -269,3 +270,5 @@ ExampleViewer.metaFields = () => {
     ]
   ];
 };
+
+export default withRoot(ExampleViewer);

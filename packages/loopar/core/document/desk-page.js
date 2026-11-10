@@ -12,11 +12,13 @@ import { loopar } from '../loopar.js';
 import { fileManage } from '../file-manage.js';
 import { PermissionManager, SCOPE } from '../auth/PermissionManager.js';
 import { isAuditableEntity, CREATED_BY_COLUMN } from '../global/audit.js';
+import { setupChecklist, recentDocuments, deskGreeting, systemStats, activityFeed } from './desk-home.js';
 
 export const DESK_PAGE_TYPE = "Desk Page";
 
 /** Elements that read data through DeskPageController (see deskElementData). */
-export const DESK_DATA_ELEMENTS = new Set(["shortcut", "number_card", "quick_list"]);
+export const DESK_DATA_ELEMENTS = new Set(["shortcut", "number_card", "quick_list", "setup_checklist", "recent_documents",
+  "desk_greeting", "system_stats", "activity_feed"]);
 
 const truthy = (v) => loopar.utils.trueValue(v);
 
@@ -167,5 +169,10 @@ export async function deskElementData(pageName, nodeKey, user = loopar.auth.user
   }
   if (node.element === "number_card") return await aggregate(data, user);
   if (node.element === "quick_list") return await quickList(data, user);
+  if (node.element === "setup_checklist") return await setupChecklist(user);
+  if (node.element === "recent_documents") return await recentDocuments(data, user);
+  if (node.element === "desk_greeting") return await deskGreeting(user);
+  if (node.element === "system_stats") return await systemStats(user);
+  if (node.element === "activity_feed") return await activityFeed(data, user);
   return {};
 }

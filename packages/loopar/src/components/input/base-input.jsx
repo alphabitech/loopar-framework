@@ -55,7 +55,9 @@ const BaseInput = (props) => {
   // reads the same way inside an editable form.
   const { readOnly: readOnlyOption } = useViewOptions();
   // Computed fields (`formula`) are read-only too: their value comes from the formula.
-  const fieldReadOnly = [1, "1", true, "true"].includes(propData?.readonly) || !!String(propData?.formula ?? "").trim();
+  const fieldReadOnly = [1, "1", true, "true"].includes(propData?.readonly)
+    || propData?.write_policy === "display_only"
+    || !!String(propData?.formula ?? "").trim();
   const readMode = !designerMode && ((readOnlyOption ?? ownerDocument?.readOnly) === true || fieldReadOnly);
   
   const getInitialData = useCallback(() => {
@@ -124,8 +126,9 @@ const BaseInput = (props) => {
     }
     
     try {
+      // `required` may change at runtime (required_on, setFieldDf): read it live.
       const validation = dataInterface(
-        { element, data: state.data },
+        { element, data: { ...state.data, required: propData?.required ?? state.data.required } },
         fieldRef.current.value
       ).validate();
       
@@ -141,7 +144,7 @@ const BaseInput = (props) => {
       console.error("Validation error:", error);
       return { valid: true };
     }
-  }, [element, state.data, state.isInvalid, parentHidden]);
+  }, [element, state.data, state.isInvalid, parentHidden, propData?.required]);
 
   useEffect(() => {
     debouncedOnChangeRef.current = debounce((event) => {
@@ -266,6 +269,7 @@ const BaseInput = (props) => {
 
           return withChange(
             <FormItem
+              required={!readMode && [1, "1", true, "true"].includes(propData?.required ?? state.data.required)}
               className={cn("flex flex-col rounded shadow-sm", readMode && "pointer-events-none", className)}
               aria-readonly={readMode || undefined}
             >
@@ -324,15 +328,21 @@ BaseInput.metaFields = () => {
         description: { element: TEXTAREA },
         placeholder: { element: TEXTAREA },
         required: { element: SWITCH },
+        required_on: {
+          element: TEXTAREA,
+          data: {
+            label: "Required when",
+            rows: 2,
+            description: "Condition that makes the field required, same syntax as Display Condition. E.g. contact_method = 'Phone'.",
+          },
+        },
         unique: { element: SWITCH },
-        set_only_time: { element: SWITCH },
-        readonly: { element: SWITCH },
         write_policy: {
           element: SELECT,
           data: {
             label: "Write policy",
-            options: ["editable", "create_only", "readonly", "protected", "system"],
-            description: "Enforced on the server. editable: any user allowed to save the record. create_only: only when created. readonly: never from a form (server code only). protected: only through the verified \"Change\" dialog (password re-check) — e.g. email, password. system: never from a form nor the dialog (2FA secrets, tokens).",
+            options: ["editable", "display_only", "create_only", "readonly", "protected", "system"],
+            description: "editable: any user allowed to save the record. display_only: shown read-only, but view code may fill it (values computed in the browser). create_only: only when created. readonly: never from a form (server code only). protected: only through the verified \"Change\" dialog (password re-check) — e.g. email, password. system: never from a form nor the dialog (2FA secrets, tokens). All but display_only are enforced on the server.",
           }
         },
         write_roles: {
@@ -355,6 +365,7 @@ BaseInput.metaFields = () => {
         internal: {
           element: SWITCH,
           data: {
+            contexts: ["Contact Form Builder"],
             label: "Internal",
             description: "Contact form entities only: staff-only field, never shown on the public form or accepted from it."
           }
@@ -362,6 +373,7 @@ BaseInput.metaFields = () => {
         required_on_website: {
           element: SWITCH,
           data: {
+            contexts: ["Contact Form Builder"],
             label: "Required on website",
             description: "Contact form entities only: the visitor must fill it (a checkbox must be checked, e.g. a consent); staff may leave it empty in the desk."
           }
@@ -369,10 +381,6 @@ BaseInput.metaFields = () => {
       },
     },
   ]];
-};
-
-BaseInput.donHaveMetaFields = () => {
-  return ["text"];
 };
 
 export default BaseInput;

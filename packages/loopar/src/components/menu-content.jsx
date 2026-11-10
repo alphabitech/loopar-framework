@@ -1,3 +1,4 @@
+import { withRoot } from "./base/with-root.jsx";
 import MetaComponent from "@meta-component";
 import { useDesigner } from "@context/designer-context";
 import { useEffect, useRef, forwardRef, useState } from "react";
@@ -252,7 +253,7 @@ const useActiveSection = () => {
   return active;
 };
 
-export default function MenuContentMeta(props) {
+function MenuContentMeta(props) {
   const { designerMode: isDesigner, designing } = useDesigner();
   const [elements, setElements] = useState(props.elements || []);
   const sectionsRefs = useRef([]);
@@ -315,3 +316,5 @@ export default function MenuContentMeta(props) {
     </div>
   );
 }
+
+export default withRoot(MenuContentMeta);

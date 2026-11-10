@@ -7,6 +7,8 @@ import {useNavigate} from 'react-router';
 import loopar from 'loopar';
 import { Button } from '@cn/components/ui/button';
 import { Input } from '@cn/components/ui/input';
+import { cn } from '@cn/lib/utils';
+import { SystemHeader } from '@workspace/system/system-shell';
 import { __ } from "loopar";
 
 /** Inline brand logos, keyed by provider. Avoids any icon-package dependency. */
@@ -51,14 +53,17 @@ const oauthErrorMessage = (reason) =>
  * payload shape). Popup blocked → graceful fallback to the full-page
  * redirect flow, which the server keeps supporting (no `popup=1` flag).
  */
-function OAuthButtons({ inModal, onClose, onMfaRequired }) {
-  const [providers, setProviders] = useState([]);
+function OAuthButtons({ initial, inModal, onClose, onMfaRequired, remember }) {
+  // Server-rendered list when the login page provides it (no layout jump);
+  // the fetch stays as fallback for callers that don't.
+  const [providers, setProviders] = useState(Array.isArray(initial) ? initial : []);
   const [connecting, setConnecting] = useState(null); // provider key or null
   const [error, setError] = useState(null);
   const popupRef = useRef(null);
   const watchdogRef = useRef(null);
 
   useEffect(() => {
+    if (Array.isArray(initial)) return;
     let alive = true;
     fetch('/auth/oauthProviders', {
       method: 'POST',
@@ -111,7 +116,8 @@ function OAuthButtons({ inModal, onClose, onMfaRequired }) {
     e.preventDefault();
     setError(null);
 
-    const url = `/auth/oauth?provider=${encodeURIComponent(provider)}&popup=1`;
+    const base = `/auth/oauth?provider=${encodeURIComponent(provider)}${remember?.() ? '&remember=1' : ''}`;
+    const url = `${base}&popup=1`;
     const w = 500, h = 650;
     const left = Math.max(0, (window.screen.width - w) / 2 + (window.screenLeft || 0));
     const top = Math.max(0, (window.screen.height - h) / 2 + (window.screenTop || 0));
@@ -123,7 +129,7 @@ function OAuthButtons({ inModal, onClose, onMfaRequired }) {
 
     if (!popup) {
       // Popup blocked → the classic full-page flow (no popup flag).
-      window.location.assign(`/auth/oauth?provider=${encodeURIComponent(provider)}`);
+      window.location.assign(base);
       return;
     }
 
@@ -144,44 +150,39 @@ function OAuthButtons({ inModal, onClose, onMfaRequired }) {
   if (!providers.length) return null;
 
   return (
-    <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', opacity: 0.55, fontSize: '0.8rem' }}>
-        <span style={{ flex: 1, height: 1, background: 'currentColor', opacity: 0.25 }} />
+    <div className="mt-2 flex flex-col gap-2.5">
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
         {__("or")}
-        <span style={{ flex: 1, height: 1, background: 'currentColor', opacity: 0.25 }} />
+        <span className="h-px flex-1 bg-border" />
       </div>
       {error && (
-        <div role="alert" style={{ fontSize: '0.85rem', color: '#d33c3c' }}>{error}</div>
+        <div role="alert" className="text-sm text-destructive">{error}</div>
       )}
       {providers.map((p) => (
-        <a
+        <Button
           key={p.provider}
-          href={`/auth/oauth?provider=${encodeURIComponent(p.provider)}`}
-          onClick={(e) => start(e, p.provider)}
-          aria-disabled={!!connecting}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.6rem',
-            width: '100%',
-            padding: '0.6rem 1rem',
-            border: '1px solid rgba(127,127,127,0.35)',
-            borderRadius: '0.6rem',
-            background: 'transparent',
-            color: 'inherit',
-            textDecoration: 'none',
-            fontSize: '0.95rem',
-            fontWeight: 500,
-            opacity: connecting && connecting !== p.provider ? 0.5 : 1,
-            pointerEvents: connecting ? 'none' : 'auto',
-          }}
+          asChild
+          variant="outline"
+          className={cn(
+            "w-full gap-2.5",
+            connecting && "pointer-events-none",
+            connecting && connecting !== p.provider && "opacity-50"
+          )}
         >
-          {ProviderIcons[p.provider] || null}
-          <span>
-            {connecting === p.provider ? `Connecting to ${p.label}…` : `Continue with ${p.label}`}
-          </span>
-        </a>
+          <a
+            href={`/auth/oauth?provider=${encodeURIComponent(p.provider)}`}
+            onClick={(e) => start(e, p.provider)}
+            aria-disabled={!!connecting}
+          >
+            {ProviderIcons[p.provider] || null}
+            <span>
+              {connecting === p.provider
+                ? `${__("Connecting to")} ${p.label}…`
+                : `${__("Continue with")} ${p.label}`}
+            </span>
+          </a>
+        </Button>
       ))}
     </div>
   );
@@ -253,16 +254,14 @@ function MfaStep({ inModal, onClose, onBack }) {
   return (
     <form
       onSubmit={(e) => { e.preventDefault(); verify(); }}
-      className="flex flex-col gap-4 p-6"
+      className="flex flex-col gap-4"
     >
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">{__("Two-factor authentication")}</h2>
-        <p className="text-sm text-muted-foreground">
-          {mode === 'code'
-            ? 'Enter the 6-digit code from your authenticator app.'
-            : 'Enter one of the recovery codes you saved when you turned on two-factor authentication.'}
-        </p>
-      </div>
+      <SystemHeader
+        title={__("Two-factor authentication")}
+        description={mode === 'code'
+          ? __('Enter the 6-digit code from your authenticator app.')
+          : __('Enter one of the recovery codes you saved when you turned on two-factor authentication.')}
+      />
 
       <Input
         ref={inputRef}
@@ -311,15 +310,15 @@ export const config = {
       return {
         user_name: this.getValue('user_name'),
         password: this.getValue('password'),
-        keep_me_sign_in: this.getValue('keep_me_sign_in')
+        keep_me_sign_in: this.getValue('keep_me_sign_in'),
       };
     },
   },
 };
 
 export default function LoginForm() {
-  const { inModal, onClose } = useDocument();
-  const { send, setError } = useForm();
+  const { inModal, onClose, Document } = useDocument();
+  const { send, setError, getValue } = useForm();
   const navigate = useNavigate();
   // Second step (2FA code). Starts on after a full-page OAuth / claim flow
   // that redirected here with ?mfa=1; set after mount to keep SSR in sync.
@@ -384,11 +383,15 @@ export default function LoginForm() {
 
   return (
     <>
+      {!inModal && (
+        <SystemHeader title={__("Sign in")} description={__("Enter your credentials to continue.")} />
+      )}
       {notice && (
-        <div role="alert" className="mx-6 mt-4 text-sm text-destructive">{notice}</div>
+        <div role="alert" className="mb-4 text-sm text-destructive">{notice}</div>
       )}
       <BareLayout />
-      <OAuthButtons inModal={inModal} onClose={onClose} onMfaRequired={openMfaStep} />
+      <OAuthButtons initial={Document?.oauthProviders} inModal={inModal} onClose={onClose} onMfaRequired={openMfaStep}
+        remember={() => loopar.utils.trueValue(getValue('keep_me_sign_in'))} />
     </>
   );
 }

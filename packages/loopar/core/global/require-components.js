@@ -65,5 +65,5 @@ export function requireComponents(__META__) {
 }
 
 export function MetaComponents(__META__, environment) {
-  return extractElements(__META__, [...requireComponents(__META__), "fragment"], environment);
+  return extractElements(__META__, requireComponents(__META__), environment);
 }

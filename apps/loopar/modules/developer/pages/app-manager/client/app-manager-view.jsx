@@ -4,7 +4,7 @@ import { ListLayout } from '@loopar/list';
 import loopar from "loopar";
 import { useState } from "react";
 
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter} from '@card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter} from '@cn/components/ui/card';
 import { cn } from "@cn/lib/utils";
 
 import { titleize } from "inflection";

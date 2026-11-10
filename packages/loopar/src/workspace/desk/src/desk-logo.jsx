@@ -5,7 +5,7 @@ export const DeskLogo = (props) => {
     src: `/assets/public/images/loopar.svg`,
     alt: "Loopar Logo",
     className: 'hidden h-6 md:block text-white',
-    href: "/core/Desk/view",
+    href: "/desk",
   }
   return (
     <div className='p-1'>

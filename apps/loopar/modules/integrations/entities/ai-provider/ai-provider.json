@@ -11,7 +11,7 @@
   "enable_history": 0,
   "enable_comments": 0,
   "require_login_to_comment": 0,
-  "doc_structure": "[{\"node\":\"row1_el48842131172\",\"element\":\"row\",\"data\":{\"label\":\"Row1\",\"layout\":\"[50,50]\"},\"elements\":[{\"node\":\"aklji4w2x\",\"element\":\"col\",\"data\":{\"label\":\"Aklji4w2x\"},\"elements\":[{\"node\":\"input4_el51875600270\",\"element\":\"input\",\"data\":{\"label\":\"Name\",\"name\":\"name\",\"required\":1,\"type\":\"VARCHAR\",\"in_list_view\":1,\"set_only_time\":1,\"unique\":1,\"searchable\":1}},{\"node\":\"input_base_url\",\"element\":\"input\",\"data\":{\"label\":\"Base URL\",\"name\":\"base_url\",\"in_list_view\":1}}]},{\"node\":\"7afr6w379\",\"element\":\"col\",\"data\":{\"label\":\"7afr6w379\"},\"elements\":[{\"node\":\"password1_el349547879\",\"element\":\"password\",\"data\":{\"label\":\"API Key\",\"name\":\"api_key\",\"required\":1}}]}]}]",
+  "doc_structure": "[{\"node\":\"row1_el48842131172\",\"element\":\"row\",\"data\":{\"layout\":\"[50,50]\"},\"elements\":[{\"node\":\"aklji4w2x\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"input4_el51875600270\",\"element\":\"input\",\"data\":{\"label\":\"Name\",\"name\":\"name\",\"required\":1,\"type\":\"VARCHAR\",\"in_list_view\":1,\"unique\":1,\"searchable\":1,\"write_policy\":\"create_only\"}},{\"node\":\"input_base_url\",\"element\":\"input\",\"data\":{\"label\":\"Base URL\",\"name\":\"base_url\",\"in_list_view\":1}}]},{\"node\":\"7afr6w379\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"password1_el349547879\",\"element\":\"password\",\"data\":{\"label\":\"API Key\",\"name\":\"api_key\",\"required\":1}}]}]}]",
   "resources": [],
   "__ENTITY__": "Entity"
 }

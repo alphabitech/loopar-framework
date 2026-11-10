@@ -44,7 +44,7 @@ export default class DynamicField {
   }
 
   get isParsed() {
-    return this.element === 'text_editor' || ['__ENTITY__', 'doc_structure', 'form_structure'].includes(this.name);
+    return ['__ENTITY__', 'doc_structure', 'form_structure'].includes(this.name);
   }
 
   get value() {
@@ -103,7 +103,8 @@ export default class DynamicField {
     return this.#value;
   }
 
-  validate() {
-    return dataInterface(this, this.#value).validate();
+  /** `values`: the record's other field values (for `required_on`). */
+  validate(values = {}) {
+    return dataInterface(this, this.#value, values).validate();
   }
 }

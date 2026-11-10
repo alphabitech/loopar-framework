@@ -69,17 +69,19 @@ const useFormField = () => {
 
 type FormItemContextValue = {
   id: string
+  /** Shows the required mark on the item's label. */
+  required?: boolean
 }
 
 const FormItemContext = React.createContext<FormItemContextValue>(
   {} as FormItemContextValue
 )
 
-const FormItem = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
+const FormItem = ({ className, required, ...props }: React.HTMLAttributes<HTMLDivElement> & { required?: boolean }) => {
   const id = React.useId()
 
   return (
-    <FormItemContext.Provider value={{ id }}>
+    <FormItemContext.Provider value={{ id, required }}>
       <div  className={cn("space-y-2", className)} {...props} />
     </FormItemContext.Provider>
   )
@@ -96,6 +98,7 @@ const FormLabelAddonContext = React.createContext<FormLabelAddon | null>(null)
 
 const FormLabel = ({ className, children, ...props }: React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root>) => {
   const { error, formItemId, name } = useFormField()
+  const { required } = React.useContext(FormItemContext)
   const addonFor = React.useContext(FormLabelAddonContext)
   const addon = name && addonFor ? addonFor(name) : null
 
@@ -106,6 +109,7 @@ const FormLabel = ({ className, children, ...props }: React.ComponentPropsWithou
       {...props}
     >
       {t(children)}
+      {required && <span className="text-destructive" aria-hidden="true"> *</span>}
     </Label>
   )
 

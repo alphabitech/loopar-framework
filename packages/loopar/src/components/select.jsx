@@ -11,6 +11,27 @@ import { EntryModal } from "@app/entry-modal";
 import { makeUrl } from "./link.jsx";
 import { useDocument } from "@loopar/document";
 import { __ } from "@global/i18n";
+import { selectSource, multipleValues } from "@global/element-definition";
+import { X } from "lucide-react";
+
+/** Chips of the values of a `multiple` select, each removable. */
+function SelectedChips({ values, labelOf, onRemove, disabled }) {
+  if (!values.length) return null;
+  return (
+    <div className="mb-1 flex flex-wrap gap-1">
+      {values.map((v) => (
+        <span key={v} className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 text-sm text-secondary-foreground">
+          {labelOf(v)}
+          {!disabled && (
+            <button type="button" aria-label={`${__("Remove")} ${v}`} onClick={() => onRemove(v)} className="opacity-60 hover:opacity-100">
+              <X className="size-3" />
+            </button>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export default function MetaSelect(props) {
   const [rows, setRows] = useState([]);
@@ -32,10 +53,8 @@ export default function MetaSelect(props) {
   const { Document: ownerDocument } = useDocument();
   const linkTitles = ownerDocument?.linkTitles;
 
-  const isLocal = useMemo(() => {
-    const options = data.options;
-    return !options || typeof options === "object" || options.includes("\n");
-  }, [data.options]);
+  const isLocal = useMemo(() => selectSource(data) === "static", [data.options, data.options_source]);
+  const multiple = loopar.utils.trueValue(data.multiple);
 
   const buildLabel = useCallback((opt) => {
     if (!opt) return null;
@@ -297,15 +316,25 @@ export default function MetaSelect(props) {
         <FormLabel {...props} field={field} />
         <div className="flex w-full items-start gap-1">
           <div className="min-w-0 flex-1">
+            {multiple && (
+              <SelectedChips
+                values={multipleValues(field.value)}
+                labelOf={(v) => currentOption(v)?.formattedValue || currentOption(v)?.label || v}
+                disabled={data.disabled}
+                onRemove={(v) => field.onChange(JSON.stringify(multipleValues(field.value).filter((x) => x !== v)))}
+              />
+            )}
             <Select
               field={field}
-              options={rows}
+              options={multiple ? rows.filter((r) => !multipleValues(field.value).includes(String(r?.value))) : rows}
               search={search}
               loadMore={loadMore}
               pagination={pagination}
               data={data}
-              onSelect={field.onChange}
-              selected={currentOption(field.value)}
+              onSelect={multiple
+                ? (v) => { if (v !== undefined && v !== null && v !== "") field.onChange(JSON.stringify([...new Set([...multipleValues(field.value), String(v)])])); }
+                : field.onChange}
+              selected={multiple ? null : currentOption(field.value)}
               isLoading={isLoading}
               error={error}
               isLocal={isLocal}
@@ -350,12 +379,24 @@ MetaSelect.metaFields = () => {
       {
         group: "form",
         elements: {
+          options_source: {
+            element: SELECT,
+            data: {
+              label: "Options from",
+              options: [{ value: "static", label: "List (Options below)" }, { value: "entity", label: "Entity records" }],
+              description: "List: one option per line, value:Label. Entity: the name of the entity whose records are offered.",
+            },
+          },
           options: {
             element: TEXTAREA,
             data: {
               description:
-                "For simple select insert the options separated by enter. For Entity Select, insert the Entity Name",
+                "List: one option per line (value or value:Label). Entity: the entity name.",
             },
+          },
+          multiple: {
+            element: SWITCH,
+            data: { label: "Multiple", description: "Allow choosing several values (stored as a JSON list)." },
           },
         },
       },

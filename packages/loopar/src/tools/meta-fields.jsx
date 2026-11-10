@@ -1,4 +1,5 @@
 import loopar from "loopar";
+import { elementsDict } from "@global/element-definition";
 
 const normalizeOptions = (options) => {
   if (!options) return [];
@@ -60,24 +61,35 @@ const DEFAULTS = {
   animation_delay: 0,
 };
 
+/**
+ * Fields of the "content" section, from the element's content schema
+ * (element-definition.js `content`): one field per visible text, typed
+ * line → input, text/lines → textarea. Rich values (markdown) are edited by
+ * the element itself. Writable (form) elements have their own fields.
+ */
+const CONTENT_FIELD = {
+  line: () => ({ element: INPUT }),
+  text: () => ({ element: TEXTAREA, data: { rows: 3 } }),
+  lines: () => ({ element: TEXTAREA, data: { rows: 6, description: "One item per line." } }),
+};
+
+const contentFields = (element) => {
+  const def = elementsDict[element.element]?.def;
+  if (!def || def.isWritable) return {};
+  return Object.entries(def.content || {}).reduce((acc, [prop, type]) => {
+    const make = CONTENT_FIELD[type];
+    if (!make) return acc;
+    const field = make();
+    acc[prop] = { ...field, data: { label: loopar.utils.Capitalize(prop.replaceAll("_", " ")), ...(field.data || {}) } };
+    return acc;
+  }, {});
+};
+
 export const getMetaFields = (element) => {
   return [
     {
       group: "content",
-      elements: {
-        label: {
-          element: INPUT,
-          data: { label: "Label" },
-        },
-        name: {
-          element: INPUT,
-          data: { label: "Name" },
-        },
-        text: {
-          element: TEXTAREA,
-          data: { label: "Text" },
-        },
-      },
+      elements: contentFields(element),
     },
     {
       group: "style",
@@ -126,6 +138,18 @@ export const getMetaFields = (element) => {
           element: SWITCH,
           data: { label: "Hidden" },
         },
+        visible_on: {
+          element: SELECT,
+          data: {
+            label: "Visible On",
+            description: "Show this element only on some screen sizes (breakpoint: md).",
+            options: [
+              { value: "", label: "All screens" },
+              { value: "mobile", label: "Mobile only" },
+              { value: "desktop", label: "Desktop only" },
+            ],
+          },
+        },
         disabled: {
           element: SWITCH,
           data: { label: "Disabled" },
@@ -173,6 +197,10 @@ export const getMetaFields = (element) => {
     {
       group: "advanced",
       elements: {
+        name: {
+          element: INPUT,
+          data: { label: "Name", description: "Internal name (form fields, anchors, scripts)." },
+        },
         id: {
           element: INPUT,
           data: {
@@ -180,15 +208,20 @@ export const getMetaFields = (element) => {
             description: "Unique identifier",
           },
         },
-        collapsible: {
-          element: SWITCH,
-          data: { label: "Collapsible" },
-        },
         display_on: {
           element: TEXTAREA,
           data: {
             label: "Display Condition",
             rows: 2,
+          },
+        },
+        attributes: {
+          element: METADATA,
+          data: {
+            label: "Attributes",
+            description: "Custom HTML attributes for the element's root: data-*, aria-*, role, itemprop, itemscope, itemtype, rel, title, lang… Event handlers, style, class and id are ignored.",
+            key_label: "Attribute",
+            value_label: "Value",
           },
         },
       },

@@ -128,7 +128,7 @@ function Banner() {
     center: "justify-center items-center",
     start: "justify-start items-start",
     end: "justify-end items-end",
-  }[data?.alling || "center"];
+  }[data?.align || "center"];
   
   const coverClassName = cn(
     "h-full w-full",
@@ -198,18 +198,21 @@ export default function MetaBanner(props){
   const data = props.data;
   const defaultElements = [
     {
-      element: "title",
+      element: "heading",
       node: props.node + "title",
       data: {
         text: data?.label || "Banner Title...",
-        size: "3xl",
+        level: "h2",
+        size: "display",
         text_align: "center",
       },
     },
     {
-      element: "subtitle",
+      element: "heading",
       node: props.node + "subtitle",
       data: {
+        level: "h3",
+        size: "xl",
         text: data?.text || "Subtitle...",
         text_align: "center",
       },
@@ -228,7 +231,7 @@ MetaBanner.metaFields =()=>{
   return [{
     group: "custom",
     elements: {
-      alling: {
+      align: {
         element: SELECT,
         data: {
           options: ["center", "start", "end"],

@@ -85,7 +85,7 @@ export class DocumentController {
   }
 
   get __READONLY_FIELDS__() {
-    return this.__FIELDS__.filter(field => field.data.readonly);
+    return this.__FIELDS__.filter(field => [1, "1", true].includes(field.data.readonly) || field.data.write_policy === "display_only");
   }
 
   __FIELD__(fieldName) {

@@ -119,12 +119,26 @@ export default function MetaPanel(props) {
     designing && "p-2"
   );
 
+  const hasHeader = data.title || data.description;
+
+  if (!hasHeader) {
+    return (
+     <Droppable
+        {...props}
+        className={className}
+        style={buildStyle()}
+      />
+    );
+  }
+
   return (
-   <Droppable
-      {...props}
-      className={className}
-      style={buildStyle()}
-    />
+    <div className={cn(className, "flex flex-col gap-4")} style={buildStyle()}>
+      <div className="space-y-1.5">
+        {data.title && <h3 className="text-2xl font-semibold leading-none tracking-tight">{data.title}</h3>}
+        {data.description && <p className="text-sm text-muted-foreground">{data.description}</p>}
+      </div>
+      <Droppable {...props} className="flex-1" />
+    </div>
   );
 }
 
@@ -149,6 +163,14 @@ MetaPanel.metaFields = () => {
     {
       group: "custom",
       elements: {
+        title: {
+          element: INPUT,
+          data: { label: "Title", description: "Optional header shown above the content." },
+        },
+        description: {
+          element: TEXTAREA,
+          data: { label: "Description", rows: 2 },
+        },
         variant: {
           element: SELECT,
           data: {

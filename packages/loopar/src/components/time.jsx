@@ -18,7 +18,7 @@ import {
 
 import BaseTimePicker from "@@date/time-picker";
 
-import { CalendarIcon } from "lucide-react";
+import { Clock } from "lucide-react";
 import { __ } from "@global/i18n";
 
 const toHHmm = (val) => {
@@ -51,12 +51,12 @@ export default function TimePicker(props) {
               <Button
                 variant={"outline"}
                 className={cn(
-                  "w-[240px] pl-3 text-left font-normal",
+                  "w-full sm:w-[240px] pl-3 text-left font-normal",
                   !display && "text-muted-foreground"
                 )}
               >
                 {display ?? <span>{__("Pick a Time")}</span>}
-                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                <Clock className="ml-auto h-4 w-4 opacity-50" />
               </Button>
             </FormControl>
           </PopoverTrigger>
@@ -71,3 +71,5 @@ export default function TimePicker(props) {
     )
   })
 }
+
+TimePicker.metaFields = () => BaseInput.metaFields();

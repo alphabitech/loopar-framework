@@ -3,6 +3,7 @@ import loopar from "loopar";
 import { useRef } from "react";
 import { useDragAndDrop } from "../droppable/DragAndDropContext";
 import Icon from "@icon";
+import { elementsDict } from "@global/element-definition";
 
 export function DesignElement(props){
   const element = props.element;
@@ -11,13 +12,15 @@ export function DesignElement(props){
   const toElement =  element.element;
 
   const elementToCreate = () => {
-    const elementName = elementManage.elementName(toElement);
-    const { key, ...authored } = elementName;
+    const { key, label } = elementManage.elementName(toElement);
+    // Only fields get a starting label ("Input3"); content elements start
+    // empty — their texts are their own props (title, text…).
+    const writable = elementsDict[toElement]?.def?.isWritable;
 
     return {
       element: toElement,
       node: key,
-      data: authored,
+      data: writable ? { label } : {},
     }
   }
 

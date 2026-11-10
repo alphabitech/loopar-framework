@@ -22,7 +22,6 @@
     "micromark-util-character": "2.1.1",
     "prism-react-renderer": "2.4.1",
     "property-information": "7.1.0",
-    "quill": "2.0.3",
     "unist-util-visit-parents": "6.0.2"
   }
 }

@@ -1,5 +1,6 @@
 import { __ } from './i18n.js';
 import {getTime, isValidDate} from './date-utils.js';
+import { evaluateCondition } from './condition.js';
 
 export const TYPES = Object.freeze({
   increments: 'increments',
@@ -47,6 +48,21 @@ export const COLUMN_FORMATS = {
     description: "Email address. VARCHAR.",
     inputType: "email",
     sql: (t, name, d) => t.string(name, d.length || 255),
+  },
+  phone: {
+    description: "Phone number (opens the phone keypad on mobile). VARCHAR.",
+    inputType: "tel",
+    sql: (t, name, d) => t.string(name, d.length || 50),
+  },
+  url: {
+    description: "Web address. VARCHAR.",
+    inputType: "url",
+    sql: (t, name, d) => t.string(name, d.length || 2048),
+  },
+  percent: {
+    description: "Percentage (0–100, decimals allowed). DECIMAL.",
+    inputType: "number",
+    sql: (t, name, d) => t.decimal(name, d.precision || 7, d.scale || 4),
   },
   password: {
     description: "Hashed password. VARCHAR (never store in plain text).",
@@ -269,61 +285,63 @@ export const ELEMENT_GROUPS = Object.freeze({
 
 export const elementsDefinition = {
   layout: [
-    { element: "section", icon: "GalleryVertical" },
-    { element: "container", icon: "Container" },
-    { element: "div", icon: "Box", droppable: true},
+    { element: "section", icon: "GalleryVertical", content: { label: "line" } },
+    { element: "div", icon: "Box", droppable: true, content: { text: "text", label: "line" } },
+    { element: "grid", icon: "LayoutGrid" },
     { element: "row", icon: "Columns2" },
-    { element: "col", icon: "RectangleVertical" },
-    { element: "fragment", icon: "Scan" },
-    { element: "panel", icon: "PanelBottom", designerClasses: "min-h-[100px] w-full" },
-    { element: "tabs", icon: "AppWindow" },
-    { element: "tab", icon: "PanelTop", show_in_design: false  },
-    { element: "generic", icon: "Code" },
+    { element: "col", icon: "RectangleVertical", parent: "row" },
+    { element: "panel", icon: "PanelBottom", designerClasses: "min-h-[100px] w-full", content: { title: "line", description: "text" } },
+    { element: "tabs", icon: "AppWindow", content: { label: "line" } },
+    { element: "tab", icon: "PanelTop", show_in_design: false, parent: "tabs", content: { label: "line" } },
     { element: "menu_content", icon: "Menu" },
+    { element: "modal", icon: "AppWindowMac", content: { title: "line", description: "text", trigger_label: "line" } },
   ],
   content: [
-    { element: "title", icon: "Heading1", droppable: false },
-    { element: "subtitle", icon: "Heading2", droppable: false },
-    { element: "paragraph", icon: "Pilcrow", droppable: false },
+    { element: "heading", icon: "Heading1", droppable: false, content: { text: "line" } },
+    { element: "paragraph", icon: "Pilcrow", droppable: false, content: { text: "text" } },
     { element: "text_block", icon: "Type" },
-    { element: "text_block_icon", icon: "MessageSquareText" },
-    { element: "markdown", icon: "BookOpenCheck", designerOnly: true, droppable: false },
-    { element: "html_block", icon: "Code", type: TYPES.text, designerOnly: true, clientOnly: true },
+    { element: "markdown", icon: "BookOpenCheck", designerOnly: true, droppable: false, content: { value: "rich", label: "line" } },
     { element: "icon", icon: "Shapes" },
-    { element: "link", icon: "Link", droppable: false },
-    { element: "button", icon: "SquareMousePointer" },
+    { element: "link", icon: "Link", droppable: false, content: { label: "line" } },
+    { element: "button", icon: "SquareMousePointer", content: { label: "line", slide_text: "line", slide_confirmed_text: "line" } },
+    { element: "list", icon: "ListChecks", droppable: false, content: { items: "lines" } },
+    { element: "separator", icon: "SeparatorHorizontal", droppable: false, content: { label: "line" } },
+    { element: "spacer", icon: "MoveVertical", droppable: false },
   ],
   media: [
-    { element: "image", icon: "Image", droppable: false },
+    { element: "image", icon: "Image", droppable: false, content: { alt: "line" } },
     { element: "gallery", icon: "Images", designerClasses: "pt-3" },
-    { element: "slider", icon: "GalleryHorizontal" },
     { element: "carousel", icon: "GalleryHorizontalEnd", designerClasses: "pt-2" },
-    { element: "video_embed", icon: "MonitorPlay", droppable: false },
-    { element: "banner_image", droppable: true, icon: "ImagePlus" },
+    { element: "video_embed", icon: "MonitorPlay", droppable: false, content: { title: "line" } },
+    { element: "before_after", icon: "SquareSplitHorizontal", droppable: false, content: { before_label: "line", after_label: "line" } },
+    { element: "embed", icon: "Frame", droppable: false, content: { title: "line" } },
   ],
   components: [
-    { element: "card", icon: "PanelTop" },
-    { element: "feature_card", icon: "BadgeCheck" },
+    { element: "feature_card", icon: "BadgeCheck", content: { title: "line", text: "text" } },
     { element: "banner", icon: "GalleryHorizontalEnd", droppable:true, designerClasses: "h-full w-full p-3 py-6" },
-    { element: 'review', icon: "Star"},
-    { element: "contact_form", icon: "Contact"},
+    { element: 'review', icon: "Star", content: { title: "line", description: "text", message: "text" } },
+    { element: "contact_form", icon: "Contact", content: { success_message: "text", button_text: "line", reset_button_text: "line" } },
     { element: 'particles', icon: 'Sparkles' },
-    { element: 'particles_settings', icon: 'Settings2' },
-    { element: 'example_viewer', icon: 'Scan' },
-    { element: "direct-preview", icon: "View" },
-    //{ element: "direct-preview-iframe", icon: "View" },
+    // Config input of `particles`, edited from its panel — not a page block.
+    { element: 'particles_settings', icon: 'Settings2', show_in_design: false },
+    { element: 'example_viewer', icon: 'Scan', content: { title: "line", description: "text" } },
+    { element: "accordion", icon: "ListCollapse" },
+    { element: "accordion_item", icon: "ChevronsUpDown", parent: "accordion", content: { title: "line", text: "text" } },
+    { element: "steps", icon: "ListOrdered", droppable: false, content: { items: "lines" } },
+    { element: "stats", icon: "ChartNoAxesColumnIncreasing", droppable: false, content: { items: "lines" } },
+    { element: "pricing_plan", icon: "BadgeDollarSign", droppable: false, content: { title: "line", price: "line", period: "line", text: "text", features: "lines", button_label: "line", badge: "line" } },
+    { element: "business_hours", icon: "Clock", droppable: false, content: { title: "line", items: "lines", note: "line" } },
+    { element: "contact_links", icon: "BookUser", droppable: false, content: { address: "line" } },
+    { element: "whatsapp_button", icon: "MessageCircle", droppable: false, content: { label: "line", message: "text" } },
   ],
   data: [
-    { element: 'collection', icon: "LayoutGrid"},
+    { element: 'collection', icon: "LayoutGrid", content: { title: "line", description: "text", empty_message: "line" } },
     { element: 'collection_view', icon: "LayoutGrid", show_in_design: false},
     { element: "entity", icon: "Code"},
-    { element: "form", icon: "ClipboardList"},
-    { element: "stripe", icon: "CreditCard" },
-    { element: "stripe_embebed", icon: "CreditCard" },
-    { element: "stripe_plans", icon: "LayoutGrid" },
+    { element: "form", icon: "ClipboardList", content: { title: "line", action_text: "line", success_message: "text", error_message: "text" } },
   ],
   meta: [
-    { element: "seo", icon: "Search", designerOnly: true },
+    { element: "seo", icon: "Search", designerOnly: true, content: { options: "text" } },
   ],
   form: [
     { element: "input", icon: "RectangleEllipsis", type: TYPES.string },
@@ -331,31 +349,25 @@ export const elementsDefinition = {
     { element: "date", icon: "Calendar", type: TYPES.date, format: 'YYYY-MM-DD' },
     { element: "date_time", icon: "CalendarClock", type: TYPES.dateTime, format: 'YYYY-MM-DD HH:mm:ss' },
     { element: "time", icon: "Clock10", type: TYPES.time, format: 'HH:mm:ss' },
-    { element: "currency", icon: "Currency", type: TYPES.decimal, show_in_design: false },
-    { element: "integer", icon: "Binary", type: TYPES.integer, show_in_design: false },
-    { element: "decimal", icon: "Hash", type: TYPES.decimal, show_in_design: false },
     { element: "select", icon: "ChevronDown", type: TYPES.text },
     { element: "textarea", icon: "FileText", type: TYPES.longtext },
-    { element: "text_editor", icon: "TextCursorInput", type: TYPES.longtext, clientOnly: true },
     { element: "checkbox", icon: "SquareCheck", type: TYPES.integer },
     { element: "switch", icon: "ToggleLeft", type: TYPES.integer },
     { element: "form_table", icon: "Table", type: TYPES.string },
     { element: "markdown_input", icon: "BookOpenCheck", type: TYPES.text, clientOnly: true },
     { element: "file_input", icon: "FileInput", type: TYPES.longtext },
-    { element: "file_uploader", icon: "FileUp", type: TYPES.longtext },
     { element: "image_input", icon: "FileImage", type: TYPES.longtext },
     { element: "color_picker", icon: "Palette", type: TYPES.text },
     { element: "icon_input", icon: "Shapes", type: TYPES.text },
     { element: "radio_group", icon: "CircleDot", type: TYPES.text },
-    { element: "radio_item", icon: "CircleDot", type: TYPES.integer, show_in_design: false },
+    { element: "range", icon: "SlidersHorizontal", type: TYPES.decimal },
+    { element: "rating", icon: "Star", type: TYPES.integer },
   ],
   // Writable like `form` (they persist DB columns), but framework-facing:
   // style/config inputs and system-managed fields, not fields a person fills
   // in a business form. Kept out of every AI generation context.
   system: [
     { element: "id", icon: "BookKey", type: TYPES.increments, show_in_design: false },
-    { element: "padding", icon: "Shrink", type: TYPES.text },
-    { element: "margin", icon: "Expand", type: TYPES.text },
     { element: "tailwind", icon: "SiTailwindcss", type: TYPES.longtext },
     // ownsDraft: keeps its own unsaved-work persistence (undo history, server
     // base hash, conflict UI) — the generic form draft must leave it alone.
@@ -383,24 +395,44 @@ export const elementsDefinition = {
     { element: "module_cards", icon: "LayoutGrid", droppable: false },
     { element: "chart", icon: "ChartColumn", droppable: false },
     { element: "dashboard", icon: "LayoutDashboard", droppable: false },
+    { element: "setup_checklist", icon: "ListChecks", droppable: false },
+    { element: "recent_documents", icon: "History", droppable: false },
+    { element: "desk_greeting", icon: "Hand", droppable: false },
+    { element: "system_stats", icon: "Gauge", droppable: false },
+    { element: "activity_feed", icon: "Activity", droppable: false },
   ]
 }
 
-export const elementsDict = Object.freeze(Object.entries(elementsDefinition).reduce((acc, [key, value]) => {
+const makeDef = (element, group) => ({
+  def: {
+    ...element,
+    group,
+    isWritable: ELEMENT_GROUPS[group]?.writable === true,
+    droppable: element.droppable,
+    designerClasses: element.designerClasses ?? null,
+  }
+});
+
+/** `INPUT`, `SELECT`… — read-only globals naming each element. */
+const defineElementConst = (name) => {
+  const key = name.toUpperCase();
+  if (global[key]) return;
+  Object.defineProperty(global, key, {
+    get: () => name,
+    set: () => {
+      throw (name + ' is a Safe CONST and cannot be re-declared.')
+    }
+  });
+};
+
+// Mutable only through registerElements (app-provided elements).
+export const elementsDict = Object.entries(elementsDefinition).reduce((acc, [key, value]) => {
   value.forEach(element => {
-    acc[element.element] = {
-      def: {
-        ...element,
-        group: key,
-        isWritable: ELEMENT_GROUPS[key]?.writable === true,
-        droppable: element.droppable,
-        designerClasses: element.designerClasses ?? null,
-      }
-    };
+    acc[element.element] = makeDef(element, key);
   });
 
   return acc;
-}, {}));
+}, {});
 
 global.elementIsDroppable = (element) => {
   const def = elementsDict[element]?.def;
@@ -408,22 +440,35 @@ global.elementIsDroppable = (element) => {
   return !def.isWritable && def.droppable !== false;
 };
 
-export const elementsNames = Object.freeze(Object.values(elementsDefinition).reduce((acc, current) => {
-  acc = [...acc, ...current.map(element => {
-    if (!global[element.element.toUpperCase()]) {
-      Object.defineProperty(global, element.element.toUpperCase(), {
-        get: () => element.element,
-        set: () => {
-          throw (element.element + ' is a Safe CONST and cannot be re-declared.')
-        }
-      });
-    }
+export const elementsNames = Object.values(elementsDefinition).flat().map(element => {
+  defineElementConst(element.element);
+  return element.element;
+});
 
-    return element.element;
-  })];
+/**
+ * Elements an app ships in `apps/<app>/elements/` (elements.json holds the
+ * definitions, `<element>.jsx` each component). Registered on the server at
+ * build time and in the browser by the components loader. Each definition
+ * needs `element` and a non-writable `group`; `app` scopes it in the palette
+ * to tenants that have that app installed. Core elements are never replaced.
+ * Idempotent.
+ */
+export function registerElements(definitions = [], app = null) {
+  for (const raw of Array.isArray(definitions) ? definitions : []) {
+    const { group, ...element } = raw || {};
+    if (!element.element || !ELEMENT_GROUPS[group] || ELEMENT_GROUPS[group].writable) continue;
+    const existing = elementsDict[element.element]?.def;
+    if (existing && !existing.app) continue;
 
-  return acc;
-}, []));
+    const def = { ...element, ...(app ? { app } : {}) };
+    const list = elementsDefinition[group];
+    const at = list.findIndex(e => e.element === def.element);
+    at >= 0 ? (list[at] = def) : list.push(def);
+    elementsDict[def.element] = makeDef(def, group);
+    if (!elementsNames.includes(def.element)) elementsNames.push(def.element);
+    defineElementConst(def.element);
+  }
+}
 
 export const elementsNameByType = (type) => {
   return elementsNames.filter(element => elementsDict[element].def.type.includes(type));
@@ -432,9 +477,11 @@ export const elementsNameByType = (type) => {
 class DataInterface {
   #element = null;
 
-  constructor(element, value) {
+  /** `values`: the other fields of the record, for conditions (`required_on`). */
+  constructor(element, value, values = {}) {
     this.#element = element;
     this.value = value;
+    this.values = values || {};
   }
 
   get data() {
@@ -627,8 +674,41 @@ class DataInterface {
       (this.value || "").toString().trim().length === 0;
   }
 
+  get isRequired() {
+    if ([true, 'true', 1, '1'].includes(this.data.required)) return true;
+    const condition = String(this.data.required_on ?? "").trim();
+    return condition ? evaluateCondition(condition, this.values) : false;
+  }
+
+  isPercent() {
+    const n = Number(String(this.value).trim());
+    return { valid: !Number.isNaN(n) && n >= 0 && n <= 100, message: 'Please enter a percentage between 0 and 100' };
+  }
+
+  /** min_length / max_length / pattern authored on the field. */
+  validatorConstraints() {
+    const text = String(this.value ?? "");
+    const min = parseInt(this.data.min_length, 10);
+    const max = parseInt(this.data.max_length, 10);
+    if (!Number.isNaN(min) && min > 0 && text.length < min) {
+      return { valid: false, message: __("{0} must have at least {1} characters", [this.__label(), min]) };
+    }
+    if (!Number.isNaN(max) && max > 0 && text.length > max) {
+      return { valid: false, message: __("{0} must have at most {1} characters", [this.__label(), max]) };
+    }
+    const pattern = String(this.data.pattern ?? "").trim();
+    if (pattern) {
+      let re = null;
+      try { re = new RegExp(`^(?:${pattern})$`); } catch { re = null; }
+      if (re && text.length <= 2048 && !re.test(text)) {
+        return { valid: false, message: this.data.pattern_message ? __(this.data.pattern_message) : __("{0} has an invalid format", [this.__label()]) };
+      }
+    }
+    return { valid: true, message: "" };
+  }
+
   validatorRequired() {
-    const required = [true, 'true', 1, '1'].includes(this.data.required);
+    const required = this.isRequired;
     // A checkbox or switch the website requires (a consent) must be on: for
     // any other required checkbox 0 is a value, like for numbers.
     const consent = [true, 'true', 1, '1'].includes(this.data.required_on_website);
@@ -664,6 +744,9 @@ class DataInterface {
       return { valid: true, message: '' };
     }
 
+    const constraints = this.validatorConstraints();
+    if (!constraints.valid) return this.#validatorMessage(constraints);
+
     const validatorRules = this.validatorRules();
 
     // Keep the rule's specific message ("Invalid email address") and add the
@@ -691,8 +774,40 @@ class DataInterface {
   }
 }
 
-export const dataInterface = (element, value) => {
-  return new DataInterface(element, value);
+/**
+ * Where a select's (or radio group's) choices come from: "static" — the
+ * `options` lines ("value:Label" per line) — or "entity" — the records of
+ * the entity named in `options`. `options_source` states it; without it the
+ * legacy reading applies (one line = an entity name).
+ */
+export function selectSource(data = {}) {
+  const explicit = String(data?.options_source ?? "").trim().toLowerCase();
+  if (explicit === "entity" || explicit === "static") return explicit;
+  const options = data?.options;
+  if (!options || typeof options === "object") return "static";
+  return String(options).includes("\n") ? "static" : "entity";
+}
+
+/** The entity a select links to, or null for static choices. */
+export function selectEntity(data = {}) {
+  if (selectSource(data) !== "entity") return null;
+  return String(data?.options ?? "").split(/\r?\n/)[0].trim() || null;
+}
+
+/** Values of a `multiple` select / radio group (stored as a JSON array). */
+export function multipleValues(value) {
+  if (Array.isArray(value)) return value.map(String);
+  if (value === null || value === undefined || value === "") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String) : [String(parsed)];
+  } catch {
+    return [String(value)];
+  }
+}
+
+export const dataInterface = (element, value, values = {}) => {
+  return new DataInterface(element, value, values);
 }
 
 global.ELEMENT_DEFINITION = function (element, or = null) {
@@ -767,19 +882,28 @@ const aiAllowedElements = (document_type) => {
  * document being designed. Keeps elementsDefinition's group order and
  * element objects; groups left with no elements are dropped.
  */
-export const paletteDefinition = (document_type) => {
+export const paletteDefinition = (document_type, installedApps = null) => {
   const ctx = contextFor(document_type);
+  // App-provided elements only where their app is installed.
+  const ofInstalledApps = (elements) => installedApps
+    ? elements.filter(e => !e.app || installedApps.includes(e.app))
+    : elements;
+
   if (!ctx) {
-    return Object.fromEntries(Object.entries(elementsDefinition).filter(([group]) => !isContextOnly(group)));
+    return Object.fromEntries(
+      Object.entries(elementsDefinition)
+        .filter(([group]) => !isContextOnly(group))
+        .map(([group, elements]) => [group, ofInstalledApps(elements)])
+    );
   }
 
   const groups = ctx.paletteGroups || ctx.aiGroups;
   const extra = new Set(ctx.extra || []);
 
   return Object.entries(elementsDefinition).reduce((acc, [group, elements]) => {
-    const list = groups.includes(group)
+    const list = ofInstalledApps(groups.includes(group)
       ? elements
-      : elements.filter(e => extra.has(e.element));
+      : elements.filter(e => extra.has(e.element)));
     if (list.length) acc[group] = list;
     return acc;
   }, {});
@@ -818,9 +942,16 @@ export const AIStructureSchema = (document_type) => {
                 format: { type: ["string", "null"], enum: [...formats, null] },
                 options: nullable("string"),
                 placeholder: nullable("string"),
-                required: nullable("boolean")
+                required: nullable("boolean"),
+                // Content vocabulary shared by every element (see `content` in the definitions).
+                title: nullable("string"),
+                text: nullable("string"),
+                description: nullable("string"),
+                items: nullable("string"),
+                value: nullable("string"),
+                level: { type: ["string", "null"], enum: ["h1", "h2", "h3", "h4", "h5", "h6", null] }
               },
-              required: ["name", "label", "format", "options", "placeholder", "required"]
+              required: ["name", "label", "format", "options", "placeholder", "required", "title", "text", "description", "items", "value", "level"]
             },
             elements: { type: "array", items: { "$ref": "#/$defs/element" } }
           },
@@ -844,6 +975,11 @@ export const sanitizeAIStructure = (structure, seen = new Set()) => {
       if (v == null || v === "") continue;
       data[k] = typeof v === "boolean" ? (v ? 1 : 0) : v;
     }
+
+    // `label` is the text of controls and fields only: elements whose content
+    // has no label (headings, cards…) don't keep the one the schema forces.
+    const def = elementsDict[el.element]?.def;
+    if (def && !def.isWritable && !(def.content && "label" in def.content)) delete data.label;
 
     const out = { element: el.element, data };
     if (typeof el.node === "string" && el.node && !seen.has(el.node)) {
@@ -906,6 +1042,14 @@ export const AIPrompt = (prompt, document_type, current = null) => {
   ];
 
   const elements = aiAllowedElements(document_type);
+  // Which texts each allowed element shows, from its content schema.
+  const contentGuide = elements
+    .map((name) => {
+      const content = elementsDict[name]?.def?.content;
+      return content ? `${name}: ${Object.keys(content).filter((p) => ["title", "text", "label", "description", "items", "value"].includes(p)).join(", ")}` : null;
+    })
+    .filter((line) => line && !line.endsWith(": "))
+    .join("; ");
 
   const editInstructions = current ? `
         You will receive the CURRENT design. Apply the request to it and return the FULL updated design:
@@ -922,7 +1066,8 @@ export const AIPrompt = (prompt, document_type, current = null) => {
         `You are a strict JSON generator: example: ${JSON.stringify(exampleJSON)}. ALWAYS output valid JSON ONLY, nothing else (no commentary, no trailing commas, no explanation). If you cannot produce valid JSON, output {"error":"<short description>"} only.
         All elements MUST be objects with keys: "element" (string), data (object) {label, name}. If the element can have children, include an "elements" array. Follow the exact structure shown in examples.
         Use strict the following elements only: ${elements.join(",")}.
-        If you need to use a element like: ${ [...new Set(Object.keys(inputType))].join(", ")} strict use element="input" and set format in data.format: ${ [...new Set(Object.keys(inputType))].join(", ")}.${editInstructions}
+        If you need to use a element like: ${ [...new Set(Object.keys(inputType))].join(", ")} strict use element="input" and set format in data.format: ${ [...new Set(Object.keys(inputType))].join(", ")}.
+        Visible texts use one vocabulary: "title" = main text of a block, "text" = body text, "label" = text of a control or form field, "description" = secondary text, "items" = a list (one entry per line), "value" = Markdown. A heading also takes "level" (one h1 per page). Texts per element: ${contentGuide}.${editInstructions}
         `,
     },
     user: {

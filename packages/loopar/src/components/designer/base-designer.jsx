@@ -31,7 +31,7 @@ const updateE = (structure, data, node, merge) => {
 
     if (!elementsNames.includes(newEl.element)) {
       newEl.data.tag = newEl.element;
-      newEl.element = "generic";
+      newEl.element = "div";
     }
 
     if (getNodeKey(newEl) === node) {

@@ -190,14 +190,14 @@ function clearPendingCookie() {
  * → { mfa_required }   2FA on: challenge issued, no session yet
  * → { mfa_locked }     too many recent failures for this user
  */
-export async function completeLogin(user, { landing = null } = {}) {
+export async function completeLogin(user, { landing = null, remember = false } = {}) {
   // The full row: callers hand in partial shapes (Auth.getUser has no
   // user_type), and the session must carry the real user type.
   const row = (await loadRow(user?.name)) || user;
   loopar.auth.assertLoginAllowed(row);
 
   if (!isMfaEnabled(row)) {
-    return { session: loopar.auth.login(row) };
+    return { session: loopar.auth.login(row, { remember }) };
   }
 
   const now = Date.now();
@@ -223,6 +223,7 @@ export async function completeLogin(user, { landing = null } = {}) {
     user: row.name,
     nonce: challenge.nonce,
     landing: typeof landing === 'function' ? landing(row) : landing,
+    remember: !!remember,
   });
 
   return { mfa_required: true };
@@ -282,7 +283,7 @@ export async function verifyChallenge({ code, recovery_code } = {}) {
   await saveMfa(row.name, { ...updates, mfa_challenge: '' });
   clearPendingCookie();
 
-  const session = loopar.auth.login(row, { mfa: true });
+  const session = loopar.auth.login(row, { mfa: true, remember: !!pending.remember });
   return { session, landing: pending.landing || null, used_recovery: !!recovery_code };
 }
 

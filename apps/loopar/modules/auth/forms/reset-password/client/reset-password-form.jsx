@@ -3,7 +3,8 @@
 import { BareLayout } from '@loopar/form';
 import { loopar } from 'loopar';
 import { useEffect, useState } from "react";
-import { Clock, XCircle, ArrowRight, ArrowLeft } from "lucide-react";
+import { ArrowRight, ArrowLeft } from "lucide-react";
+import { SystemHeader } from "@workspace/system/system-shell";
 import { useWorkspace } from '@workspace/workspace-provider';
 import {Link} from "@link"
 import { __ } from "loopar";
@@ -12,45 +13,28 @@ const TokenError = ({ type }) => {
   const isExpired = type === "expired";
 
   return (
-    <div className="flex flex-col items-start gap-3 p-7">
-      <span className={`text-xs font-medium px-2 py-1 rounded ${
-        isExpired
-          ? "bg-amber-100 text-amber-700"
-          : "bg-red-100 text-red-700"
-      }`}>
-        {isExpired ? "Link expired" : "Invalid link"}
-      </span>
-
-      <p className="text-base font-medium  leading-snug">
-        {isExpired
-          ? "This link is no longer valid"
-          : "We couldn't verify this link"
-        }
-      </p>
-
-      <p className="text-sm text-gray-500 leading-relaxed">
-        {isExpired
-          ? "Password reset links expire after 30 minutes for security reasons. Request a new one and use it right away."
-          : "This link may have already been used or is malformed. Request a new one if you need to recover your account."
-        }
-      </p>
-
-      <hr className="w-full border-t border-gray-200" />
+    <div className="flex flex-col gap-4">
+      <SystemHeader
+        title={isExpired ? __("This link has expired") : __("We couldn't verify this link")}
+        description={isExpired
+          ? __("Password reset links expire after 30 minutes. Request a new one and use it right away.")
+          : __("It may have been used already or be incomplete. Request a new one to recover your account.")}
+      />
       <Link
-        variant="destructive"
-        className="w-full gap1"
-        to="/auth/recoveryPassword" 
+        variant="primary"
+        className="w-full gap-1 justify-center"
+        to="/auth/recoveryPasswordRequest"
         notControlled
       >
-        <ArrowRight size={13} /> {__("Request a new link")}
+        {__("Request a new link")} <ArrowRight size={14} />
       </Link>
       <Link
-        className="w-full gap-1"
+        className="w-full gap-1 justify-center text-muted-foreground"
         variant="ghost"
-        to="/auth/login" 
+        to="/auth/login"
         notControlled
       >
-        <ArrowRight size={13} /> {__("Back to login")}
+        <ArrowLeft size={14} /> {__("Back to login")}
       </Link>
     </div>
   );
@@ -97,5 +81,13 @@ export const config = {
 
 export default function ResetPasswordForm() {
 
-  return <ResetPassword><BareLayout /></ResetPassword>;
+  return (
+    <ResetPassword>
+      <SystemHeader
+        title={__("Choose a new password")}
+        description={__("Enter it twice to confirm. You'll use it to sign in from now on.")}
+      />
+      <BareLayout />
+    </ResetPassword>
+  );
 }

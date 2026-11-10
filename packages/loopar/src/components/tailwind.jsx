@@ -105,3 +105,5 @@ export default function Tailwind(props) {
     </div>
   ));
 }
+
+Tailwind.metaFields = () => BaseInput.metaFields();

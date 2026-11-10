@@ -134,7 +134,7 @@ export default function Row(props) {
           className={cn(
             "grid-container dynamic w-full box-border",
             rowHeight,
-            data.class,
+            props.className,
           )}
           style={{
             "--column-layout": columnLayout,

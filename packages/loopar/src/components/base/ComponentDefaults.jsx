@@ -108,13 +108,6 @@ export function ComponentDefaults(props) {
   }
 }
 
-export const tagDontHaveChild = (tag) => {
-  /**List Elements that don't have children */
-  const singleTags = "input,textarea,img,switch,checkbox,hr,br,checkbox,script,link,base,area,basefont,frame,embed,source,track,wbr,image".split(",");
-
-  return singleTags.includes(tag);
-}
-
 export const VARIANTS = {
   primary: "primary",
   secondary: "secondary",
@@ -135,5 +128,3 @@ export const DEFAULTS = {
 
 export const colPadding = ["p-0", "p-1", "p-2", "p-3", "p-4", "p-5", "p-6", "p-7", "p-8", "p-9"];
 
-
-export const validTags = ["a", "abbr", "address", "area", "article", "aside", "audio", "b", "base", "bdi", "bdo", "blockquote", "body", "br", "button", "canvas", "caption", "cite", "code", "col", "colgroup", "data", "datalist", "dd", "del", "details", "dfn", "dialog", "div", "dl", "dt", "em", "embed", "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "head", "header", "hgroup", "hr", "html", "i", "iframe", "img", "input", "ins", "kbd", "label", "legend", "li", "link", "main", "map", "mark", "meta", "meter", "nav", "noscript", "object", "ol", "optgroup", "option", "output", "p", "param", "picture", "pre", "progress", "q", "rp", "rt", "ruby", "s", "samp", "script", "section", "select", "slot", "small", "source", "span", "strong", "style", "sub", "summary", "sup", "table", "tbody", "td", "template", "textarea", "tfoot", "th", "thead", "time", "title", "tr", "track", "u", "ul", "var", "video", "wbr"];

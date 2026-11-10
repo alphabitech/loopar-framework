@@ -159,7 +159,7 @@ export function setDefaultParams(params, workspaceName) {
   }
 
   if (!params.document && !params.action && workspaceName === 'desk') {
-    params.document = 'Desk';
+    params.document = 'Desk Home';
     params.action = 'view';
   }
 

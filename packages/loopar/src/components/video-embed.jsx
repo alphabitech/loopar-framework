@@ -1,3 +1,4 @@
+import { rootProps } from "./base/root-props.js";
 import { useMemo, useState } from "react";
 import { MonitorPlay, Play } from "lucide-react";
 import { cn } from "@cn/lib/utils";
@@ -131,11 +132,12 @@ export default function VideoEmbed(props) {
 
   const poster = firstImageSrc(data.poster) || video?.thumb || null;
   const padding = aspectPadding(data, video);
-  const title = data.label || "Video";
+  const title = data.title || "Video";
 
   const frame = (children) => (
     <div
-      className={cn("relative w-full overflow-hidden rounded-xl bg-black", data.class)}
+      {...rootProps(props)}
+      className={cn("relative w-full overflow-hidden rounded-xl bg-black", props.className)}
       style={{ paddingTop: `${padding}%` }}
     >
       <div className="absolute inset-0">{children}</div>

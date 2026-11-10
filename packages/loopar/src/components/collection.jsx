@@ -1,3 +1,4 @@
+import { withRoot } from "./base/with-root.jsx";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { loopar } from "loopar";
 import { ChevronLeftIcon, ChevronRightIcon, Loader2 } from "lucide-react";
@@ -73,7 +74,7 @@ function Pagination({ page, totalPages, onChange }) {
   );
 }
 
-export default function Collection({ data = {} }) {
+function Collection({ data = {} }) {
   const entityName = data.options ? String(data.options).trim() : null;
   const Card = useMemo(() => lookupCard(entityName), [entityName]);
   const preloaded = data.preloaded;
@@ -87,7 +88,7 @@ export default function Collection({ data = {} }) {
     category,
     tag,
     title,
-    subtitle,
+    description,
     card_variant = "default",
     empty_message = `No items to show yet.`,
   } = data;
@@ -167,12 +168,12 @@ export default function Collection({ data = {} }) {
   return (
     <section className={card_variant === "list" ? "w-full" : "w-full py-12 px-4 min-h-section-min"}>
       <div className={card_variant === "list" ? "flex flex-col gap-4" : "max-w-6xl mx-auto flex flex-col gap-8"}>
-        {(title || subtitle) && (
+        {(title || description) && (
           <div className="text-center">
             {title && <h2 className="text-2xl md:text-3xl font-medium">{title}</h2>}
-            {subtitle && (
+            {description && (
               <p className="text-sm text-muted-foreground mt-2 max-w-2xl mx-auto">
-                {subtitle}
+                {description}
               </p>
             )}
           </div>
@@ -233,7 +234,7 @@ Collection.metaFields = () => {
           },
         },
         title: { element: TEXTAREA, data: { label: "Title" } },
-        subtitle: { element: TEXTAREA, data: { label: "Subtitle" } },
+        description: { element: TEXTAREA, data: { label: "Description" } },
         page_size: { element: INPUT, data: { label: "Items per page", format: "int" } },
         columns: { element: INPUT, data: { label: "Columns (1–4)", format: "int" } },
         featured_only: { element: SWITCH, data: { label: "Featured only" } },
@@ -267,3 +268,5 @@ Collection.metaFields = () => {
     },
   ];
 };
+
+export default withRoot(Collection);

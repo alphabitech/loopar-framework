@@ -26,14 +26,14 @@ function sign(payloadB64) {
 
 /* ----------------------------- transaction cookie ----------------------------- */
 
-export function setOauthTx({ provider, state, codeVerifier = null, popup = false, stepUpUser = null }) {
+export function setOauthTx({ provider, state, codeVerifier = null, popup = false, stepUpUser = null, remember = false }) {
   // `popup` records HOW the flow was started (window.open vs full-page
   // navigation) so the callback can answer with the popup-close page or a
   // normal redirect. It rides the signed cookie because the provider
   // round-trip gives us nowhere else to keep it.
   // `stepUpUser`: the flow re-authenticates this logged user (protected field
   // change) instead of opening a session.
-  const payload = b64url(JSON.stringify({ provider, state, codeVerifier, popup: !!popup, stepUpUser: stepUpUser || null, ts: Date.now() }));
+  const payload = b64url(JSON.stringify({ provider, state, codeVerifier, popup: !!popup, stepUpUser: stepUpUser || null, remember: !!remember, ts: Date.now() }));
   loopar.cookie.set(TX_COOKIE, `${payload}.${sign(payload)}`, { maxAge: TX_TTL_MS, path: '/' });
 }
 

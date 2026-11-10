@@ -59,7 +59,7 @@ export const Meta = memo(function Meta(props) {
   const metaModule = useMetaModule(meta.element, isDesigner || def.designerOnly !== true);
   const Comp = metaModule?.default || metaModule;
 
-  if (Comp || [HTML_BLOCK, MARKDOWN, SEO].includes(meta.element)) {
+  if (Comp || [MARKDOWN, SEO].includes(meta.element)) {
     // Hydrate metaFields defaults here — the common point for SSR, the public
     // page and the designer — so the base render no longer depends on the
     // element editor mounting to see values like feature-card's default icon.
@@ -71,7 +71,11 @@ export const Meta = memo(function Meta(props) {
     // pre-override data (a button could look disabled while being clickable).
     // Each render now builds its own props: defaults, then runtime overrides.
     const baseData = applyMetaDefaults(Comp, metaProps.data || {});
-    const data = fieldMeta ? { ...baseData, ...(fieldMeta.data || {}) } : baseData;
+    let data = fieldMeta ? { ...baseData, ...(fieldMeta.data || {}) } : baseData;
+    // `required_on`: required while its condition holds (validation + asterisk).
+    if (!isDesigner && String(data.required_on ?? "").trim()) {
+      data = { ...data, required: evaluateCondition(data.required_on, formValues) ? 1 : data.required };
+    }
 
     const renderProps = {
       ...metaProps,

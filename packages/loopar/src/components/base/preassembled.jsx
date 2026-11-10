@@ -49,36 +49,6 @@ export const PreassembledContextProvider = (props) => {
 }
 
 export default function Preassembled(props) {
-  const { setElements } = ComponentDefaults(props);
-  const { designerMode } = useDesigner();
-  
-  const data = props.data || {};
-  const id = useId();
-
-  useEffect(() => {
-    if(!designerMode) return;
-    return;
-    let counter = 0;
-
-    if (!props.elements || props.elements?.length === 0) {
-      const prepareElements = (elements) => {
-        return elements.map(el => {
-          counter ++;
-          el.data ??= {};
-          el.node ??= id + counter;
-          //el.data.key ??= id + counter;
-
-          if (el.elements?.length > 0) {
-            el.elements = prepareElements(el.elements);
-          }
-          return el;
-        });
-      }
-
-      setElements(prepareElements(props.defaultElements || []), null, false);
-    }
-  }, [data]);
-
   if(props.desacopled){
     return (
       props.notDroppable ? <><div {...props}/>{props.children}</> :

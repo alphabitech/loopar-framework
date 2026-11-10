@@ -1,10 +1,11 @@
 import {cn} from "@cn/lib/utils";
-import Icon from "@icon"; 
+import Icon from "@icon";
+import { rootProps } from "./base/root-props.js";
 
 export default function FeatureCard(props) {
   const data = props.data;
   const {
-    label,
+    title,
     text,
     align = "start",
     image_height = "h-64",
@@ -81,6 +82,23 @@ export default function FeatureCard(props) {
     }
   };
 
+  // "plain": no card — a small icon badge over the title and text, for
+  // feature lists and service highlights.
+  if (variant === "plain") {
+    const badge = { sm: "size-8", md: "size-12", lg: "size-16", xl: "size-24" }[icon_size] || "size-16";
+    return (
+      <div {...rootProps(props)} style={restStyle} className={cn("flex flex-col gap-3 py-3", alignMap[align], props.className)}>
+        {icon && (
+          <span className={cn("flex shrink-0 items-center justify-center rounded-full bg-primary p-2.5 text-primary-foreground", badge)}>
+            <Icon data={{ icon }} className="h-full w-full" />
+          </span>
+        )}
+        <h3 className="text-xl font-bold text-foreground md:text-2xl">{title}</h3>
+        {text && <p className="text-pretty text-muted-foreground">{text}</p>}
+      </div>
+    );
+  }
+
   const v = variantStyles[variant] || variantStyles.default;
 
   const className = cn(
@@ -96,7 +114,7 @@ export default function FeatureCard(props) {
 
   const Content = () => (
     <div className={cn("flex flex-col gap-2", alignMap[align])}>
-      <h3 className={cn(v.titleClass, onImage && "!text-white drop-shadow-sm")}>{label}</h3>
+      <h3 className={cn(v.titleClass, onImage && "!text-white drop-shadow-sm")}>{title}</h3>
       <p className={cn(v.textClass, onImage && "!text-white/85")}>{text}</p>
     </div>
   );
@@ -124,7 +142,7 @@ export default function FeatureCard(props) {
 
   return (
     <div 
-      {...props}
+      {...rootProps(props)}
       style={restStyle}
       className={className}
     >
@@ -177,10 +195,11 @@ FeatureCard.metaFields = () => {
         element: SELECT,
         data: {
           label: "Card Variant",
-          description: "Visual style. Default keeps existing look. Elevated adds baseline shadow, lift on hover, edge-to-edge image, larger title.",
+          description: "Visual style. Default keeps existing look. Elevated adds baseline shadow, lift on hover, edge-to-edge image, larger title. Plain: no card, small icon badge over title and text.",
           options: [
             { value: "default", label: "Default" },
-            { value: "elevated", label: "Elevated" }
+            { value: "elevated", label: "Elevated" },
+            { value: "plain", label: "Plain (icon + text)" }
           ],
           default_value: "default"
         }

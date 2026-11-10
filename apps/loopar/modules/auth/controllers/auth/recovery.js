@@ -16,10 +16,22 @@ function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
-export async function generatePasswordResetToken(email) {
-  const user = await loopar.db.getDoc('User', { email });
+/**
+ * The account an email belongs to, or null (also null for desk accounts on a
+ * website domain). Explicit query: `db.getDoc('User', { email })` ignores a
+ * non-name filter and returns the first row.
+ */
+export async function findAccountByEmail(email) {
+  if (!email) return null;
+  const user = await loopar.db.query('User').where({ email })
+    .select('name', 'email', 'user_type', 'disabled').first();
+  return user && !blockedOnSite(user) ? user : null;
+}
 
-  if (!user || blockedOnSite(user)) return { ok: true };
+export async function generatePasswordResetToken(email) {
+  const user = await findAccountByEmail(email);
+
+  if (!user) return { ok: true };
 
   const rawToken = jwt.sign(
     { sub: user.name, purpose: 'password-reset' },

@@ -4,7 +4,6 @@ import { loopar } from "../loopar.js";
 
 const CAROUSEL_LIKE_ELEMENTS = new Set([
   "carousel",
-  "banner_image",
   "gallery",
 ]);
 
@@ -90,9 +89,9 @@ function flattenSchema(nodes) {
   for (const node of (nodes || [])) {
     const elem = node?.element;
     const data = node?.data || {};
-    if (["row", "col", "card", "section", "tabs", "tab", "generic", "div"].includes(elem)) {
-      if (data.label && elem === "card") {
-        out.push({ element: "_section", label: data.label, name: data.name || null });
+    if (["row", "col", "panel", "section", "tabs", "tab", "div", "grid"].includes(elem)) {
+      if (data.title && elem === "panel") {
+        out.push({ element: "_section", label: data.title, name: data.name || null });
       }
       if (node.elements) out.push(...flattenSchema(node.elements));
       continue;

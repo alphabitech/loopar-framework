@@ -18,33 +18,10 @@
 import { normalizeLanguage } from "./i18n.js";
 
 /**
- * Visible text props of the content elements. Elements not listed here
- * translate `text` only; an element can declare its own list with a
- * `translatable` array on its definition (element-definition.js).
+ * Visible text props of an element come from its definition
+ * (element-definition.js): `content` declares them ({ title: "line",
+ * text: "text"… }) and an app element may list `translatable` instead.
  */
-export const CONTENT_TEXT_PROPS = Object.freeze({
-  title: ["text"],
-  subtitle: ["text"],
-  paragraph: ["text"],
-  markdown: ["value"],
-  generic: ["inner_text"],
-  text_block_icon: ["title", "text"],
-  feature_card: ["label", "text"],
-  banner: ["label", "text"],
-  card: ["label", "description"],
-  link: ["label"],
-  button: ["label", "slide_text", "slide_confirmed_text"],
-  tab: ["label"],
-  section: ["label"],
-  review: ["message"],
-  collection: ["empty_message"],
-  contact_form: ["success_message"],
-  form: ["success_message", "succes_message"],
-  video_embed: ["label"],
-  example_viewer: ["description"],
-  seo: ["options"],
-});
-
 const DEFAULT_PROPS = ["text"];
 
 /** Short, stable fingerprint of a text (FNV-1a 32-bit, hex): same result in Node and the browser. */
@@ -93,7 +70,7 @@ const INPUT_GROUPS = new Set(["form", "system"]);
 
 export function contentTextProps(element, definition = null) {
   if (Array.isArray(definition?.translatable)) return definition.translatable;
-  if (CONTENT_TEXT_PROPS[element]) return CONTENT_TEXT_PROPS[element];
+  if (definition?.content) return Object.keys(definition.content);
   return INPUT_GROUPS.has(definition?.group) ? INPUT_PROPS : DEFAULT_PROPS;
 }
 

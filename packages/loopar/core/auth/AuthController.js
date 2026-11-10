@@ -333,7 +333,7 @@ export default class AuthController {
       const webLanding = process.env.WEB_LANDING || '/';
 
       if (cap.isAuth && action !== 'logout') {
-        const dest = user.user_type === 'Web' ? webLanding : '/desk/Desk/view';
+        const dest = user.user_type === 'Web' ? webLanding : '/desk';
         return resolve('You are already logged in, refresh this page', dest);
       }
 

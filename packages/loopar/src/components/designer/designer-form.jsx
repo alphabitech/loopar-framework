@@ -1,6 +1,7 @@
 import {DesignElement} from "./design-element";
 import { ELEMENT_GROUPS, paletteDefinition } from "@global/element-definition";
 import { useDocument } from "@loopar/document";
+import { useWorkspace } from "@workspace/workspace-provider";
 import { Input } from "@cn/components/ui/input";
 import { ChevronDown } from "lucide-react";
 import loopar from "loopar";
@@ -20,6 +21,8 @@ const readCollapsed = () => {
 export function DesignerForm() {
   const id = useId();
   const { entity } = useDocument();
+  const { __META__ } = useWorkspace();
+  const installedApps = __META__?.installed_apps || null;
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState(readCollapsed);
 
@@ -34,7 +37,7 @@ export function DesignerForm() {
   const query = search.trim().toLowerCase();
 
   const groups = useMemo(() => {
-    return Object.entries(paletteDefinition(entity)).map(([group, elements]) => {
+    return Object.entries(paletteDefinition(entity, installedApps)).map(([group, elements]) => {
       let visible = elements.filter(el => el.show_in_design !== false);
 
       if (query) {
@@ -45,7 +48,7 @@ export function DesignerForm() {
 
       return { group, elements: visible };
     }).filter(g => g.elements.length > 0);
-  }, [entity, query]);
+  }, [entity, query, installedApps]);
 
   return (
     <div className="flex flex-col">

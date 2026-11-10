@@ -9,7 +9,9 @@
  * (server side — the client can't alter it) as `data.write_policy`:
  *
  *   editable     default — written from a form by anyone allowed to save it
- *   create_only  only when the record is created (the old `set_only_time`)
+ *   display_only shown read-only in the form, but client code may fill it
+ *                (values computed in the browser); the server accepts it
+ *   create_only  only when the record is created
  *   readonly     never from client input; only server code (totals, states)
  *   protected    changed only through a verified flow (re-authentication),
  *                never through the regular form save (email, password)
@@ -33,6 +35,7 @@
 
 export const WRITE_POLICY = Object.freeze({
   EDITABLE: 'editable',
+  DISPLAY_ONLY: 'display_only',
   CREATE_ONLY: 'create_only',
   READONLY: 'readonly',
   PROTECTED: 'protected',
@@ -44,15 +47,10 @@ const POLICIES = new Set(Object.values(WRITE_POLICY));
 /** Policies whose CHANGES save() verifies (layer B). */
 export const GUARDED_POLICIES = new Set([WRITE_POLICY.PROTECTED, WRITE_POLICY.SYSTEM]);
 
-const isTrue = (v) => [1, '1', true, 'true'].includes(v);
-
 /** Effective policy of a field from its `data`. */
 export function fieldPolicy(data = {}) {
   const raw = String(data?.write_policy ?? '').trim().toLowerCase();
-  const policy = POLICIES.has(raw) ? raw : WRITE_POLICY.EDITABLE;
-  // Legacy flag: "set only the first time" = create_only.
-  if (policy === WRITE_POLICY.EDITABLE && isTrue(data?.set_only_time)) return WRITE_POLICY.CREATE_ONLY;
-  return policy;
+  return POLICIES.has(raw) ? raw : WRITE_POLICY.EDITABLE;
 }
 
 /** `write_roles` as a list ("A, B" or one per line). */
@@ -63,10 +61,10 @@ export function fieldRoles(data = {}) {
 }
 
 /**
- * { fieldName: { policy, roles, element, legacyReadonly } } for every named
- * field of a doc_structure whose write is restricted in any way. Fields that
- * are plain `editable` with no roles and no legacy readonly flag are omitted:
- * absence means "editable".
+ * { fieldName: { policy, roles, element } } for every named field of a
+ * doc_structure whose write is restricted or displayed read-only. Fields
+ * that are plain `editable` with no roles are omitted: absence means
+ * "editable".
  */
 export function writePolicyMap(structure = []) {
   const out = {};
@@ -77,9 +75,8 @@ export function writePolicyMap(structure = []) {
       if (name) {
         const policy = fieldPolicy(data);
         const roles = fieldRoles(data);
-        const legacyReadonly = isTrue(data.readonly);
-        if (policy !== WRITE_POLICY.EDITABLE || roles.length || legacyReadonly) {
-          out[name] = { policy, roles, element: node.element, legacyReadonly };
+        if (policy !== WRITE_POLICY.EDITABLE || roles.length) {
+          out[name] = { policy, roles, element: node.element };
         }
       }
       walk(node?.elements);
@@ -179,6 +176,7 @@ export function guardedChanges(policyMap = {}, original = {}, current = {}, auth
  */
 export function renderLock(rule, { isNew = false, actor = {} } = {}) {
   if (!rule) return null;
+  if (rule.policy === WRITE_POLICY.DISPLAY_ONLY) return { readonly: 1 };
   const { allowed } = canWriteFromInput({ ...rule, name: rule.name ?? '__render__' }, {
     op: isNew ? 'create' : 'update',
     actor,

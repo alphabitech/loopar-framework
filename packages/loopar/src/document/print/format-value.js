@@ -1,3 +1,4 @@
+import { selectSource } from "@global/element-definition";
 import { resolveColumnFormat } from "@global/element-definition";
 import { __ } from "@global/i18n";
 import { regional, formatNumber, formatCurrency, formatDate, formatDateTime } from "@global/format";
@@ -114,7 +115,7 @@ export function formatPrintValue(kind, value, { data = {}, titles = null, locale
 function optionLabel(value, data = {}, titles = null) {
   if (data.value_descriptive) return String(data.value_descriptive);
   const lines = String(data.options || "").split("\n").map((l) => l.trim()).filter(Boolean);
-  if (lines.length > 1) {
+  if (selectSource(data) === "static") {
     const hit = lines.find((l) => l.split(":")[0] === String(value));
     if (hit) {
       const [v, label] = hit.split(":");

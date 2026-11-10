@@ -2,12 +2,22 @@ const __META_COMPONENTS__ = {};
 import { createContext, use, useContext } from "react";
 import loopar from "loopar";
 import {MetaComponents} from "@global/require-components";
+import { registerElements } from "@global/element-definition";
 import { MetaLoadError } from "./components/meta/meta-load-error";
 
-const components = Object.entries(import.meta.glob(['./components/*.jsx'])).reduce((acc, [path, module]) => {
+// App-provided elements (apps/<app>/elements/*.jsx) first, so a core
+// element with the same file name always wins.
+const components = Object.entries({
+  ...import.meta.glob(['/apps/*/elements/*.jsx']),
+  ...import.meta.glob(['./components/*.jsx']),
+}).reduce((acc, [path, module]) => {
   acc['src/' + path.split('/').pop().replace('.jsx', '')] = module;
   return acc;
 }, {});
+
+// Their definitions (tiny JSON) are needed eagerly: palette, droppable rules.
+Object.entries(import.meta.glob(['/apps/*/elements/elements.json'], { eager: true, import: 'default' }))
+  .forEach(([path, definitions]) => registerElements(definitions, path.split('/')[2]));
 
 function makeFailedComponent(component, error) {
   const Failed = () => <MetaLoadError element={component} error={error} />;
@@ -25,7 +35,7 @@ function getComponent(component) {
       return;
     }
 
-    const moduleImport = components[`src/${cParse}`] || components[`src/generic`] || null;
+    const moduleImport = components[`src/${cParse}`] || components[`src/div`] || null;
     if(!moduleImport) {
       console.warn("Component not found: " + component);
       resolve(null);

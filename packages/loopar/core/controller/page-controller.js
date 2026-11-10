@@ -221,6 +221,6 @@ export default class PageController extends SingleConrtroller {
       console.warn('[page-controller] Form Submission storage unavailable:', error.message);
     }
 
-    return this.success(formNode.data?.succes_message || 'Submitted successfully');
+    return this.success(formNode.data?.success_message || 'Submitted successfully');
   }
 }

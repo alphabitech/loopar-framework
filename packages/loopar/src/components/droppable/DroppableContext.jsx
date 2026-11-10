@@ -1,5 +1,6 @@
 import {createContext, useContext, useCallback, useMemo, useRef} from "react";
 import { useDragAndDrop } from "./DragAndDropContext";
+import { elementsDict } from "@global/element-definition";
 
 export const DroppableContext = createContext({});
 
@@ -18,6 +19,9 @@ export const DroppableContextProvider = ({data, node, children, ...props }) => {
     e.preventDefault();
     if(!currentDragging || currentDragging?.node === node) return;
     if(props.element == ROW && currentDragging.el.element != COL) return;
+    // Elements that only live inside one container (col → row, tab → tabs…).
+    const requiredParent = elementsDict[currentDragging.el?.element]?.def?.parent;
+    if (requiredParent && props.element !== requiredParent) return;
 
     setDropZone(node);
   }, [currentDragging, node, props.element, setDropZone]);

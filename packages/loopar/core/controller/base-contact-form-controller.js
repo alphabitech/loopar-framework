@@ -52,7 +52,7 @@ export default class BaseContactFormController extends BaseController {
 
   /** True when the public form shows at least one file/upload field (internal ones don't count). */
   #declaresFileField(entity) {
-    const FILE_ELEMENTS = ['file_input', 'image_input', 'file_uploader'];
+    const FILE_ELEMENTS = ['file_input', 'image_input'];
     return loopar.utils.fieldList(entity.doc_structure)
       .some(f => FILE_ELEMENTS.includes(f.element) && !isTrue(f.data?.internal));
   }

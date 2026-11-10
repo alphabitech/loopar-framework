@@ -10,6 +10,8 @@ import { Trash2Icon, PlusIcon } from "lucide-react";
 import {Button} from "@cn/components/ui/button";
 import { getNodeKey } from "@global/prune-doc-structure";
 import React from "react";
+import { rootProps } from "./base/root-props.js";
+import { cn } from "@cn/lib/utils";
 import { ComponentDefaults } from "./base/ComponentDefaults.jsx";
 
 const TabContent = ({element, parent, onDrop}) => {
@@ -30,6 +32,8 @@ function TabFn(props){
   const {id, elementsDict, node, data, asChild = false, canCustomize, setElements, parent} = props;
 
   const {designerMode, isDesigner, handleEditElement, handleDeleteElement} = useDesigner();
+  const vertical = data?.orientation === "vertical";
+  const underline = data?.variant === "underline";
   const getIdentifier = (id) => `${id}${designerMode ? '-designer' : ''}`;
   const getKey = (tab = {}) => {
     const tabData = tab.data || {};
@@ -89,10 +93,18 @@ function TabFn(props){
     <BaseTabs 
       defaultValue={currentTab}
       value={currentTab}
-      className="w-full"
+      // Keyboard (arrows/Home/End) and assistive tech change tabs through Radix.
+      onValueChange={setCurrentTab}
+      orientation={vertical ? "vertical" : "horizontal"}
+      className={cn("w-full", vertical && "flex flex-col gap-4 md:flex-row")}
     >
-      <div className="flex items-center justify-between overflow-x-auto overflow-y-hidden">
-        <TabsList className={`inline-flex items-center gap-1 no-drag bg-transparent ${props.tabsClassName || ""}`}>
+      <div className={cn("flex items-center justify-between overflow-x-auto overflow-y-hidden", vertical && "md:items-start md:overflow-visible")}>
+        <TabsList className={cn(
+          "inline-flex items-center gap-1 no-drag bg-transparent",
+          vertical && "md:h-auto md:flex-col md:items-stretch",
+          underline && "rounded-none border-b p-0",
+          props.tabsClassName
+        )}>
           {elementsDict.map((tab) => {
             const data = tab.data || {};
             const tabKey = getKey(tab);
@@ -101,14 +113,18 @@ function TabFn(props){
               <TabsTrigger
                 key={tabKey}
                 value={tabKey}
-                className="flex items-center gap-2 !px-4 !min-h-[44px]"
+                className={cn(
+                  "flex items-center gap-2 !px-4 !min-h-[44px]",
+                  vertical && "md:justify-start",
+                  underline && "rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
+                )}
                 onMouseDown={(e) => {
+                  if (!designerMode) return;
+                  // Designer: select the tab and open its properties without starting a drag.
                   e.preventDefault();
                   e.stopPropagation();
                   setCurrentTab(tabKey);
-                  if (designerMode && editKey) {
-                    handleEditElement(editKey);
-                  }
+                  if (editKey) handleEditElement(editKey);
                 }}
               >
                 <span>{data.label}</span>
@@ -147,7 +163,7 @@ function TabFn(props){
       {elementsDict.map((element, index) => {
         const tabKey = getKey(element);
         return (
-          <TabsContent key={tabKey} value={tabKey} className="space-y-2">
+          <TabsContent key={tabKey} value={tabKey} className={cn("space-y-2", vertical && "md:mt-0 md:flex-1")}>
             <TabContent element={element} parent={parent + index}/>
           </TabsContent>
         );
@@ -190,7 +206,7 @@ export default function MetaTabs(props){
   const parentKey = node || data.key || data.id || data.name;
 
   return (
-    <div className={`p-2 my-3 pt-0 mt-0 border border-separate ${props.className} ${data.class}`}id={data.id}>
+    <div {...rootProps(props)} className={cn("p-2 my-3 pt-0 mt-0 border border-separate", props.className)}>
       {data.label && <h4 className="p-2">{data.label}</h4>}
       <TabFn
         id={data.id || data.name || data.key || key}
@@ -207,3 +223,19 @@ export default function MetaTabs(props){
 }
 
 MetaTabs.requires = ["tab"]
+
+MetaTabs.metaFields = () => [
+  {
+    group: "custom",
+    elements: {
+      variant: {
+        element: SELECT,
+        data: { label: "Style", options: [{ value: "pills", label: "Pills" }, { value: "underline", label: "Underline" }] },
+      },
+      orientation: {
+        element: SELECT,
+        data: { label: "Orientation", options: [{ value: "horizontal", label: "Horizontal" }, { value: "vertical", label: "Vertical (desktop)" }] },
+      },
+    },
+  },
+];

@@ -1,0 +1,8 @@
+{
+  "name": "Desk Home",
+  "module": "core",
+  "icon": "House",
+  "is_home": 1,
+  "doc_structure": "[{\"node\":\"dh_greeting\",\"element\":\"desk_greeting\",\"data\":{\"label\":\"\"}},{\"node\":\"dh_stats\",\"element\":\"system_stats\",\"data\":{}},{\"node\":\"dh_grid\",\"element\":\"div\",\"data\":{\"class\":\"flex flex-wrap items-start gap-4 space-y-0\"},\"elements\":[{\"node\":\"dh_setup\",\"element\":\"setup_checklist\",\"data\":{\"label\":\"Finish setting up\",\"class\":\"min-w-72 flex-[3_1_0%]\"}},{\"node\":\"dh_recent\",\"element\":\"recent_documents\",\"data\":{\"label\":\"Continue where you left off\",\"limit\":6,\"class\":\"min-w-72 flex-[2_1_0%]\"}}]},{\"node\":\"dh_activity\",\"element\":\"activity_feed\",\"data\":{\"label\":\"Team activity\",\"limit\":8}}]",
+  "__ENTITY__": "Desk Page Builder"
+}

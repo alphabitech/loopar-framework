@@ -1,3 +1,4 @@
+import { withRoot } from "./base/with-root.jsx";
 import { FormWrapper } from "@form-provider";
 import { useRef, useState, useEffect } from "react";
 import { Droppable } from "@droppable";
@@ -9,7 +10,7 @@ import { buildFormData } from "@@tools/build-form-data";
 import { useCaptcha, CaptchaSlot } from "./captcha-widget";
 import { __ } from "@global/i18n";
 
-export default function MetaForm(props) {
+function MetaForm(props) {
   const formRef = useRef(null);
   const {
     title = "",
@@ -18,9 +19,13 @@ export default function MetaForm(props) {
     action_text = "Submit",
     render_response,
     action_class,
-    succes_message,
-    error_message
+    success_message,
+    error_message,
+    appearance
   } = props.data;
+  // "plain": no box, no title, full-width submit — for system pages (auth)
+  // that frame the form themselves.
+  const plain = appearance === "plain";
   const [saved, setSaved] = useState(false);
   const [savedMessage, setSavedMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -56,7 +61,7 @@ export default function MetaForm(props) {
         fd.append("_elapsed", String(Date.now() - (mountTsRef.current || Date.now())));
 
         const res = await loopar.call(document, action, { body: fd });
-        setSavedMessage(res?.message || succes_message || "Submitted successfully");
+        setSavedMessage(res?.message || success_message || "Submitted successfully");
       } else {
         // Generic pipeline: the PAGE receives the submit and validates
         // against its own metadata (the same definition that rendered this
@@ -72,7 +77,7 @@ export default function MetaForm(props) {
             _elapsed: Date.now() - (mountTsRef.current || Date.now())
           }
         });
-        setSavedMessage(res?.message || succes_message || "Submitted successfully");
+        setSavedMessage(res?.message || success_message || "Submitted successfully");
       }
       setSaved(true);
       // Blank the fields so the form is ready for another submission
@@ -87,7 +92,9 @@ export default function MetaForm(props) {
   };
 
   if (render_response && saved && savedMessage) {
-    return <p>{String(savedMessage)}</p>;
+    return plain
+      ? <p className="rounded-lg border bg-muted/40 p-4 text-sm">{String(savedMessage)}</p>
+      : <p>{String(savedMessage)}</p>;
   }
 
   return (
@@ -97,13 +104,15 @@ export default function MetaForm(props) {
       className="w-full"
       formRef={formRef}
     >
-      <div className="w-full border">
-        <div className="p-4">
-          <p className="text-md font-medium tracking-widest uppercase text-muted-foreground">
-            {title}
-          </p>
+      <div className={cn("w-full", !plain && "border")}>
+        <div className={cn(!plain && "p-4")}>
+          {!plain && (
+            <p className="text-md font-medium tracking-widest uppercase text-muted-foreground">
+              {title}
+            </p>
+          )}
 
-          <div className="p-2">
+          <div className={cn(!plain && "p-2")}>
             <Droppable {...props} />
           </div>
 
@@ -132,14 +141,14 @@ export default function MetaForm(props) {
 
           <div className={cn(
             "flex justify-end gap-2 pt-4",
-            "border-t border-border/40"
+            !plain && "border-t border-border/40"
           )}>
             <Button
               type="button"
-              size="sm"
+              size={plain ? "lg" : "sm"}
               onClick={submit}
               disabled={sending || !captcha.ready}
-              className={action_class}
+              className={cn(plain && "w-full", action_class)}
             >
               {sending ? "Sending..." : action_text}
             </Button>
@@ -163,9 +172,16 @@ MetaForm.metaFields = () => [{
       data: { description: "Optional: custom controller action. Leave empty for the generic pipeline." }
     },
     action_text: { element: INPUT },
+    appearance: {
+      element: SELECT,
+      data: {
+        options: "card\nplain",
+        description: "plain: no box or title, full-width button (for pages that frame the form, like auth)."
+      }
+    },
     action_class: { element: INPUT },
     render_response: { element: SWITCH },
-    succes_message: { element: TEXTAREA },
+    success_message: { element: TEXTAREA },
     error_message: { element: TEXTAREA },
     notify: {
       element: SWITCH,
@@ -177,3 +193,5 @@ MetaForm.metaFields = () => [{
     }
   }
 }];
+
+export default withRoot(MetaForm);

@@ -1,6 +1,6 @@
 import { ListLayout } from '@loopar/list';
 import loopar from "loopar";
-import { Card } from '@card';
+import { Card } from '@cn/components/ui/card';
 import { Link } from "@link";
 import { useTable } from "@@table/TableContext";
 import { Checkbox } from "@cn/components/ui/checkbox";

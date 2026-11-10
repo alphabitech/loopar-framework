@@ -5,8 +5,10 @@ export default function TextBlock(props) {
   const id = useId();
   const defaultElements = [
     {
-      element: "subtitle",
+      element: "heading",
       data: {
+        level: "h3",
+        size: "2xl",
         class: "font-bold text-2xl mb-2",
         text: "Text Block",
         name: id + "-title"

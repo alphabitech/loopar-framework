@@ -1,23 +1,16 @@
+import { useDesigner } from "@context/designer-context";
 
-import { ComponentDefaults } from "./ComponentDefaults";
-import { useEffect } from "react";
-
+/**
+ * The element's `text`. An empty text shows a placeholder while designing
+ * only — it is never written into the document (it used to be saved as real
+ * content the moment the element mounted).
+ */
 export default function BaseText(props) {
-  const {set, data} = ComponentDefaults(props);
-
-  useEffect(() => {
-    if (!props.data.text || props.data.text === "") {
-      set("text", props.defaultText || defaultText);
-    }
-  }, [data.text, set]);
-
+  const { designerMode } = useDesigner();
+  const data = props.data || {};
   const defaultText = props.defaultText || "Text here";
 
-  const getText = () => {
-    return data.text || defaultText;
-  }
+  const getText = () => data.text || (designerMode ? defaultText : "");
 
-  return {getText, defaultText: props.defaultText || defaultText}
+  return { getText, defaultText };
 }
-
-BaseText.dontHaveMetaElements = ["label"];

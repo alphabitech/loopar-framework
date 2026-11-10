@@ -12,6 +12,7 @@ import { FormWrapper } from "@form-provider";
 import { isEqual } from 'es-toolkit/predicate';
 import { __ } from "@global/i18n";
 import { ElementLanguages } from "./element-languages";
+import { useDocument } from "@loopar/document";
 
 function mergeGroups(...arrays) {
   const groupMap = new Map();
@@ -51,6 +52,15 @@ function mergeGroups(...arrays) {
   return Array.from(groupMap.values());
 }
 
+// Elements whose value can't sensibly have a default (secrets, child tables,
+// structure, uploads, identity).
+const NO_DEFAULT_VALUE = new Set(["designer", "password", "form_table", "id", "file_input", "image_input", "metadata", "tailwind", "slot"]);
+const DEFAULT_VALUE_DROPPED_KEYS = new Set([
+  "readonly", "formula", "disabled", "hidden", "display_on", "required", "required_on", "unique",
+  "write_policy", "write_roles", "protected_change", "default_value", "value", "description",
+  "in_list_view", "searchable", "print_hide", "translatable", "internal", "required_on_website",
+]);
+
 const ACTIVE_SECTION_KEY = "element-editor-active-section";
 const NONE = "__none__";
 
@@ -64,6 +74,8 @@ const readActiveSection = () => {
 
 export function ElementEditor() {
   const { updateElement, updatingElement } = useDesigner();
+  // Fields scoped to some document types (data.contexts) show only there.
+  const { entity: documentType } = useDocument();
 
   if (!updatingElement) return null;
 
@@ -84,31 +96,40 @@ export function ElementEditor() {
   const metaFields = useMemo(() => {
     const genericMetaFields = getMetaFields(updatingElement);
     const selfMetaFields = Element.metaFields && Element.metaFields() || [];
-    return mergeGroups(genericMetaFields, ...selfMetaFields);
+    return mergeGroups(genericMetaFields, ...selfMetaFields)
+      .filter(({ elements }) => Object.keys(elements || {}).length > 0);
   }, [data, Element]);
 
   const metaFieldsData = useMemo(() => {
-    return metaFields.map(({ group, elements }) => {
-      if (group === 'form' && elementsDict[elementName]?.def?.isWritable && ["designer", "fragment"].includes(elementName) === false) {
+    return metaFields.map(({ group, elements: allElements }) => {
+      const elements = Object.fromEntries(Object.entries(allElements).filter(([, props]) =>
+        !Array.isArray(props?.data?.contexts) || props.data.contexts.includes(documentType)
+      ));
+      if (group === 'form' && elementsDict[elementName]?.def?.isWritable && !NO_DEFAULT_VALUE.has(elementName)) {
         elements['divider_default'] = (
           <Separator className="my-3" />
         );
-  
+
+        // The default is edited with the field's own element, but as a plain
+        // editable input: none of the field's behavior flags (read-only,
+        // formula, conditions, write policy…) may lock or hide it here.
+        const presentation = Object.fromEntries(
+          Object.entries(data).filter(([key]) => !DEFAULT_VALUE_DROPPED_KEYS.has(key))
+        );
         elements['default_value'] = {
           element: elementName,
           key: elementKey + "_default",
           data: {
-            ...data,
+            ...presentation,
             label: "Default",
-            hidden: 0,
-            required: 0,
+            description: "Value a new record starts with.",
           }
         };
       }
   
       return { group, elements };
     });
-  }, [metaFields, elementName, data]);
+  }, [metaFields, elementName, data, documentType]);
 
   const __FORM_FIELDS__ = useMemo(() => {
     const formFields = {};
@@ -243,8 +264,8 @@ export function ElementEditor() {
                     />
                   </button>
                 </div>
-                <div className={`flex-col gap-2 pl-2 ${isCollapsed ? "hidden" : "flex"}`}>
-                  <div className='w-full border-l-3 p-2 pt-3 border-secondary'>
+                <div className={`flex-col pl-2 ${isCollapsed ? "hidden" : "flex"}`}>
+                  <div className='w-full border-l-3 p-2 pt-3 border-secondary flex flex-col gap-4'>
                     {fields.map(([field, props]) => {
                       if (!props.element) {
                         return (

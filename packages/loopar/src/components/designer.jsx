@@ -40,3 +40,5 @@ export default function MetaDesigner(props) {
     />
   ));
 }
+
+MetaDesigner.metaFields = () => BaseInput.metaFields();

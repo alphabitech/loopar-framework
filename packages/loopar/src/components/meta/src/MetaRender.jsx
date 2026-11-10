@@ -1,10 +1,17 @@
+import React from "react";
 import { useState, useRef, useEffect } from "react";
 import { __META_COMPONENTS__ } from "@loopar/components-loader";
 import { cn } from "@cn/lib/utils";
 import loopar from "loopar";
 import PureHTMLBlock from "@pure-html-block";
 import {SEORender} from "@seo-render";
+import { sanitizeAttributes } from "@global/custom-attributes";
 const Animations = loopar.animation.animations();
+
+const VISIBLE_ON = {
+  mobile: "contents md:hidden",
+  desktop: "hidden md:contents",
+};
 
 export const MetaRender = ({ meta, metaProps, Comp, docRef, parent, data, threshold = 0.1 }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -45,10 +52,15 @@ export const MetaRender = ({ meta, metaProps, Comp, docRef, parent, data, thresh
     };
   }
   
-  if ([HTML_BLOCK, MARKDOWN].includes(meta.element)) {
+  // Custom attributes (data-*, aria-*…) travel as top-level props; every
+  // element forwards them to its root through rootProps().
+  const attributes = sanitizeAttributes(data.attributes);
+
+  if (meta.element === MARKDOWN) {
     return <PureHTMLBlock
       element={meta}
       {...loopar.utils.renderizableProps(metaProps)}
+      {...attributes}
       data={data}
       className={className}
       style={style}
@@ -63,9 +75,16 @@ export const MetaRender = ({ meta, metaProps, Comp, docRef, parent, data, thresh
 
   if (!Comp) return null;
 
+  // `contents` keeps the wrapper out of the layout (grids, flex rows); the
+  // breakpoint class only toggles it between contents and none.
+  const VisibilityWrapper = VISIBLE_ON[data.visible_on] ? "div" : React.Fragment;
+  const visibilityProps = VISIBLE_ON[data.visible_on] ? { className: VISIBLE_ON[data.visible_on] } : {};
+
   return (
+    <VisibilityWrapper {...visibilityProps}>
     <Comp
       {...metaProps}
+      {...attributes}
       className={className}
       style={style}
       value={data.value}
@@ -77,5 +96,6 @@ export const MetaRender = ({ meta, metaProps, Comp, docRef, parent, data, thresh
         if (parent && parent !== docRef) parent.fields?.registerRef(data.name, ref);
       }}
     />
+    </VisibilityWrapper>
   );
 }

@@ -11,7 +11,7 @@ import { __, languageName } from "@global/i18n";
 import { contentTexts, parseTranslations, compactTranslations, entryValue, entryState, makeEntry, isMachine } from "@global/i18n-content";
 
 const LONG_TEXT = 90;
-const LONG_ELEMENTS = new Set(["markdown", "markdown_input", "textarea", "text_editor"]);
+const LONG_ELEMENTS = new Set(["markdown", "markdown_input", "textarea"]);
 
 export const definitionOf = (element) => elementsDict[element]?.def;
 

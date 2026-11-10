@@ -9,6 +9,20 @@ const REFRESH_THRESHOLD = 1800;
 /** Same lifetime as JWT login (1d); readable by JS for header + double-submit check. */
 const CSRF_COOKIE_MS = 24 * 60 * 60 * 1000;
 
+/** "Keep me signed in": a persistent cookie + a long-lived, sliding token. */
+const REMEMBER_DAYS = 30;
+const DAY_S = 24 * 60 * 60;
+const tokenTtl = (remember) => (remember ? `${REMEMBER_DAYS}d` : '1d');
+/**
+ * Without `remember` the cookies have no maxAge: they die with the browser.
+ * With it they persist; the token is re-issued at most once a day so an
+ * active user stays signed in, and an idle one expires after REMEMBER_DAYS.
+ */
+const sessionCookieOpts = (httpOnly, remember) => ({
+  httpOnly, path: '/', ...(remember ? { maxAge: REMEMBER_DAYS * DAY_S * 1000 } : {}),
+});
+const refreshThreshold = (remember) => (remember ? (REMEMBER_DAYS - 1) * DAY_S : REFRESH_THRESHOLD);
+
 function setCsrfCookie(token) {
   if (!token) return;
   loopar.cookie.set(CSRF_COOKIE_NAME, token, {
@@ -156,7 +170,8 @@ export default class Auth {
       const now = Math.floor(Date.now() / 1000);
       const exp = userData.exp || 0;
 
-      if (exp - now < REFRESH_THRESHOLD || !userData.csrfToken) {
+      const remember = !!userData.remember;
+      if (exp - now < refreshThreshold(remember) || !userData.csrfToken) {
         const payload = {
           name: userData.name,
           email: userData.email,
@@ -164,13 +179,14 @@ export default class Auth {
           profile_picture: userData.profile_picture,
           user_type: userData.user_type,
           mfa: !!userData.mfa,
+          remember,
           tenant: this.tenantId,
           csrfToken: userData.csrfToken || generateCsrfToken(),
         };
 
-        const newToken = jwt.sign(payload, getJWTSecret(), { expiresIn: '1d' });
-        loopar.cookie.set(this.tokenName, newToken, { httpOnly: true, path: '/' });
-        loopar.cookie.set(this.loggedCookieName, '1', { httpOnly: false, path: '/' });
+        const newToken = jwt.sign(payload, getJWTSecret(), { expiresIn: tokenTtl(remember) });
+        loopar.cookie.set(this.tokenName, newToken, sessionCookieOpts(true, remember));
+        loopar.cookie.set(this.loggedCookieName, '1', sessionCookieOpts(false, remember));
         setCsrfCookie(payload.csrfToken);
 
         return payload;
@@ -209,8 +225,11 @@ export default class Auth {
     }
   }
 
-  /** `mfa`: the session was opened after a verified second factor. */
-  login(user, { mfa = false } = {}) {
+  /**
+   * `mfa`: the session was opened after a verified second factor.
+   * `remember`: "Keep me signed in" — persistent cookie, 30-day sliding token.
+   */
+  login(user, { mfa = false, remember = false } = {}) {
     this.assertLoginAllowed(user);
 
     const payload = {
@@ -220,14 +239,15 @@ export default class Auth {
       profile_picture: user.profile_picture,
       user_type: user.user_type,
       mfa: !!mfa,
+      remember: !!remember,
       tenant: this.tenantId,
       csrfToken: generateCsrfToken(),
     };
   
-    const token = jwt.sign(payload, getJWTSecret(), { expiresIn: '1d' });
+    const token = jwt.sign(payload, getJWTSecret(), { expiresIn: tokenTtl(remember) });
   
-    loopar.cookie.set(this.tokenName, token, { httpOnly: true, path: '/' });
-    loopar.cookie.set(this.loggedCookieName, '1', { httpOnly: false, path: '/' });
+    loopar.cookie.set(this.tokenName, token, sessionCookieOpts(true, remember));
+    loopar.cookie.set(this.loggedCookieName, '1', sessionCookieOpts(false, remember));
     setCsrfCookie(payload.csrfToken);
     // The user's desk language (empty = system default) travels in its own
     // cookie, so changing it doesn't need a new session token.

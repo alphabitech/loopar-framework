@@ -19,8 +19,10 @@ export default function TextArea(props) {
           <Textarea
             {...inputProps}
             placeholder={data.placeholder || data.label}
-            className="border border-input rounded-xm bg-transparent"
-            rows={data.rows || 6}
+            className="border border-input rounded-md bg-transparent"
+            rows={parseInt(data.rows, 10) || 6}
+            {...(data.max_length ? { maxLength: parseInt(data.max_length, 10) || undefined } : {})}
+            disabled={[1, "1", true, "true"].includes(data.disabled) || undefined}
           />
         </FormControl>
         {data.description && (
@@ -40,10 +42,9 @@ export default function TextArea(props) {
     {
       group: "form",
       elements: {
-        rows: {
-          element: INPUT,
-          format: "number",
-        },
+        rows: { element: INPUT, data: { format: "int", description: "Visible lines (default 6)." } },
+        min_length: { element: INPUT, data: { label: "Min length", format: "int" } },
+        max_length: { element: INPUT, data: { label: "Max length", format: "int" } },
       },
     },
   ];

@@ -25,3 +25,5 @@ export default function MarkdownInput(props){
     </>
   )});
 }
+
+MarkdownInput.metaFields = () => BaseInput.metaFields();

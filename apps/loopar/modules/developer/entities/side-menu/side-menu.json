@@ -11,7 +11,7 @@
   "enable_history": 0,
   "enable_comments": 0,
   "require_login_to_comment": 0,
-  "doc_structure": "[{\"node\":\"ss5a1ng7d\",\"element\":\"input\",\"data\":{\"name\":\"parent_id\",\"label\":\"Parent ID\",\"type\":\"integer\",\"hidden\":1}},{\"node\":\"qco7vd6yh\",\"element\":\"input\",\"data\":{\"name\":\"parent_document\",\"label\":\"Parent Document\",\"type\":\"text\",\"hidden\":1}},{\"node\":\"whia6n1qv\",\"element\":\"row\",\"data\":{\"name\":\"name_and_status_container\",\"label\":\"Row1\"},\"elements\":[{\"node\":\"2br73ymk1\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Name\",\"required\":1,\"type\":\"VARCHAR\",\"in_list_view\":1,\"set_only_time\":1,\"unique\":1,\"searchable\":1}}]},{\"node\":\"form_table1_el42152357939\",\"element\":\"form_table\",\"data\":{\"name\":\"form_table1_el42152357939\",\"label\":\"Form_table1\",\"options\":\"Side Menu Item\"}}]",
+  "doc_structure": "[{\"node\":\"ss5a1ng7d\",\"element\":\"input\",\"data\":{\"name\":\"parent_id\",\"label\":\"Parent ID\",\"type\":\"integer\",\"hidden\":1}},{\"node\":\"qco7vd6yh\",\"element\":\"input\",\"data\":{\"name\":\"parent_document\",\"label\":\"Parent Document\",\"type\":\"text\",\"hidden\":1}},{\"node\":\"whia6n1qv\",\"element\":\"row\",\"data\":{\"name\":\"name_and_status_container\"},\"elements\":[{\"node\":\"2br73ymk1\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Name\",\"required\":1,\"type\":\"VARCHAR\",\"in_list_view\":1,\"unique\":1,\"searchable\":1,\"write_policy\":\"create_only\"}}]},{\"node\":\"form_table1_el42152357939\",\"element\":\"form_table\",\"data\":{\"name\":\"form_table1_el42152357939\",\"label\":\"Form_table1\",\"options\":\"Side Menu Item\"}}]",
   "resources": [],
   "__ENTITY__": "Entity"
 }

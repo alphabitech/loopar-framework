@@ -1,3 +1,4 @@
+import { withRoot } from "./base/with-root.jsx";
 import { useState, useEffect } from "react";
 import { loopar, useRealtime } from "loopar";
 import {useDocument} from "@loopar/document";
@@ -224,12 +225,12 @@ function ReviewForm({ requireCity, requireRating, entity }) {
   );
 }
 
-export default function MetaReview({
+function MetaReview({
   data
 }) {
   const {show_avg, show_form, page_size, require_city, require_rating, 
     title="Review", 
-    subtitle="Review"
+    description="Review"
   } = data;
 
   const [reviews, setReviews] = useState(data.reviews || []);
@@ -260,7 +261,7 @@ export default function MetaReview({
         <div className="text-center">
           <h2 className="text-2xl font-medium">{title}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {subtitle}
+            {description}
           </p>
         </div>
 
@@ -342,9 +343,11 @@ MetaReview.metaFields = () => {
         require_rating: { element: SWITCH },
         page_size: { element: INPUT, data: {format: "int"} },
         title: {element: TEXTAREA},
-        subtitle: {element: TEXTAREA},
+        description: {element: TEXTAREA},
         message: {element: TEXTAREA},
       }
     },
   ];
 };
+
+export default withRoot(MetaReview);

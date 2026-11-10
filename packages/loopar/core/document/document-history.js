@@ -71,6 +71,12 @@ function buildDiff(before, after) {
 }
 
 function buildHistoryRow(loopar, { document, doc, action, extras = {} }) {
+  // Writes of an app install/update are attributed to whoever ran it, but
+  // they are not that person's work: tagged so views like the desk's
+  // "recent documents" can leave them out.
+  if (loopar.installing) {
+    extras = { ...extras, metadata: { ...(extras.metadata || {}), source: 'installer', app: loopar.installingApp } };
+  }
   return {
     name: Helpers.randomString(15),
     document,

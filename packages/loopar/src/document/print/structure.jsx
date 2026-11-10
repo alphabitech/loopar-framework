@@ -9,7 +9,7 @@ import { useDocument } from "../base/provider";
 import { printKind, formatPrintValue, isEmptyValue, isNumericKind } from "./format-value";
 import { formatDate } from "@global/format";
 
-const SECTION_ELEMENTS = new Set(["tab", "section", "panel", "card"]);
+const SECTION_ELEMENTS = new Set(["tab", "section", "panel"]);
 
 const isTrue = (v) => loopar.utils.trueValue(v);
 const isWritable = (element) => elementsDict[element]?.def?.isWritable === true || element === "metadata";
@@ -196,10 +196,11 @@ function Node({ el, values }) {
     );
   }
 
-  if (SECTION_ELEMENTS.has(element) && data.label) {
+  const sectionTitle = data.title || data.label;
+  if (SECTION_ELEMENTS.has(element) && sectionTitle) {
     return (
       <section className="lp-section">
-        <h3 className="lp-section-title">{data.label}</h3>
+        <h3 className="lp-section-title">{sectionTitle}</h3>
         <div className="lp-stack">{body}</div>
       </section>
     );

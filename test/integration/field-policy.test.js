@@ -47,7 +47,7 @@ test("the User ref carries the write policy from user.json", async () => {
     assert.equal(map.password.policy, "protected");
     assert.equal(map.mfa_enabled.policy, "system");
     assert.equal(map.oauth_sub.policy, "system");
-    assert.equal(map.name.policy, "create_only"); // legacy set_only_time
+    assert.equal(map.name.policy, "create_only");
     assert.equal(map.first_name, undefined);       // plain editable
   });
 });

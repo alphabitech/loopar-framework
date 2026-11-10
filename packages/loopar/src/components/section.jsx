@@ -5,13 +5,19 @@ import { usePersist } from "@services/persist-state";
 import { useDesigner } from "@context/designer-context";
 import { useDocument } from "@loopar/document";
 import { cn } from "@cn/lib/utils";
+import { rootProps } from "./base/root-props.js";
 
 const DEFAULTS = {
   gap: 4,
   padding_y: "md",
-  max_width: "1280px",
   full_width: false,
 };
+
+const MIN_HEIGHT = { half: "min-h-[50vh]", screen: "min-h-[calc(100vh-var(--spacing-web-header-height,0px))]" };
+const CONTENT_ALIGN = { center: "justify-center", end: "justify-end" };
+const VIDEO_OVERLAY = { light: "bg-black/20", medium: "bg-black/40", strong: "bg-black/60" };
+// Background video: a direct file (.mp4/.webm). Streaming platforms belong in video_embed.
+const VIDEO_FILE = /^https?:\/\/\S+\.(mp4|webm|ogv|mov)(\?\S*)?$/i;
 
 export default function Section(props) {
   const { designing } = useDesigner();
@@ -27,11 +33,13 @@ export default function Section(props) {
     gap: data.gap ?? docSpacing.gap ?? DEFAULTS.gap,
   }), [data, docSpacing]);
 
+  // The collapse toggle is an editing aid: visitors never see it, and a
+  // section collapsed while designing still renders on the public page.
   useEffect(() => {
-    if (designing || data.collapsible) {
-      setCollapsible(true);
-    }
-  }, [designing, data.collapsible]);
+    setCollapsible(!!designing);
+  }, [designing]);
+
+  const videoSrc = VIDEO_FILE.test(String(data.background_video || "").trim()) ? String(data.background_video).trim() : null;
 
   const gap = useMemo(() => {
     const sp = parseInt(config.gap);
@@ -66,26 +74,48 @@ export default function Section(props) {
       </div>
       <div
         className={cn(
-          "container mx-auto",
+          !config.full_width && "container mx-auto",
           collapsible && collapsed && "h-10 overflow-hidden"
         )}
       >
-        {!collapsed && (
+        {!(collapsible && collapsed) && (
           <section
+            {...rootProps(props)}
             className={cn(
-              "mx-auto flex max-w-[1280px]",
+              "mx-auto flex",
+              !config.full_width && "max-w-[1280px]",
               "flex-col",
               paddingY,
-              data.class
+              MIN_HEIGHT[config.min_height],
+              CONTENT_ALIGN[config.content_align],
+              videoSrc && "relative overflow-hidden",
+              props.className
             )}
             style={{
               gap: `${gap}rem`,
               ...props.style,
             }}
           >
+            {videoSrc && (
+              <>
+                <video
+                  className="pointer-events-none absolute inset-0 -z-0 h-full w-full object-cover"
+                  src={videoSrc}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  aria-hidden="true"
+                />
+                {config.video_overlay && config.video_overlay !== "none" && (
+                  <div className={cn("pointer-events-none absolute inset-0", VIDEO_OVERLAY[config.video_overlay])} aria-hidden="true" />
+                )}
+              </>
+            )}
             <Droppable
               {...props}
-              className="flex flex-col w-full p-4 lg:p-0"
+              className={cn("flex flex-col w-full p-4 lg:p-0", videoSrc && "relative z-10")}
               style={{ gap: `${gap}rem` }}
             />
           </section>
@@ -131,11 +161,30 @@ Section.metaFields = () => {
             description: "Remove max-width constraint",
           },
         },
-        collapsible: {
-          element: SWITCH,
+        min_height: {
+          element: SELECT,
           data: {
-            label: "Collapsible",
-            description: "Allow section to collapse",
+            label: "Min Height",
+            options: [{ value: "", label: "Content" }, { value: "half", label: "Half screen" }, { value: "screen", label: "Full screen" }],
+          },
+        },
+        content_align: {
+          element: SELECT,
+          data: {
+            label: "Vertical Align",
+            description: "Where the content sits when the section is taller than it.",
+            options: [{ value: "", label: "Top" }, { value: "center", label: "Center" }, { value: "end", label: "Bottom" }],
+          },
+        },
+        background_video: {
+          element: INPUT,
+          data: { label: "Background Video", description: "URL of an .mp4/.webm file; plays muted in a loop behind the content." },
+        },
+        video_overlay: {
+          element: SELECT,
+          data: {
+            label: "Video Overlay",
+            options: [{ value: "none", label: "None" }, { value: "light", label: "Light" }, { value: "medium", label: "Medium" }, { value: "strong", label: "Strong" }],
           },
         },
       },

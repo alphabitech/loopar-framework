@@ -38,3 +38,11 @@ export default function MetaSlot(props) {
 
   return <Comp {...props} />;
 }
+
+MetaSlot.metaFields = () => [{
+  group: "form",
+  elements: {
+    name: { element: INPUT, data: { label: "Slot name", description: "Key of the component the view provides for this slot (useViewOptions slots)." } },
+    writable: { element: SWITCH, data: { label: "Stores a value", description: "Creates a column so the slot's component can save a value with the record." } },
+  },
+}];
