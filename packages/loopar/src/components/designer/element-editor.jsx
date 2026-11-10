@@ -5,7 +5,7 @@ import { elementsDict } from "@global/element-definition";
 import {MetaComponent} from "@@meta/meta-component";
 import { Separator } from "@cn/components/ui/separator";
 import { Input } from "@cn/components/ui/input";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { getMetaFields } from "@@tools/meta-fields";
 import { DesignerContext, useDesigner } from "@context/designer-context";
 import { FormWrapper } from "@form-provider";
@@ -13,6 +13,7 @@ import { isEqual } from 'es-toolkit/predicate';
 import { __ } from "@global/i18n";
 import { ElementLanguages } from "./element-languages";
 import { useDocument } from "@loopar/document";
+import { getNodeKey } from "@global/prune-doc-structure";
 
 function mergeGroups(...arrays) {
   const groupMap = new Map();
@@ -73,13 +74,15 @@ const readActiveSection = () => {
 };
 
 export function ElementEditor() {
-  const { updateElement, updatingElement } = useDesigner();
+  const { updateElement, updatingElement, getElementPath, handleEditElement } = useDesigner();
   // Fields scoped to some document types (data.contexts) show only there.
   const { entity: documentType } = useDocument();
 
   if (!updatingElement) return null;
 
   const elementName = updatingElement.element;
+  // Root → selected chain; ancestors are clickable to select the container.
+  const elementPath = getElementPath ? getElementPath(getNodeKey(updatingElement)) : [];
 
   const data = useMemo(() => {
     return {...updatingElement.data,};
@@ -231,6 +234,33 @@ export function ElementEditor() {
                 <ElementLanguages elementKey={elementKey} element={elementName} data={updatingElement.data} />
               </span>
             </div>
+            {elementPath.length > 1 && (
+              <nav
+                aria-label={__("Element path")}
+                className="flex flex-wrap items-center gap-y-0.5 px-1 pb-1.5 text-xs text-muted-foreground"
+              >
+                {elementPath.map((step, i) => {
+                  const last = i === elementPath.length - 1;
+                  const label = loopar.utils.Capitalize(String(step.element || "").replaceAll("_", " "));
+                  return (
+                    <span key={step.key} className="flex items-center">
+                      {i > 0 && <ChevronRight className="h-3 w-3 mx-0.5 shrink-0 opacity-60" />}
+                      {last ? (
+                        <span className="font-medium text-foreground">{label}</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="rounded px-0.5 hover:text-foreground hover:bg-muted transition-colors"
+                          onClick={() => handleEditElement(step.key)}
+                        >
+                          {label}
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
+              </nav>
+            )}
             <Input
               type="search"
               placeholder={__("Search properties...")}

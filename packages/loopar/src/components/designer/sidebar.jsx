@@ -49,14 +49,14 @@ export const Sidebar = memo(() => {
           <Button
             size="icon"
             variant="secondary"
-            title={designerModeType == "designer" ? "Preview" : "Design"}
+            title={designerModeType === "preview" ? __("Design") : __("Preview")}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               handleChangeMode();
             }}
           >
-            {designerModeType == "designer" ? <EyeIcon className="h-5 w-5"/> : <BrushIcon className="h-5 w-5"/>}
+            {designerModeType === "preview" ? <BrushIcon className="h-5 w-5"/> : <EyeIcon className="h-5 w-5"/>}
           </Button>
           {/* <Button
             size="icon"
@@ -99,7 +99,25 @@ export const Sidebar = memo(() => {
           style={{height: "calc(100% - 50px)", overflowY: "auto"}}
         >
           {
-            (designerModeType == "editor") ? (
+            designerModeType === "preview" ? (
+              // The palette needs the drag-and-drop canvas, which preview
+              // doesn't mount (it renders exactly what gets published).
+              <div className="flex flex-col items-center gap-3 p-6 text-center text-sm text-muted-foreground">
+                <EyeIcon className="h-6 w-6"/>
+                <p>{__("Preview shows the page exactly as it will be published.")}</p>
+                <BaseButton
+                  variant="secondary"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleChangeMode();
+                  }}
+                >
+                  <BrushIcon className="mr-2 h-4 w-4"/>
+                  {__("Back to design")}
+                </BaseButton>
+              </div>
+            ) : (designerModeType == "editor") ? (
               <ElementEditor key={getNodeKey(updatingElement)}/>
             ) : <DesignerForm/>
           }

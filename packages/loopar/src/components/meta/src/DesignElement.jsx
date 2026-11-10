@@ -7,6 +7,36 @@ import { useDesigner } from "@context/designer-context";
 import { useDragAndDrop } from "@@droppable/DragAndDropContext";
 import { cn } from "@cn/lib/utils";
 import { getNodeKey } from "@global/prune-doc-structure";
+import { elementsDict } from "@global/element-definition";
+
+// Layout containers get their own hue so nested structure reads at a glance
+// (section → row → col). Rest = dashed at reduced alpha; hover/selected = full
+// color. Literal class strings so Tailwind can see them.
+const TONES = {
+  section: {
+    rest: "outline-sky-600/60 dark:outline-sky-400/55",
+    active: "outline-sky-600 dark:outline-sky-400",
+    chip: "bg-sky-600 text-white dark:bg-sky-400 dark:text-sky-950",
+  },
+  row: {
+    rest: "outline-amber-600/60 dark:outline-amber-400/55",
+    active: "outline-amber-600 dark:outline-amber-400",
+    chip: "bg-amber-600 text-white dark:bg-amber-400 dark:text-amber-950",
+  },
+  col: {
+    rest: "outline-emerald-600/60 dark:outline-emerald-400/55",
+    active: "outline-emerald-600 dark:outline-emerald-400",
+    chip: "bg-emerald-600 text-white dark:bg-emerald-400 dark:text-emerald-950",
+  },
+  default: {
+    rest: "outline-primary/45",
+    active: "outline-primary",
+    chip: "bg-primary text-primary-foreground",
+  },
+};
+TONES.grid = TONES.row;
+
+const toneOf = (element) => TONES[element] || TONES.default;
 
 export const DesignElement = memo(function DesignElement(props) {
   const { element, Comp, parentKey } = props;
@@ -184,6 +214,12 @@ export const DesignElement = memo(function DesignElement(props) {
   const isActive = hover && !dragging;
 
   const isSelected = designing && updatingElement && getNodeKey(updatingElement) === nodeKey;
+  const tone = toneOf(elementProps.element);
+  const isLayout = elementsDict[elementProps.element]?.def?.group === "layout";
+  // Type label: containers show it on hover and while selected; leaves only on
+  // hover (selected leaves already carry the edit chip and the label would
+  // cover their content).
+  const showTypeLabel = designing && !isBeingDragged && (isActive || (isSelected && isDroppable));
 
   return (
     <HiddenContext.Provider value={disabled}>
@@ -191,11 +227,12 @@ export const DesignElement = memo(function DesignElement(props) {
         className={cn(
           "relative w-full h-auto",
           className,
-          designing && isDroppable && "outline outline-1 outline-dashed outline-primary/25 outline-offset-2",
-          designing && !isDroppable && isActive && "outline outline-1 outline-dashed outline-primary/30 outline-offset-2",
-          isSelected && "outline outline-2 outline-primary outline-offset-2"
+          designing && isDroppable && !isActive && !isSelected && ["outline outline-1 outline-dashed outline-offset-2", tone.rest],
+          designing && isActive && !isSelected && ["outline outline-1 outline-solid outline-offset-2", tone.active],
+          isSelected && ["outline outline-2 outline-solid outline-offset-2", isLayout ? tone.active : "outline-primary"]
         )}
         ref={draggableRef}
+        data-node-key={nodeKey}
         onPointerOver={(e) => {
           e.stopPropagation();
           handleMouseOver(true);
@@ -203,6 +240,17 @@ export const DesignElement = memo(function DesignElement(props) {
         onPointerOut={() => handleMouseOver(false)}
         onPointerDown={handleDragStart}
       >
+        {showTypeLabel && (
+          <span
+            className={cn(
+              "absolute top-0 left-0 z-11 pointer-events-none select-none",
+              "rounded-br-sm rounded-tl-sm px-1.5 text-[10px] font-semibold uppercase tracking-wide leading-4",
+              tone.chip
+            )}
+          >
+            {String(elementProps.element || "").replaceAll("_", " ")}
+          </span>
+        )}
         {designerModeType !== "preview" && (
           <ElementTitle
             element={element}

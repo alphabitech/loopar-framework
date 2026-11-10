@@ -4,6 +4,7 @@ import { TranslationsTab, useHasTranslations } from "./translations-tab";
 import { BaseFormContext } from "@form-context";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DesignerContext, useDesigner } from "@context/designer-context";
+import MetaComponent from "@meta-component";
 import {Button} from "@cn/components/ui/button";
 import Tab from "@tab";
 import Tabs from "@tabs";
@@ -100,6 +101,11 @@ const fixMeta = (structure, path = "") => {
   }
 }
 
+// Preview renders the canvas with the same designer context the public site
+// sees (no designer mode), so no wrappers, drop zones or design-only spacing
+// are mounted: what you see is what gets published.
+const PREVIEW_CONTEXT = { designerMode: false, designing: false, designerModeType: "preview" };
+
 const hashStr = (s) => {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
@@ -114,17 +120,12 @@ const DesignerButton = () => {
     return <><BrushIcon className="mr-2" /> {__("Design")}</>
   }
 
-  if (designerModeType == "editor") {
-    if (sidebarOpen) {
-      return <><BrushIcon className="mr-2" /> {__("Design")}</>
-    } else {
-      return <><EyeIcon className="mr-2" /> {__("Preview")}</>
-    }
+  // Designing with the side panel closed: the button reopens the panel.
+  if (!sidebarOpen) {
+    return <><BrushIcon className="mr-2" /> {__("Design")}</>
   }
 
-  if (designerModeType == "designer") {
-    return <><EyeIcon className="mr-2" /> {__("Preview")}</>
-  }
+  return <><EyeIcon className="mr-2" /> {__("Preview")}</>
 }
 
 export const BaseDesigner = (props) => {
@@ -586,19 +587,132 @@ export const BaseDesigner = (props) => {
     setMeta(JSON.stringify(removeElement(reconciled)));
   }, [setMeta]);
 
+  // Switching between design and preview remounts the whole canvas (wrappers
+  // in, wrappers out), so the page height changes and a raw scroll offset
+  // lands somewhere else. Instead, anchor on the element under the reading
+  // line and bring that same element back to the same screen position.
+  const canvasRef = useRef(null);
+  const scrollAnchorRef = useRef(null);
+
+  const nodeKeys = () => {
+    const keys = new Set();
+    const walk = (elements) => (elements || []).forEach(el => {
+      if (!el?.data) return;
+      keys.add(getNodeKey(el));
+      walk(el.elements);
+    });
+    walk(stateRef.current.localMetaComponents);
+    return keys;
+  };
+
+  // Design wrappers carry data-node-key; the published render exposes the key
+  // as `node` (containers) or `id` (leaves).
+  const keyOf = (el) => el.getAttribute?.("data-node-key") || el.getAttribute?.("node") || el.id || null;
+
+  const findByKey = (key) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !key) return null;
+    const k = CSS.escape(key);
+    return canvas.querySelector(`[data-node-key="${k}"]`) || canvas.querySelector(`[node="${k}"]`) || canvas.querySelector(`#${k}`);
+  };
+
+  const captureScrollAnchor = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof window === "undefined") return null;
+    const rect = canvas.getBoundingClientRect();
+    // The side panel is fixed over the right edge; probe the visible canvas.
+    const right = Math.min(rect.right, stateRef.current.sidebarOpen ? window.innerWidth - 300 : window.innerWidth);
+    const x = Math.max(rect.left + 8, (rect.left + right) / 2);
+    const y = Math.min(Math.max(window.innerHeight * 0.35, rect.top + 8), rect.bottom - 8);
+    if (y <= rect.top) return null;
+
+    const keys = nodeKeys();
+    let el = document.elementFromPoint(x, y);
+    while (el && el !== canvas) {
+      const key = keyOf(el);
+      if (key && keys.has(key)) return { key, offset: el.getBoundingClientRect().top };
+      el = el.parentElement;
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    const anchor = scrollAnchorRef.current;
+    scrollAnchorRef.current = null;
+    if (!anchor) return;
+
+    // Modules and wrappers mount over a few frames: keep correcting until the
+    // anchor holds still, and give up as soon as the user scrolls.
+    let cancelled = false, frames = 0, stable = 0;
+    const cancel = () => { cancelled = true; };
+    const events = ["wheel", "touchmove", "keydown", "pointerdown"];
+    events.forEach(ev => window.addEventListener(ev, cancel, { passive: true }));
+
+    const tick = () => {
+      if (cancelled) return;
+      frames++;
+      const el = findByKey(anchor.key);
+      if (el) {
+        const delta = el.getBoundingClientRect().top - anchor.offset;
+        if (Math.abs(delta) > 1) {
+          window.scrollBy(0, delta);
+          stable = 0;
+        } else {
+          stable++;
+        }
+      }
+      if (stable < 6 && frames < 120) requestAnimationFrame(tick);
+      else cleanup();
+    };
+    const cleanup = () => events.forEach(ev => window.removeEventListener(ev, cancel));
+
+    requestAnimationFrame(tick);
+    return () => { cancel(); cleanup(); };
+  }, [designerModeType]);
+
+  // Preview keeps the side panel as it is: it stays fixed while scrolling,
+  // so its Design button is the way back to editing from anywhere. Design
+  // modes always open it.
   const handleSetMode = useCallback((newMode) => {
+    const modeNow = stateRef.current.designerModeType;
+    // Only crossing preview ⇄ design remounts the canvas.
+    if ((modeNow === "preview") !== (newMode === "preview")) {
+      scrollAnchorRef.current = captureScrollAnchor();
+    }
     stateRef.current.setDesignerModeType(newMode);
-    stateRef.current.handleSetSidebarOpen(true);
+    newMode !== "preview" && stateRef.current.handleSetSidebarOpen(true);
   }, []);
 
   const handleChangeMode = useCallback((opt = null) => {
-    const { designerModeType: modeNow, sidebarOpen: openNow } = stateRef.current;
-    const newMode = opt !== null ? opt : (
-      ["preview", "editor"].includes(modeNow) ? (!openNow ? "preview" : "designer") : "preview"
-    );
+    if (opt !== null) return handleSetMode(opt);
 
-    handleSetMode(newMode);
+    const { designerModeType: modeNow, sidebarOpen: openNow, updatingElementName: selected } = stateRef.current;
+
+    if (modeNow === "preview") {
+      // Back to design, resuming the element being edited if there is one.
+      return handleSetMode(selected && selected !== "null" ? "editor" : "designer");
+    }
+
+    if (!openNow) return stateRef.current.handleSetSidebarOpen(true);
+
+    handleSetMode("preview");
   }, [handleSetMode]);
+
+  // Ancestor chain (root → element) of a node, for the selection breadcrumb.
+  const getElementPath = useCallback((key) => {
+    const walk = (elements, trail) => {
+      for (const el of elements || []) {
+        if (!el?.data) continue;
+        const k = getNodeKey(el);
+        const next = [...trail, { key: k, element: el.element }];
+        if (k === key) return next;
+        const found = walk(el.elements, next);
+        if (found) return found;
+      }
+      return null;
+    };
+    return walk(stateRef.current.localMetaComponents, []) || [];
+  }, []);
 
   const handleEditElement = useCallback((element) => {
     stateRef.current.setUpdatingElementName(element);
@@ -690,6 +804,7 @@ export const BaseDesigner = (props) => {
     activeId,
     handleChangeMode,
     handleSetMode,
+    getElementPath,
     updatingFromEditor,
     dragEnabled,
     setDragEnable,
@@ -796,17 +911,24 @@ export const BaseDesigner = (props) => {
               name={`${selfKey}-designer_tab`}
               key={`${selfKey}-designer_tab`}
             >
-              <div
-                className={cn("rounded border shadow-sm w-full", designerModeType === "preview" ? "p-3" : "")}
-              >
-                <DragAndDropProvider
-                  metaComponents={localMetaComponents}
-                  data={data}
-                  node={selfKey}
-                  onDrop={setMeta}
-                >
-                  {sidebarOpen && <Sidebar/>}
-                </DragAndDropProvider>
+              <div ref={canvasRef} className="rounded border shadow-sm w-full">
+                {designerModeType === "preview" ? (
+                  <>
+                    <DesignerContext.Provider value={PREVIEW_CONTEXT}>
+                      <MetaComponent elements={localMetaComponents} parentKey={selfKey} />
+                    </DesignerContext.Provider>
+                    {sidebarOpen && <Sidebar/>}
+                  </>
+                ) : (
+                  <DragAndDropProvider
+                    metaComponents={localMetaComponents}
+                    data={data}
+                    node={selfKey}
+                    onDrop={setMeta}
+                  >
+                    {sidebarOpen && <Sidebar/>}
+                  </DragAndDropProvider>
+                )}
               </div>
             </Tab>,
             <Tab

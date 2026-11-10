@@ -135,6 +135,10 @@ export default function Row(props) {
             "grid-container dynamic w-full box-border",
             rowHeight,
             props.className,
+            // Spacing between columns is the grid `gap` alone: an inherited
+            // space-y-* adds margin to every column but the last, doubling
+            // the gap when stacked and leaving side-by-side columns uneven.
+            "space-y-0",
           )}
           style={{
             "--column-layout": columnLayout,

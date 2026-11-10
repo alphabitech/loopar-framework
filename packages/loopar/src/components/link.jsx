@@ -164,7 +164,10 @@ export function Link({
         props.className,
       )
     : (() => {
-        const classVariant = buttonVariants({ variant, size }).replaceAll("text-primary", "");
+        // Drop only the bare `text-primary` token (the "link" variant's color):
+        // a substring replace also mangled `text-primary-foreground` into
+        // `-foreground`, so primary/default links lost their text color.
+        const classVariant = buttonVariants({ variant, size }).replace(/(^|\s)text-primary(?=\s|$)/g, "$1");
         return cn(
           "justify-normal cursor-pointer p-2",
           canRender && !renderOnRestrict && activeLink(isActive, activeClassName),

@@ -113,6 +113,7 @@ export const VARIANTS = {
   secondary: "secondary",
   default: "default",
   ghost: "ghost",
+  outline: "outline",
   destructive: "destructive",
 };
 
