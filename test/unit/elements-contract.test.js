@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { elementsDefinition, dataInterface, selectSource, selectEntity, multipleValues } from "../../packages/loopar/core/global/element-definition.js";
+import { elementsDefinition, dataInterface, multipleValues } from "../../packages/loopar/core/global/element-definition.js";
 import { sanitizeAttributes, isAllowedAttribute } from "../../packages/loopar/core/global/custom-attributes.js";
 import { evaluateCondition } from "../../packages/loopar/core/global/condition.js";
 
@@ -44,14 +44,20 @@ test("length, pattern and percent constraints", () => {
   assert.equal(v({ min_length: 3 }, ""), true); // empty optional values are not checked
 });
 
-test("select sources: explicit wins, legacy one-line = entity", () => {
-  assert.equal(selectSource({ options: "Customer" }), "entity");
-  assert.equal(selectSource({ options: "Yes", options_source: "static" }), "static");
-  assert.equal(selectSource({ options: "a\nb" }), "static");
-  assert.equal(selectEntity({ options: "Customer", options_source: "entity" }), "Customer");
-  assert.equal(selectEntity({ options: "a\nb" }), null);
+test("static options: groups, parent cascade and multiple limits", async () => {
+  const { parseOptionLines, optionsForParent } = await import("../../packages/loopar/core/global/select-options.js");
+  const options = parseOptionLines("# HN:Honduras\nTGU:Tegucigalpa\nSPS\n# US:United States\nBOS:Boston");
+  assert.deepEqual(options.map((o) => [o.value, o.label, o.groupValue]), [["TGU", "Tegucigalpa", "HN"], ["SPS", "SPS", "HN"], ["BOS", "Boston", "US"]]);
+  assert.deepEqual(optionsForParent(options, "US", true).map((o) => o.value), ["BOS"]);
+  assert.deepEqual(optionsForParent(options, "", true), []);
+  assert.equal(optionsForParent(options, "US", false).length, 3);
+
+  const v = (data, value) => dataInterface({ element: "select", data: { name: "x", multiple: 1, ...data } }, value).validate().valid;
+  assert.equal(v({ min_items: 2 }, '["a"]'), false);
+  assert.equal(v({ max_items: 1 }, '["a","b"]'), false);
+  assert.equal(v({ min_items: 1, max_items: 2 }, '["a","b"]'), true);
+  assert.equal(v({ required: 1 }, "[]"), false);
   assert.deepEqual(multipleValues('["a","b"]'), ["a", "b"]);
-  assert.deepEqual(multipleValues(""), []);
 });
 
 test("custom attributes: only safe names and values reach the DOM", () => {

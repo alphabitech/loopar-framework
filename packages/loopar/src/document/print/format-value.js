@@ -1,4 +1,5 @@
-import { selectSource } from "@global/element-definition";
+import { parseOptionLines } from "@global/select-options";
+import { multipleValues } from "@global/element-definition";
 import { resolveColumnFormat } from "@global/element-definition";
 import { __ } from "@global/i18n";
 import { regional, formatNumber, formatCurrency, formatDate, formatDateTime } from "@global/format";
@@ -45,7 +46,7 @@ const ELEMENT_KIND = {
   image_input: "images",
   file_input: "files", file_uploader: "files",
   metadata: "keyvalue",
-  select: "option", radio_group: "option",
+  select: "option", radio_group: "option", connection: "option",
   form_table: "table",
   // Not printable: secrets, framework/style fields, rich JSON editors.
   password: "skip", radio_item: "skip", id: "skip", designer: "skip",
@@ -113,20 +114,16 @@ export function formatPrintValue(kind, value, { data = {}, titles = null, locale
  * `titles` has it, else the stored name.
  */
 function optionLabel(value, data = {}, titles = null) {
+  if ([1, "1", true, "true"].includes(data.multiple)) {
+    return multipleValues(value).map((v) => optionLabel(v, { ...data, multiple: 0, value_descriptive: null }, titles)).join(", ");
+  }
   if (data.value_descriptive) return String(data.value_descriptive);
-  const lines = String(data.options || "").split("\n").map((l) => l.trim()).filter(Boolean);
-  if (selectSource(data) === "static") {
-    const hit = lines.find((l) => l.split(":")[0] === String(value));
-    if (hit) {
-      const [v, label] = hit.split(":");
-      return label || v;
-    }
-  }
-  if (lines.length === 1) {
-    const title = titles?.[lines[0]]?.[String(value)];
-    if (title) return String(title);
-  }
-  return String(value);
+  const hit = parseOptionLines(data.options).find((o) => o.value === String(value));
+  if (hit) return hit.label;
+  // A connection: the linked record's title.
+  const entity = String(data.options || "").split(/\r?\n/)[0].trim();
+  const title = entity ? titles?.[entity]?.[String(value)] : null;
+  return title ? String(title) : String(value);
 }
 
 export const isNumericKind = (kind) => kind === "money" || kind === "decimal" || kind === "int";

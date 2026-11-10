@@ -223,11 +223,18 @@ function migrateNodeData(node, parent, ctx) {
 
   if (migrateClass(node)) changed = true;
 
-  // Selects state where their options come from (one static line used to be
-  // read as an entity name).
-  if (node.element === "select" && typeof d.options === "string" && d.options.trim() && !d.options_source) {
-    d.options_source = d.options.includes("\n") ? "static" : "entity";
-    changed = true;
+  // A select bound to an entity is a `connection`; `select` is a fixed list.
+  // (options_source was the interim flag; a single line used to mean an entity.)
+  if (node.element === "select") {
+    const source = d.options_source || (typeof d.options === "string" && d.options.trim() && !d.options.includes("\n") ? "entity" : "static");
+    if (source === "entity") {
+      node.element = "connection";
+      changed = true;
+    }
+    if ("options_source" in d) {
+      delete d.options_source;
+      changed = true;
+    }
   }
 
   if (FILLER_LABEL_ELEMENTS.has(node.element) && "label" in d && parent?.element !== "menu_content") {
@@ -241,7 +248,7 @@ function migrateNodeData(node, parent, ctx) {
 export const LEGACY_ELEMENTS = Object.freeze(Object.keys(ELEMENT_MIGRATIONS));
 
 /** Bump when a migration is added: tenants re-run the database pass once. */
-export const ELEMENT_MIGRATION_VERSION = 4;
+export const ELEMENT_MIGRATION_VERSION = 5;
 
 /**
  * Migrates a doc_structure (array of nodes, or its JSON text).

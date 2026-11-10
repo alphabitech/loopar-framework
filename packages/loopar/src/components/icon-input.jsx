@@ -1,5 +1,5 @@
 import BaseInput from "./input/base-input.jsx";
-import Select from "@select";
+import Connection from "@connection";
 import { DynamicIcon } from "@icon";
 import { __ } from "@global/i18n";
 
@@ -10,7 +10,7 @@ export default function IconInput(props) {
 
   return renderInput(field => {
     return (
-      <Select
+      <Connection
         data={{
           ...data,
           options: "Icon Manager",

@@ -9,6 +9,7 @@ import { useDocument } from "@loopar/document";
 import { buildFormData } from "@@tools/build-form-data";
 import { useCaptcha, CaptchaSlot } from "./captcha-widget";
 import { __ } from "@global/i18n";
+import { entityPicker } from "./base/entity-pickers.js";
 
 function MetaForm(props) {
   const formRef = useRef(null);
@@ -164,8 +165,8 @@ MetaForm.metaFields = () => [{
   elements: {
     title: { element: INPUT },
     document: {
-      element: INPUT,
-      data: { description: "Optional: target Document for a custom action. Leave empty to use the generic Form Submission pipeline (server-side validation from this form's own fields)." }
+      ...entityPicker(),
+      data: { ...entityPicker().data, description: "Optional: target Document for a custom action. Leave empty to use the generic Form Submission pipeline (server-side validation from this form's own fields)." }
     },
     action: {
       element: INPUT,

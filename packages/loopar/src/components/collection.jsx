@@ -5,6 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon, Loader2 } from "lucide-react";
 
 import DefaultCard from "./collection/default-card.jsx";
 import { __ } from "@global/i18n";
+import { entityPicker } from "./base/entity-pickers.js";
 
 const cardModules = import.meta.glob("./*-card.jsx", { eager: true });
 
@@ -219,8 +220,9 @@ Collection.metaFields = () => {
       group: "custom",
       elements: {
         options: {
-          element: INPUT,
+          ...entityPicker(),
           data: {
+            ...entityPicker().data,
             label: "Entity",
             placeholder: "Project / Service / BlogPost",
             description: "The backing entity to list (must have a publicList action).",

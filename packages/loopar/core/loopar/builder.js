@@ -61,6 +61,29 @@ export class Builder {
         .map(field => field.data.name);
     }
 
+    // Light description of each named, stored field: what pickers need to
+    // offer the fields of an entity (group by, cascade filters) and to infer
+    // how a cascade is connected, without reading the entity JSON again.
+    const getFieldMeta = (fields) => {
+      const getAll = fields => fields.reduce((acc, field) =>
+        acc.concat(field, ...getAll(field.elements || [])), []);
+      const out = {};
+      for (const field of getAll(fields)) {
+        const data = field.data || {};
+        const def = elementsDict[field.element]?.def || {};
+        if (!data.name || !def.isWritable) continue;
+        const firstLine = typeof data.options === "string" ? data.options.split(/\r?\n/)[0].trim() : "";
+        out[data.name] = {
+          element: field.element,
+          label: data.label || data.name,
+          ...([CONNECTION, FORM_TABLE].includes(field.element) && firstLine ? { options: firstLine } : {}),
+          ...(this.utils.trueValue(data.multiple) ? { multiple: 1 } : {}),
+          ...(data.parent ? { parent: data.parent } : {}),
+        };
+      }
+      return out;
+    }
+
     const refs = {};
     const types_ = {};
     const refsByApp = {};
@@ -123,6 +146,7 @@ export class Builder {
         __MODULE__: doc.__MODULE__,
         __TYPE__: doc.type,
         __FIELDS__: getEntityFields(fields, { auditable }),
+        __FIELD_META__: getFieldMeta(fields),
         __FORM_TABLE_FIELDS__: getFormTableFields(fields),
         __TRANSLATABLE__: getTranslatableFields(fields),
         // Computed fields: { fieldName: formula }, recomputed on every save.

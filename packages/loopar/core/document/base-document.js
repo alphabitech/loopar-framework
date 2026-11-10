@@ -1,9 +1,11 @@
 'use strict'
 
+import { inferParentFilter, parseFilters } from './parent-filter.js';
 import { __ } from '../global/i18n.js';
 import CoreDocument from './core-document.js';
 import { loopar } from '../loopar.js';
 import { Op } from 'db-env';
+import { multipleValues } from '../global/element-definition.js';
 import { CREATED_BY_COLUMN } from '../global/audit.js';
 import { requestOwnerFilter } from '../auth/record-scope.js';
 import { clampPage } from './list-state.js';
@@ -102,7 +104,7 @@ export default class BaseDocument extends CoreDocument {
       if (!field) return;
 
       if (value && value.toString().length > 0) {
-        const isSelectType = [SELECT, SWITCH, CHECKBOX].includes(field.element);
+        const isSelectType = [SELECT, CONNECTION, RADIO_GROUP, SWITCH, CHECKBOX].includes(field.element);
         
         if ([SWITCH, CHECKBOX].includes(field.element)) {
           if ([1, '1'].includes(value)) {
@@ -133,9 +135,9 @@ export default class BaseDocument extends CoreDocument {
     const links = [];
     const walk = (structure) => {
       for (const el of structure || []) {
-        if (el.element === SELECT && el.data?.name) {
+        if (el.element === CONNECTION && el.data?.name) {
           const entity = linkedEntity(el.data.options);
-          if (entity) links.push([el.data.name, entity]);
+          if (entity) links.push([el.data.name, entity, [1, "1", true, "true"].includes(el.data.multiple)]);
         }
         if (el.element !== FORM_TABLE && el.elements) walk(el.elements);
       }
@@ -151,9 +153,13 @@ export default class BaseDocument extends CoreDocument {
       return;
     }
     for (const row of rows) {
-      for (const [field, entity] of links) {
+      for (const [field, entity, multiple] of links) {
         const value = row[field];
-        const title = value == null || value === "" ? null : titles[entity]?.[String(value)];
+        if (value == null || value === "") continue;
+        // A multiple connection lists every linked title.
+        const title = multiple
+          ? multipleValues(value).map((v) => titles[entity]?.[String(v)] ?? v).join(", ")
+          : titles[entity]?.[String(value)];
         if (title != null && title !== "") (row.__titles__ ??= {})[field] = title;
       }
     }
@@ -267,12 +273,17 @@ export default class BaseDocument extends CoreDocument {
   }
 
   buildConditionToSelect(q = null) {
-    if (q === null) return {};
-    if (q === '') return {};
-    
-    if (this.getFieldSelectNames().length === 1) {
-      return { [this.getFieldSelectNames()]: { [Op.like]: `%${q}%` } };
-    }
+    if (q === null || q === undefined || q === '') return {};
+
+    // Any of the searched fields (search_fields + name) may match.
+    const fields = this.getFieldSelectNames();
+    const likes = fields.map(field => ({ [field]: { [Op.like]: `%${q}%` } }));
+    return likes.length === 1 ? likes[0] : { [Op.or]: likes };
+  }
+
+  /** Names of the fields declared in this entity's structure. */
+  declaredFieldNames() {
+    return new Set(["name", ...Object.keys(this.fields || {})]);
   }
 
   titleFields() {
@@ -292,30 +303,54 @@ export default class BaseDocument extends CoreDocument {
     return Array.from(new Set([...fields.split(',').filter(field => field !== '')]));
   }
 
-  async getListToSelectElement(q = null) {
+  /**
+   * Records offered by a `connection` field: searched by `q`, optionally
+   * restricted to `filterField = filterValue` (cascade from a parent field)
+   * and ordered by `groupBy` so the client can show them under its values.
+   * Only fields declared by the entity may filter or group.
+   */
+  async getListToSelectElement(q = null, { page = 1, limit = 20, filterField = null, filterValue = null, groupBy = null, filters = null, sourceEntity = null, parentField = null } = {}) {
+    const declared = this.declaredFieldNames();
+    const group = groupBy && declared.has(groupBy) ? groupBy : null;
+    const pageSize = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+
     const pagination = {
-      page: 1,
-      pageSize: 20,
-      totalPages: 4,
-      totalRecords: 1,
-      sortBy: "id",
+      page: Math.max(1, parseInt(page, 10) || 1),
+      pageSize,
+      totalPages: 1,
+      totalRecords: 0,
+      sortBy: group || "id",
       sortOrder: "asc"
     };
 
     loopar.db.pagination = pagination;
 
     const listFields = this.getFieldSelectLabels();
+    // Cascade: the field to compare is given, or inferred from how the
+    // parent field of the form connects to this entity.
+    const cascadeField = parentField
+      ? inferParentFilter({ target: this.__ENTITY__.name, source: sourceEntity, parent: parentField, parentFilter: filterField })
+      : filterField;
+    const parentFilter = cascadeField && declared.has(cascadeField) ? { [cascadeField]: filterValue ?? null } : {};
+    const staticFilter = Object.fromEntries(Object.entries(parseFilters(filters)).filter(([k]) => declared.has(k)));
 
-    const condition = combineSConditions(this.buildConditionToSelect(q), await requestOwnerFilter(this.__ENTITY__.name));
-    const rows = await loopar.db.getList(this.__ENTITY__.name, ["name", ...listFields], condition);
+    const condition = combineSConditions(
+      this.buildConditionToSelect(q),
+      parentFilter,
+      staticFilter,
+      await requestOwnerFilter(this.__ENTITY__.name)
+    );
+    const fields = [...new Set(["name", ...listFields, ...(group ? [group] : [])])];
+    const rows = await loopar.db.getList(this.__ENTITY__.name, fields, condition);
 
     pagination.totalRecords = await this.records(condition);
-    pagination.totalPages = Math.ceil(pagination.totalRecords / pagination.pageSize);
+    pagination.totalPages = Math.max(1, Math.ceil(pagination.totalRecords / pagination.pageSize));
 
-    return Object.assign({
+    return {
       title_fields: listFields,
-      rows: rows
-    });
+      rows,
+      pagination: { page: pagination.page, pages: pagination.totalPages, total: pagination.totalRecords },
+    };
   }
 
   async getValueDescriptive(name) {
@@ -342,13 +377,15 @@ export default class BaseDocument extends CoreDocument {
       for (const el of structure || []) {
         const data = el.data || {};
 
-        if (el.element === SELECT) {
+        if (el.element === CONNECTION) {
           const entity = linkedEntity(data.options);
           if (entity) {
+            const multiple = [1, "1", true, "true"].includes(data.multiple);
             for (const row of rows) {
               const value = row?.[data.name];
-              if (value !== null && value !== undefined && value !== "") {
-                (wanted[entity] ??= new Set()).add(String(value));
+              if (value === null || value === undefined || value === "") continue;
+              for (const v of multiple ? multipleValues(value) : [value]) {
+                (wanted[entity] ??= new Set()).add(String(v));
               }
             }
           }
@@ -387,7 +424,7 @@ export default class BaseDocument extends CoreDocument {
     const out = {};
     const walk = (structure) => {
       for (const el of structure || []) {
-        if (el.element === SELECT && el.data?.name) {
+        if (el.element === CONNECTION && el.data?.name) {
           const entity = linkedEntity(el.data.options);
           if (entity) out[el.data.name] = entity;
         }

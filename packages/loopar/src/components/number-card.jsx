@@ -2,6 +2,7 @@ import { cn } from "@cn/lib/utils";
 import { Link } from "@link";
 import Icon from "@icon";
 import { useDeskElement, deskLink, formatNumber, filterField } from "@loopar/components/desk/use-desk-element";
+import { entityPicker, entityFieldPicker } from "./base/entity-pickers.js";
 
 /** Desk page element: one figure (count / sum / avg…) of an entity. */
 export default function NumberCard(props) {
@@ -38,9 +39,9 @@ NumberCard.metaFields = () => [
   {
     group: "content",
     elements: {
-      entity: { element: INPUT, data: { label: "Entity", placeholder: "Gym Member" } },
+      entity: entityPicker({ label: "Entity" }),
       aggregate: { element: SELECT, data: { label: "Value", options: "count\nsum\navg\nmin\nmax" } },
-      field: { element: INPUT, data: { label: "Field", description: "Numeric field for sum / avg / min / max." } },
+      field: entityFieldPicker("entity", { label: "Field", description: "Numeric field for sum / avg / min / max." }, "all"),
       filter: filterField(),
       format: { element: SELECT, data: { label: "Format", options: "number\ncurrency" } },
       prefix: { element: INPUT, data: { label: "Prefix", placeholder: "L " } },

@@ -169,7 +169,7 @@ ContactForm.metaFields = () => {
       group: "General",
       elements: {
         entity: {
-          element: SELECT,
+          element: CONNECTION,
           data: {
             label: "Entity",
             description: "Entity to use",

@@ -38,7 +38,7 @@ Chart.metaFields = () => [
   {
     group: "content",
     elements: {
-      chart: { element: SELECT, data: { label: "Chart", options: "Dashboard Chart", description: "A Dashboard Chart record." } },
+      chart: { element: CONNECTION, data: { label: "Chart", options: "Dashboard Chart", description: "A Dashboard Chart record." } },
       chart_type: { element: SELECT, data: { label: "Show as", options: "\nbar\nline\narea\ndonut", description: "Empty = the chart's own type." } },
       height: { element: INPUT, data: { label: "Height (px)", format: "int", default_value: 260 } },
       format: { element: SELECT, data: { label: "Format", options: "number\ncurrency" } },

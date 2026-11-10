@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState } from 'react';
+import { useRef, useMemo, useState, useContext } from 'react';
 import { __META_COMPONENTS__ } from "@loopar/components-loader";
 import loopar from "loopar";
 import { elementsDict } from "@global/element-definition";
@@ -14,6 +14,32 @@ import { __ } from "@global/i18n";
 import { ElementLanguages } from "./element-languages";
 import { useDocument } from "@loopar/document";
 import { getNodeKey } from "@global/prune-doc-structure";
+import { BaseFormContext } from "@form-context";
+import { ElementEditorContext } from "@context/element-editor-context";
+import { evaluateCondition } from "@global/condition";
+
+/**
+ * The editor's fields are named `elementKey + prop`; conditions and pickers
+ * written against sibling props (`parent: "options"`, `display_on`) read the
+ * same values without the prefix. Control and registration stay prefixed.
+ */
+function UnprefixedValues({ prefix, children }) {
+  const ctx = useContext(BaseFormContext);
+  const value = useMemo(() => {
+    if (!ctx) return ctx;
+    const values = Object.fromEntries(Object.entries(ctx.values || {}).map(([key, v]) =>
+      [key.startsWith(prefix) ? key.slice(prefix.length) : key, v]));
+    return { ...ctx, values };
+  }, [ctx, prefix]);
+  return <BaseFormContext.Provider value={value}>{children}</BaseFormContext.Provider>;
+}
+
+/** Hidden (never unmounted, its value is kept) while `displayOn` is false. */
+function EditorField({ displayOn, className = "", children }) {
+  const values = useContext(BaseFormContext)?.values || {};
+  const visible = !displayOn || evaluateCondition(displayOn, values);
+  return <div className={visible ? className : "hidden"}>{children}</div>;
+}
 
 function mergeGroups(...arrays) {
   const groupMap = new Map();
@@ -74,7 +100,7 @@ const readActiveSection = () => {
 };
 
 export function ElementEditor() {
-  const { updateElement, updatingElement, getElementPath, handleEditElement } = useDesigner();
+  const { updateElement, updatingElement, getElementPath, handleEditElement, metaTree } = useDesigner();
   // Fields scoped to some document types (data.contexts) show only there.
   const { entity: documentType } = useDocument();
 
@@ -215,7 +241,10 @@ export function ElementEditor() {
       label.toLowerCase().includes(query);
   };
 
+  const editorContext = useMemo(() => ({ metaTree, elementKey, element: elementName }), [metaTree, elementKey, elementName]);
+
   return (
+    <ElementEditorContext.Provider value={editorContext}>
     <DesignerContext.Provider
       value={{}}
     >
@@ -225,6 +254,7 @@ export function ElementEditor() {
         onChange={saveData}
         formRef={formRef}
       >
+        <UnprefixedValues prefix={elementKey}>
         <div className="flex flex-col">
           <div className="sticky top-0 z-10 bg-background dark:bg-background-dark p-2 pb-1">
             <div className="flex items-baseline gap-2 min-w-0 px-1 pb-1.5">
@@ -307,8 +337,9 @@ export function ElementEditor() {
                       }
 
                       return (
-                        <div
+                        <EditorField
                           key={`${elementKey}-${group}-${field}`}
+                          displayOn={props.data?.display_on}
                           className={query && !fieldMatches(field, props) ? "hidden" : ""}
                         >
                           <MetaComponent
@@ -323,7 +354,7 @@ export function ElementEditor() {
                               />
                             )}
                           />
-                        </div>
+                        </EditorField>
                       );
                     })}
                   </div>
@@ -332,7 +363,9 @@ export function ElementEditor() {
             );
           })}
         </div>
+        </UnprefixedValues>
       </FormWrapper>
     </DesignerContext.Provider>
+    </ElementEditorContext.Provider>
   );
 };

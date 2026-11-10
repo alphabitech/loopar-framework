@@ -20,6 +20,7 @@ import {
   PopoverTrigger,
 } from "@cn/components/ui/popover";
 import { __ } from "@global/i18n";
+import { groupOptions } from "./options.js";
 
 const PAGE_SIZE = 20;
 
@@ -226,7 +227,7 @@ export function Select({
 
   const renderButton = (extraProps = {}) => (
     <Button
-      variant="outline"
+      variant="field"
       role="combobox"
       aria-expanded={open}
       aria-label={`Select ${data.label}`}
@@ -310,22 +311,22 @@ export function Select({
           )}
           
           {!error && visibleRows.length > 0 && (
-            <CommandGroup
+            <div
               className={cn(
                 "max-h-[250px] overflow-auto",
                 isPending && "opacity-60 transition-opacity"
               )}
               ref={containerRef}
             >
-              {visibleRows.map((option) => {
-                if (!option) return null;
-                
+              {groupOptions(visibleRows.filter(Boolean)).map(({ group, options: groupRows }) => (
+              <CommandGroup key={group ?? "__"} heading={group || undefined}>
+              {groupRows.map((option) => {
                 const value = option.formattedValue || option.label || option.value;
                 const isSelected = option.value === current.value;
 
                 return (
                   <CommandItem
-                    value={option.value}
+                    value={String(option.value)}
                     key={option.value}
                     onSelect={() => setValueHandler(option.value)}
                     className={cn(
@@ -343,6 +344,8 @@ export function Select({
                   </CommandItem>
                 );
               })}
+              </CommandGroup>
+              ))}
               
               {hasMore && (
                 <div 
@@ -364,7 +367,7 @@ export function Select({
                   )}
                 </div>
               )}
-            </CommandGroup>
+            </div>
           )}
         </Command>
       </PopoverContent>

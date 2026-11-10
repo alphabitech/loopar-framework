@@ -18,6 +18,8 @@ import { debugCollector } from '../../debug/collector.js';
 import { parse as parseUrl } from 'node:url';
 import { normalizeLanguage } from '../../global/i18n.js';
 import { siteLanguages, siteDefaultLanguage } from '../i18n.js';
+import { learnInternalNetwork, clientIp, isControlPlaneTenant } from '../../global/internal-networks.js';
+import { PermissionManager } from '../../auth/PermissionManager.js';
 
 export class Middleware {
   constructor(options) {
@@ -260,6 +262,7 @@ export class Middleware {
    */
   setupControllerMiddleware() {
     return async (req, res, next) => {
+      this.#learnInternalNetwork(req);
       await this.makeController(req, res, next);
       const response = req.__WORKSPACE__;
 
@@ -284,6 +287,26 @@ export class Middleware {
 
       next();
     };
+  }
+
+  /**
+   * Authenticated request → its network is the tenant's own (analytics drops
+   * anonymous views from it on every site of the tenant). A platform operator
+   * (Administrator / Tenant Manager on a controlPlane tenant) also feeds the
+   * global registry that EVERY tenant checks. Cheap: the user name is cached
+   * on req and the registries only write when something changes.
+   */
+  #learnInternalNetwork(req) {
+    try {
+      if (!loopar.__installed__) return;
+      const user = loopar.auth?.user?.();
+      if (!user || user === 'Guest') return;
+      const operator = isControlPlaneTenant() &&
+        (user === 'Administrator' || PermissionManager.can('Tenant Manager', 'view', user));
+      learnInternalNetwork(clientIp(req), { operator });
+    } catch (error) {
+      console.warn(['[internal-networks] learn failed', error?.message]);
+    }
   }
 
   /**

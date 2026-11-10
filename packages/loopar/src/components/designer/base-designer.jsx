@@ -2,9 +2,11 @@ import loopar from "loopar";
 import { BrushIcon, BracesIcon, EyeIcon, SparkleIcon, HandGrab, BrushCleaning, Undo2, Redo2, LanguagesIcon } from "lucide-react";
 import { TranslationsTab, useHasTranslations } from "./translations-tab";
 import { BaseFormContext } from "@form-context";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { DesignerContext, useDesigner } from "@context/designer-context";
 import MetaComponent from "@meta-component";
+import { PreviewModal, guardInteractions } from "./preview-frame";
+import { Maximize2 } from "lucide-react";
 import {Button} from "@cn/components/ui/button";
 import Tab from "@tab";
 import Tabs from "@tabs";
@@ -17,7 +19,7 @@ import elementManage from "@@tools/element-manage";
 import {DragAndDropProvider} from "../droppable/DragAndDropContext.jsx";
 import {Prompt} from "./src/prompt/Prompt.jsx";
 import MarkdownPreview from '@uiw/react-markdown-preview';
-import {elementsNames} from "@global/element-definition";
+import {elementsNames, documentContextName} from "@global/element-definition";
 import {OrphanColumnsManager} from "./src/OrphanColumnsManager.jsx"
 import { ElementStore, ElementStoreContext } from "./element-store.js";
 import { getNodeKey, pruneDocStructure } from "@global/prune-doc-structure";
@@ -104,7 +106,22 @@ const fixMeta = (structure, path = "") => {
 // Preview renders the canvas with the same designer context the public site
 // sees (no designer mode), so no wrappers, drop zones or design-only spacing
 // are mounted: what you see is what gets published.
-const PREVIEW_CONTEXT = { designerMode: false, designing: false, designerModeType: "preview" };
+const PREVIEW_CONTEXT = { designerMode: false, designing: false, designerModeType: "preview", previewing: true };
+
+// Web pages bring their own spacing (sections). Everything else is rendered
+// by a host container in the desk or auth shell; the preview mirrors it:
+// desk content padding + the host's stacking (auth forms: gap-4, desk forms:
+// space-y-3, desk pages: the app gap, 1rem by default).
+const PREVIEW_HOST = {
+  form: "px-4 pt-2 pb-4 flex flex-col gap-4",
+  desk: "px-4 pt-2 pb-4 flex flex-col gap-4",
+  print: "px-4 pt-2 pb-4",
+};
+const PREVIEW_HOST_BY_TYPE = {
+  Entity: "px-4 pt-2 pb-4 flex flex-col gap-3",
+};
+const previewHostClass = (documentType) =>
+  PREVIEW_HOST_BY_TYPE[documentType] || PREVIEW_HOST[documentContextName(documentType)];
 
 const hashStr = (s) => {
   let h = 5381;
@@ -113,10 +130,10 @@ const hashStr = (s) => {
 };
 
 const DesignerButton = () => {
-  const { designerMode, designerModeType } = useDesigner();
+  const { designerMode, previewInline } = useDesigner();
   const { sidebarOpen, name } = useDocument();
 
-  if (!designerMode || designerModeType == "preview") {
+  if (!designerMode || previewInline) {
     return <><BrushIcon className="mr-2" /> {__("Design")}</>
   }
 
@@ -138,6 +155,9 @@ export const BaseDesigner = (props) => {
   const [dragEnabled, setDragEnable] = useState(true);
 
   const [updatingElementName, setUpdatingElementName] = usePersist(name + "updatingElementName");
+  // Side panel view: "elements" (palette) | "navigator" | "properties".
+  // null = follow the mode (editor → properties, otherwise the palette).
+  const [sidebarView, setSidebarView] = useState(null);
   const [designerModeType, setDesignerModeType] = usePersist(name + "designer-mode-type");
   const [sendingPrompt, setSendingPrompt] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState("Generate a form that allows me to manage inventory data");
@@ -592,7 +612,36 @@ export const BaseDesigner = (props) => {
   // lands somewhere else. Instead, anchor on the element under the reading
   // line and bring that same element back to the same screen position.
   const canvasRef = useRef(null);
+  const frameRef = useRef(null);
   const scrollAnchorRef = useRef(null);
+  // Preview, two levels:
+  // - inline: rendered in the canvas itself, same container, width and
+  //   breakpoints as the designer (coherent by construction);
+  // - full screen (previewOpen): its own frame/viewport over everything, with
+  //   device widths — the real render.
+  const [previewInline, setPreviewInline] = useState(false);
+  // Design ⇄ inline preview swaps the whole canvas tree (and may load element
+  // modules). As a transition, the current view stays on screen until the new
+  // one is ready, instead of flashing Suspense fallbacks / half-built layouts.
+  const [switchingPreview, startPreviewTransition] = useTransition();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const inlinePreviewRef = useRef(null);
+  stateRef.current.previewOpen = previewOpen;
+  stateRef.current.previewInline = previewInline;
+
+  // Preview renders inside an iframe: its document is where nodes live then.
+  const frameDoc = () => {
+    const frame = frameRef.current;
+    return frame?.isConnected ? frame.contentDocument : null;
+  };
+
+  // Viewport-relative top of a node, in host coordinates (frame nodes are
+  // offset by the frame's own position).
+  const topOf = (el) => {
+    const top = el.getBoundingClientRect().top;
+    return el.ownerDocument === document ? top : top + frameRef.current.getBoundingClientRect().top;
+  };
+
 
   const nodeKeys = () => {
     const keys = new Set();
@@ -609,32 +658,69 @@ export const BaseDesigner = (props) => {
   // as `node` (containers) or `id` (leaves).
   const keyOf = (el) => el.getAttribute?.("data-node-key") || el.getAttribute?.("node") || el.id || null;
 
-  const findByKey = (key) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !key) return null;
+  // `inFrame`: look only in the preview frame (true) or only in the design
+  // canvas (false) — while the frame loads, the canvas underneath still has
+  // the same keys and must not be scrolled instead.
+  const findByKey = (key, inFrame) => {
+    const root = inFrame ? frameDoc()?.getElementById("lp-preview-root") : canvasRef.current;
+    if (!root || !key) return null;
     const k = CSS.escape(key);
-    return canvas.querySelector(`[data-node-key="${k}"]`) || canvas.querySelector(`[node="${k}"]`) || canvas.querySelector(`#${k}`);
+    return root.querySelector(`[data-node-key="${k}"]`) || root.querySelector(`[node="${k}"]`) || root.querySelector(`#${k}`);
   };
 
+  // Element under the reading line (a third down the visible area) of the
+  // preview frame when it is open, of the design canvas otherwise.
   const captureScrollAnchor = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || typeof window === "undefined") return null;
-    const rect = canvas.getBoundingClientRect();
-    // The side panel is fixed over the right edge; probe the visible canvas.
-    const right = Math.min(rect.right, stateRef.current.sidebarOpen ? window.innerWidth - 300 : window.innerWidth);
-    const x = Math.max(rect.left + 8, (rect.left + right) / 2);
-    const y = Math.min(Math.max(window.innerHeight * 0.35, rect.top + 8), rect.bottom - 8);
-    if (y <= rect.top) return null;
-
+    if (typeof window === "undefined") return null;
     const keys = nodeKeys();
-    let el = document.elementFromPoint(x, y);
-    while (el && el !== canvas) {
+    const frame = frameRef.current;
+    let el, stop;
+
+    if (frame?.isConnected) {
+      const fr = frame.getBoundingClientRect();
+      const doc = frameDoc();
+      el = doc?.elementFromPoint(fr.width / 2, fr.height * 0.35) || null;
+      stop = doc?.body;
+    } else {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      // The side panel is fixed over the right edge; probe the visible canvas.
+      const right = Math.min(rect.right, stateRef.current.sidebarOpen ? window.innerWidth - 300 : window.innerWidth);
+      const x = Math.max(rect.left + 8, (rect.left + right) / 2);
+      const y = Math.min(Math.max(window.innerHeight * 0.35, rect.top + 8), rect.bottom - 8);
+      if (y <= rect.top) return null;
+      el = document.elementFromPoint(x, y);
+      stop = canvas;
+    }
+
+    while (el && el !== stop) {
       const key = keyOf(el);
-      if (key && keys.has(key)) return { key, offset: el.getBoundingClientRect().top };
+      if (key && keys.has(key)) return { key, offset: topOf(el) };
       el = el.parentElement;
     }
     return null;
   };
+
+  const openPreview = useCallback(() => {
+    const anchor = captureScrollAnchor();
+    scrollAnchorRef.current = anchor && { ...anchor, inFrame: true };
+    setPreviewOpen(true);
+  }, []);
+
+  const setInline = useCallback((on) => {
+    if (stateRef.current.previewInline === on) return;
+    const anchor = captureScrollAnchor();
+    scrollAnchorRef.current = anchor && { ...anchor, inFrame: false };
+    startPreviewTransition(() => setPreviewInline(on));
+  }, []);
+
+  const closePreview = useCallback(() => {
+    if (!stateRef.current.previewOpen) return;
+    const anchor = captureScrollAnchor();
+    scrollAnchorRef.current = anchor && { ...anchor, inFrame: false };
+    setPreviewOpen(false);
+  }, []);
 
   useEffect(() => {
     const anchor = scrollAnchorRef.current;
@@ -646,57 +732,68 @@ export const BaseDesigner = (props) => {
     let cancelled = false, frames = 0, stable = 0;
     const cancel = () => { cancelled = true; };
     const events = ["wheel", "touchmove", "keydown", "pointerdown"];
+    const targets = [window];
+    const listen = (w) => {
+      if (!w || targets.includes(w)) return;
+      targets.push(w);
+      events.forEach(ev => w.addEventListener(ev, cancel, { passive: true }));
+    };
     events.forEach(ev => window.addEventListener(ev, cancel, { passive: true }));
 
     const tick = () => {
       if (cancelled) return;
       frames++;
-      const el = findByKey(anchor.key);
+      const el = findByKey(anchor.key, anchor.inFrame);
       if (el) {
-        const delta = el.getBoundingClientRect().top - anchor.offset;
+        // Opening restores inside the frame; closing restores the designer.
+        const inFrame = el.ownerDocument !== document;
+        inFrame && listen(el.ownerDocument.defaultView);
+        const delta = topOf(el) - anchor.offset;
         if (Math.abs(delta) > 1) {
-          window.scrollBy(0, delta);
+          (inFrame ? el.ownerDocument.defaultView : window).scrollBy(0, delta);
           stable = 0;
         } else {
           stable++;
         }
       }
-      if (stable < 6 && frames < 120) requestAnimationFrame(tick);
+      // setTimeout, not rAF: animation frames pause in background tabs.
+      if (stable < 6 && frames < 240) timer = setTimeout(tick, 16);
       else cleanup();
     };
-    const cleanup = () => events.forEach(ev => window.removeEventListener(ev, cancel));
+    const cleanup = () => targets.forEach(w => events.forEach(ev => w.removeEventListener(ev, cancel)));
 
-    requestAnimationFrame(tick);
-    return () => { cancel(); cleanup(); };
+    let timer = setTimeout(tick, 16);
+    return () => { cancel(); clearTimeout(timer); cleanup(); };
+  }, [previewOpen, previewInline]);
+
+  // Inline preview: same link/action guard the full-screen frame uses.
+  useEffect(() => {
+    if (!previewInline) return;
+    return guardInteractions(inlinePreviewRef.current);
+  }, [previewInline]);
+
+  // "preview" used to be a designer mode; a persisted one resumes as design.
+  useEffect(() => {
+    designerModeType === "preview" && setDesignerModeType("designer");
   }, [designerModeType]);
 
-  // Preview keeps the side panel as it is: it stays fixed while scrolling,
-  // so its Design button is the way back to editing from anywhere. Design
-  // modes always open it.
+  // "preview" = inline preview; design modes leave it and open the panel.
   const handleSetMode = useCallback((newMode) => {
-    const modeNow = stateRef.current.designerModeType;
-    // Only crossing preview ⇄ design remounts the canvas.
-    if ((modeNow === "preview") !== (newMode === "preview")) {
-      scrollAnchorRef.current = captureScrollAnchor();
-    }
+    if (newMode === "preview") return setInline(true);
+    setInline(false);
     stateRef.current.setDesignerModeType(newMode);
-    newMode !== "preview" && stateRef.current.handleSetSidebarOpen(true);
-  }, []);
+    stateRef.current.handleSetSidebarOpen(true);
+  }, [setInline]);
 
+  // Toolbar toggle: full screen → back to inline; inline → design; a closed
+  // side panel is reopened; otherwise design → inline preview.
   const handleChangeMode = useCallback((opt = null) => {
     if (opt !== null) return handleSetMode(opt);
-
-    const { designerModeType: modeNow, sidebarOpen: openNow, updatingElementName: selected } = stateRef.current;
-
-    if (modeNow === "preview") {
-      // Back to design, resuming the element being edited if there is one.
-      return handleSetMode(selected && selected !== "null" ? "editor" : "designer");
-    }
-
-    if (!openNow) return stateRef.current.handleSetSidebarOpen(true);
-
-    handleSetMode("preview");
-  }, [handleSetMode]);
+    if (stateRef.current.previewOpen) return closePreview();
+    if (stateRef.current.previewInline) return setInline(false);
+    if (!stateRef.current.sidebarOpen) return stateRef.current.handleSetSidebarOpen(true);
+    setInline(true);
+  }, [handleSetMode, setInline, closePreview]);
 
   // Ancestor chain (root → element) of a node, for the selection breadcrumb.
   const getElementPath = useCallback((key) => {
@@ -716,8 +813,63 @@ export const BaseDesigner = (props) => {
 
   const handleEditElement = useCallback((element) => {
     stateRef.current.setUpdatingElementName(element);
+    setSidebarView(v => element ? "properties" : (v === "properties" ? null : v));
     handleChangeMode(element ? "editor" : "designer");
   }, [handleChangeMode]);
+
+  // Selects without switching the side panel view (used by the navigator).
+  const selectElement = useCallback((element) => {
+    stateRef.current.setUpdatingElementName(element);
+    handleChangeMode(element ? "editor" : "designer");
+  }, [handleChangeMode]);
+
+  // Moves a node next to (before/after) or into (inside, appended) another one.
+  // Same path as any structural edit: setMeta → commit → undo history.
+  const moveElement = useCallback((key, targetKey, position) => {
+    if (!key || !targetKey || key === targetKey) return;
+
+    const tree = storeRef.current.reconcileTree(stateRef.current.localMetaComponents);
+    let moved = null;
+
+    const remove = (elements) => (elements || []).reduce((acc, el) => {
+      if (el?.data && getNodeKey(el) === key) {
+        moved = el;
+        return acc;
+      }
+      acc.push(el?.elements ? { ...el, elements: remove(el.elements) } : el);
+      return acc;
+    }, []);
+
+    const place = (elements) => {
+      const i = elements.findIndex(el => el?.data && getNodeKey(el) === targetKey);
+      if (i >= 0) {
+        const copy = [...elements];
+        if (position === "inside") {
+          copy[i] = { ...copy[i], elements: [...(copy[i].elements || []), moved] };
+        } else {
+          copy.splice(position === "after" ? i + 1 : i, 0, moved);
+        }
+        return [copy, true];
+      }
+
+      let done = false;
+      const out = elements.map(el => {
+        if (done || !el?.elements) return el;
+        const [children, ok] = place(el.elements);
+        if (!ok) return el;
+        done = true;
+        return { ...el, elements: children };
+      });
+      return [out, done];
+    };
+
+    const without = remove(tree);
+    if (!moved) return;
+    const [next, ok] = place(without);
+    if (!ok) return;
+
+    setMeta(JSON.stringify(next));
+  }, [setMeta]);
 
   const handleDeleteElement = useCallback((element) => {
     loopar.confirm("Are you sure you want to delete this element?", () => {
@@ -727,7 +879,7 @@ export const BaseDesigner = (props) => {
 
   useEffect(() => {
     const onKey = (e) => {
-      if (stateRef.current.designerModeType === "preview") return;
+      if (stateRef.current.previewOpen || stateRef.current.previewInline) return;
       const ae = document.activeElement;
       if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) return;
 
@@ -805,6 +957,13 @@ export const BaseDesigner = (props) => {
     handleChangeMode,
     handleSetMode,
     getElementPath,
+    selectElement,
+    moveElement,
+    metaTree: localMetaComponents,
+    sidebarView,
+    setSidebarView,
+    previewInline,
+    openPreview,
     updatingFromEditor,
     dragEnabled,
     setDragEnable,
@@ -829,6 +988,11 @@ export const BaseDesigner = (props) => {
     activeId,
     handleChangeMode,
     handleSetMode,
+    selectElement,
+    moveElement,
+    localMetaComponents,
+    sidebarView,
+    previewInline,
     updatingFromEditor,
     dragEnabled,
   ]);
@@ -911,12 +1075,34 @@ export const BaseDesigner = (props) => {
               name={`${selfKey}-designer_tab`}
               key={`${selfKey}-designer_tab`}
             >
-              <div ref={canvasRef} className="rounded border shadow-sm w-full">
-                {designerModeType === "preview" ? (
+              <div
+                ref={canvasRef}
+                aria-busy={switchingPreview || undefined}
+                className={cn("rounded border shadow-sm w-full transition-opacity duration-150", switchingPreview && "opacity-60 pointer-events-none")}
+              >
+                {previewInline ? (
                   <>
-                    <DesignerContext.Provider value={PREVIEW_CONTEXT}>
-                      <MetaComponent elements={localMetaComponents} parentKey={selfKey} />
-                    </DesignerContext.Provider>
+                    <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-xs text-muted-foreground">
+                      <EyeIcon className="h-3.5 w-3.5"/>
+                      <span className="font-medium text-foreground">{__("Preview")}</span>
+                      <span className="hidden sm:inline">{__("Links and actions are disabled")}</span>
+                      <button
+                        type="button"
+                        className="ml-auto flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-muted hover:text-foreground"
+                        title={__("Full screen preview with device widths")}
+                        onClick={openPreview}
+                      >
+                        <Maximize2 className="h-3.5 w-3.5"/>
+                        {__("Full screen")}
+                      </button>
+                    </div>
+                    <div ref={inlinePreviewRef}>
+                      <DesignerContext.Provider value={PREVIEW_CONTEXT}>
+                        <div className={previewHostClass(entity)}>
+                          <MetaComponent elements={localMetaComponents} parentKey={selfKey} />
+                        </div>
+                      </DesignerContext.Provider>
+                    </div>
                     {sidebarOpen && <Sidebar/>}
                   </>
                 ) : (
@@ -930,6 +1116,18 @@ export const BaseDesigner = (props) => {
                   </DragAndDropProvider>
                 )}
               </div>
+              <PreviewModal
+                open={previewOpen}
+                title={name || data.label}
+                onClose={closePreview}
+                frameRef={frameRef}
+              >
+                <DesignerContext.Provider value={PREVIEW_CONTEXT}>
+                  <div className={previewHostClass(entity)}>
+                    <MetaComponent elements={localMetaComponents} parentKey={selfKey} />
+                  </div>
+                </DesignerContext.Provider>
+              </PreviewModal>
             </Tab>,
             <Tab
               label={<div className="flex"><BracesIcon className="h-6 w-6 pr-2" /> {__("META")}</div>}
@@ -981,8 +1179,11 @@ export const BaseDesigner = (props) => {
 }
 
 export const Designer = (props) => {
-  const {designerMode} = useDesigner();
-  if (!designerMode) {
+  const {designerMode, previewing} = useDesigner();
+  // In the preview a nested designer field (e.g. the Entity form's structure)
+  // shows its placeholder: a live designer there would mount its own side
+  // panel inside the preview frame.
+  if (!designerMode && !previewing) {
     return <BaseDesigner {...props} />
   }
 

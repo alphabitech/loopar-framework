@@ -275,6 +275,9 @@
     "Entity:Icon Manager": {
       "__root__": "/apps/loopar/modules/developer/entities/icon-manager"
     },
+    "Entity:Entity Directory": {
+      "__root__": "/apps/loopar/modules/developer/entities/entity-directory"
+    },
     "Entity:Email Settings": {
       "__root__": "/apps/loopar/modules/mail/entities/email-settings"
     },
@@ -448,6 +451,7 @@
     "Entity:AI Provider": "link",
     "Entity:Tenant Manager": "link",
     "Entity:Icon Manager": "link",
+    "Entity:Entity Directory": "link",
     "Entity:Email Settings": "link",
     "Entity:Email Account": "link",
     "Entity:Email Template": "link",

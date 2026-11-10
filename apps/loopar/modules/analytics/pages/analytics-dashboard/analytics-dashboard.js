@@ -2,6 +2,7 @@
 
 import { BaseDocument, loopar } from 'loopar';
 import { ENGAGED_THRESHOLD_MS as ENGAGED_MS } from '../../entities/page-view/page-view-controller.js';
+import { isOperator } from './analytics-dashboard-controller.js';
 
 const ENTITY = 'Page View';
 const WORKSPACE = 'web';
@@ -50,7 +51,7 @@ export default class AnalyticsDashboard extends BaseDocument {
         this.getCampaigns(),
       ]);
 
-    return { kpis, visits, pages, countries, devices, browsers, referrers, hourly, campaigns, sites: await this.getSites(), site: this.site || '' };
+    return { kpis, visits, pages, countries, devices, browsers, referrers, hourly, campaigns, sites: await this.getSites(), site: this.site || '', operator: isOperator() };
   }
 
   async __meta__() {

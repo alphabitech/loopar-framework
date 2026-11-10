@@ -134,7 +134,7 @@ class InstallerBuilder {
   }
 
   fieldIsModelReference(field) {
-    if (![SELECT, FORM_TABLE].includes(field.element)) return false;
+    if (![CONNECTION, FORM_TABLE].includes(field.element)) return false;
     const opts = field.data?.options;
     if (typeof opts !== 'string' || !opts) return false;
     const lines = opts.split("\n");
@@ -155,7 +155,7 @@ class InstallerBuilder {
   findSelectFieldFor(elements, entityName) {
     return this.findFieldInStructure(
       elements,
-      el => el.element === SELECT && el?.data?.options === entityName
+      el => el.element === CONNECTION && el?.data?.options === entityName
     );
   }
 
@@ -237,7 +237,7 @@ class InstallerBuilder {
             reqs.push(queueKey(relatedEntity.__ENTITY__, relatedEntity.__NAME__));
           }
 
-          if (el.element === SELECT) {
+          if (el.element === CONNECTION) {
             const refKey = await this._resolveSelectRef(el, d, doc, relatedEntity, entity);
             if (refKey) reqs.push(refKey);
           }

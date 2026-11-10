@@ -5,8 +5,8 @@ import { isEqual } from "es-toolkit/predicate";
 
 import { useFieldArray, useWatch } from 'react-hook-form';
 import { useRowFormulas } from "@@tools/use-formulas";
-import { useFormContext } from "@form-context";
-import {useRef, useMemo, useCallback, useEffect, memo, useState } from "react";
+import { useFormContext, BaseFormContext } from "@form-context";
+import {useRef, useMemo, useCallback, useEffect, memo, useState, useContext } from "react";
 
 import { FormWrapper } from "@form-provider";
 import { TableProvider, useTable } from "./table/TableContext"
@@ -37,6 +37,15 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { __ } from "@global/i18n";
+import { entityPicker } from "./base/entity-pickers.js";
+
+/** Form values seen from one row: its own cells, as a form of their own. */
+function RowValues({ index, children }) {
+  const ctx = useContext(BaseFormContext);
+  const row = ctx?.values?.rows?.[index];
+  const value = useMemo(() => ctx && ({ ...ctx, values: row || {} }), [ctx, row]);
+  return <BaseFormContext.Provider value={value}>{children}</BaseFormContext.Provider>;
+}
 
 const SortableRow = memo(function SortableRow({ index, row, columns }) {
   const { id } = row;
@@ -141,7 +150,7 @@ const FormTable = (props) => {
         
         newCol.render = (field, index) => {
           const cellName = `rows.${index}.${newCol.data.name}`;
-          return (
+          const input = (
             <MemoizedTableInput 
               component={newCol.element}
               cellName={cellName}
@@ -149,6 +158,8 @@ const FormTable = (props) => {
               register={register}
             />
           );
+          // A cascade (`parent`) reads the other cells of its own row.
+          return newCol.data.parent ? <RowValues index={index}>{input}</RowValues> : input;
         };
         
         return newCol;
@@ -341,9 +352,7 @@ FormTableInput.metaFields = ()=>{
       {
         group: "form",
         elements: {
-          options: {
-            element: TEXTAREA,
-          },
+          options: entityPicker({ label: "Child entity", description: "Child table whose rows this field holds." }, "child"),
         },
       }
     ],

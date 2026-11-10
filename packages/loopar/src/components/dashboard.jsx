@@ -51,7 +51,7 @@ Dashboard.metaFields = () => [
   {
     group: "content",
     elements: {
-      dashboard: { element: SELECT, data: { label: "Dashboard", options: "Dashboard" } },
+      dashboard: { element: CONNECTION, data: { label: "Dashboard", options: "Dashboard" } },
       show_description: { element: SWITCH, data: { label: "Show description" } },
     },
   },

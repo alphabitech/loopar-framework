@@ -106,7 +106,7 @@ export default class Entity extends BaseDocument {
       if (!loopar.installing) {
         await this.validateStructuralFlags();
         await this.validateAppVersion();
-        await this.validateLinkedDocument(SELECT);
+        await this.validateLinkedDocument(CONNECTION);
         await this.validateLinkedDocument(FORM_TABLE);
       }
     }
@@ -536,6 +536,22 @@ export default class Entity extends BaseDocument {
 
           if (await loopar.db.count(ref.__ENTITY__, name) === 0) {
             errors.push(`${ref.__ENTITY__} ${name} is not a valid Entity for ${field.data.name}, please check the options.`);
+          } else if (type === CONNECTION) {
+            // Group and cascade fields must exist in the connected entity.
+            // A connection to this same entity reads the fields being saved.
+            const own = loopar.utils.toEntityKey(name) === loopar.utils.toEntityKey(this.name);
+            const declared = new Set(['name', 'id', ...(own
+              ? fields.map(f => f.data?.name).filter(Boolean)
+              : Object.keys(ref.__FIELD_META__ || {}))]);
+            for (const prop of ['group_by', 'parent_filter']) {
+              const value = field.data[prop];
+              if (value && !ref.is_virtual && !declared.has(value)) {
+                errors.push(`${field.data.name}: ${prop.replace('_', ' ')} "${value}" is not a field of ${name}.`);
+              }
+            }
+            if (field.data.parent && !fields.some(f => f.data?.name === field.data.parent)) {
+              errors.push(`${field.data.name}: parent field "${field.data.parent}" is not a field of this entity.`);
+            }
           } else if (type === FORM_TABLE) {
             const isSingle = await loopar.db.getValue(ref.__ENTITY__, "is_single", name);
             if (isSingle) {

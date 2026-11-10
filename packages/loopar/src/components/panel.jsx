@@ -137,7 +137,9 @@ export default function MetaPanel(props) {
         {data.title && <h3 className="text-2xl font-semibold leading-none tracking-tight">{data.title}</h3>}
         {data.description && <p className="text-sm text-muted-foreground">{data.description}</p>}
       </div>
-      <Droppable {...props} className="flex-1" />
+      {/* Same stacking as a header-less panel (whose own className carries
+          space-y-4): without it, consecutive rows inside touched. */}
+      <Droppable {...props} className="flex-1 space-y-4" />
     </div>
   );
 }

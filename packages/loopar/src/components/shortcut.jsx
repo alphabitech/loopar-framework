@@ -4,6 +4,7 @@ import { Link } from "@link";
 import Icon from "@icon";
 import { SquareArrowOutUpRightIcon } from "lucide-react";
 import { useDeskElement, deskLink, formatNumber, filterField } from "@loopar/components/desk/use-desk-element";
+import { entityPicker } from "./base/entity-pickers.js";
 
 /**
  * Desk page element: a big link to an entity, page or URL, with an optional
@@ -61,7 +62,7 @@ Shortcut.metaFields = () => [
   {
     group: "content",
     elements: {
-      target: { element: INPUT, data: { label: "Target", placeholder: "Gym Member / Gym POS", description: "Entity or page it opens." } },
+      target: entityPicker({ label: "Target", description: "Entity or page it opens." }, "all"),
       action: { element: SELECT, data: { label: "Opens", options: "list\ncreate\nview", description: "list for entities, view for pages, create for a new record." } },
       url: { element: INPUT, data: { label: "URL", placeholder: "/desk/…", description: "Overrides Target + Opens." } },
       icon: { element: ICON_INPUT, data: { label: "Icon" } },

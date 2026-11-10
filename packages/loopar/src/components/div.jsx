@@ -90,7 +90,6 @@ Div.metaFields = () => [
         data: {
           label: "Direction (flex)",
           options: [{ value: "row", label: "Row" }, { value: "column", label: "Column" }, { value: "row-reverse", label: "Row reverse" }, { value: "column-reverse", label: "Column reverse" }],
-          display_on: "display = flex",
         },
       },
       wrap: { element: SWITCH, data: { label: "Wrap (flex)" } },

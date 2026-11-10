@@ -150,6 +150,33 @@ function AnalyticsDashboard({data}) {
 
   useEffect(() => { loadAll(); }, [days, site]);
 
+  // Retroactive cleanup of own traffic: count first, confirm, then delete.
+  // The platform operator (control plane) cleans every online tenant at once.
+  const operator = !!analytics?.operator;
+  const purgeInternal = async () => {
+    const scope = operator ? { all_tenants: 1 } : {};
+    const { purge: plan } = await loopar.call("Analytics Dashboard", "purgeInternal", { body: { ...scope, dry_run: 1 } });
+    if (!plan?.total) {
+      loopar.notify(__("No own traffic to clean"));
+      return;
+    }
+    const perTenant = (plan.tenants || []).map(t => `${t.name}: ${t.total}`).join("\n");
+    loopar.confirm({
+      title: __("Delete own traffic?"),
+      content: (
+        <div className="space-y-2 text-sm">
+          <p>{__("{0} views will be permanently deleted ({1} while logged in, {2} anonymous from the same connections).", [plan.total, plan.flagged, plan.anonymous])}</p>
+          {perTenant && <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-xs">{perTenant}</pre>}
+          {plan.skipped?.length > 0 && <p className="text-xs text-muted-foreground">{__("Skipped (offline or without analytics): {0}", [plan.skipped.join(", ")])}</p>}
+        </div>
+      ),
+    }, async () => {
+      const { purge: done } = await loopar.call("Analytics Dashboard", "purgeInternal", { body: scope });
+      loopar.notify(__("{0} views deleted", [done?.deleted ?? 0]));
+      loadAll();
+    });
+  };
+
   const maxPages     = Math.max(...pages.map(p => p.views), 1);
   const maxCountries = Math.max(...countries.map(c => c.views), 1);
   const maxReferrers = Math.max(...referrers.map(r => r.views), 1);
@@ -186,6 +213,16 @@ function AnalyticsDashboard({data}) {
               {sites.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           )}
+          <button
+            type="button"
+            onClick={purgeInternal}
+            className="rounded border border-border bg-background px-2 py-1 text-sm text-muted-foreground hover:text-foreground"
+            title={operator
+              ? __("Delete views recorded from your own connections, in every tenant")
+              : __("Delete views recorded from your own connections")}
+          >
+            {operator ? __("Clean own traffic (all tenants)") : __("Clean own traffic")}
+          </button>
           {DAYS_OPTIONS.map(opt => (
             <PeriodBtn
               key={opt.value}

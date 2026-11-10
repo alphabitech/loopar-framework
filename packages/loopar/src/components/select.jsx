@@ -1,367 +1,107 @@
 import BaseInput from "@base-input";
 import { FormLabel } from "./input/index.js";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import loopar from "loopar";
 import { Select } from "./select/base-select.jsx";
 import { FormDescription } from "@cn/components/ui/form";
-import { Button } from "@cn/components/ui/button";
-import { PlusIcon } from "@radix-ui/react-icons";
-import { useWorkspace } from "@workspace/workspace-provider";
-import { EntryModal } from "@app/entry-modal";
-import { makeUrl } from "./link.jsx";
-import { useDocument } from "@loopar/document";
-import { __ } from "@global/i18n";
-import { selectSource, multipleValues } from "@global/element-definition";
-import { X } from "lucide-react";
+import { useFormValues } from "@form-context";
+import { multipleValues } from "@global/element-definition";
+import { parseStaticOptions, optionsForParent } from "./select/options.js";
+import { ChoiceList } from "./select/choice-list.jsx";
+import { SelectedChips, multipleMetaFields } from "./select/selected-chips.jsx";
+import { formFieldPicker } from "./base/entity-pickers.js";
 
-/** Chips of the values of a `multiple` select, each removable. */
-function SelectedChips({ values, labelOf, onRemove, disabled }) {
-  if (!values.length) return null;
-  return (
-    <div className="mb-1 flex flex-wrap gap-1">
-      {values.map((v) => (
-        <span key={v} className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 text-sm text-secondary-foreground">
-          {labelOf(v)}
-          {!disabled && (
-            <button type="button" aria-label={`${__("Remove")} ${v}`} onClick={() => onRemove(v)} className="opacity-60 hover:opacity-100">
-              <X className="size-3" />
-            </button>
-          )}
-        </span>
-      ))}
-    </div>
-  );
-}
-
+/**
+ * Choice from a fixed list (`options`: value / value:Label per line, `# Group`
+ * headings). Records of another entity are a `connection`.
+ * With `parent`, only the group whose value matches the parent field shows.
+ */
 export default function MetaSelect(props) {
-  const [rows, setRows] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const { award } = useWorkspace();
-  
-  const titleFields = useRef(["label"]);
-  const model = useRef(null);
-  const abortControllerRef = useRef(null);
-  const fieldRef = useRef(null);
-  const paginationRef = useRef({ page: 1, limit: 20, total: 0, pages: 0 });
-  const currentQueryRef = useRef("");
-  
   const { renderInput, data } = BaseInput(props);
-  // Titles of the linked records the server sent with the document
-  // ({ [Entity]: { [name]: title } }): the closed select shows "ATL RCC", not "SITE-0002".
-  const { Document: ownerDocument } = useDocument();
-  const linkTitles = ownerDocument?.linkTitles;
-
-  const isLocal = useMemo(() => selectSource(data) === "static", [data.options, data.options_source]);
+  const formValues = useFormValues() ?? {};
   const multiple = loopar.utils.trueValue(data.multiple);
+  const max = parseInt(data.max_items, 10) || 0;
+  const parentValue = data.parent ? formValues[data.parent] : undefined;
 
-  const buildLabel = useCallback((opt) => {
-    if (!opt) return null;
-    
-    if (typeof opt === "object") {
-      if (Array.isArray(titleFields.current)) {
-        const values = titleFields.current
-          .map(lbl => opt[lbl])
-          .filter(val => val);
-        
-        return values.reduce((acc, el, index) => {
-          acc.push(el);
-          if (index < values.length - 1) acc.push(" - ");
-          return acc;
-        }, []);
-      } else {
-        return opt[titleFields.current];
-      }
-    }
-    
-    return opt;
-  }, []);
+  const allOptions = useMemo(() => parseStaticOptions(data.options), [data.options]);
+  const options = useMemo(
+    () => optionsForParent(allOptions, parentValue, !!data.parent),
+    [allOptions, parentValue, data.parent]
+  );
 
-  const buildOption = useCallback((option) => {
-    if (!option) return { null: null };
-    
-    if (typeof option === "object") {
-      return {
-        value: option.value,
-        label: buildLabel(option.label || option.value),
-        formattedValue: option.formattedValue,
-      };
-    }
-    
-    return {
-      value: option || fieldRef.current?.value,
-      label: option || fieldRef.current?.value,
-    };
-  }, [buildLabel]);
+  const [rows, setRows] = useState(options);
+  useEffect(() => setRows(options), [options]);
 
-  const builtOptions = useMemo(() => {
-    const opts = data.options || "";
+  const search = useCallback((target) => {
+    const q = String(target?.target?.value || "").toLowerCase();
+    const filtered = q ? options.filter((o) => `${o.value} ${o.label}`.toLowerCase().includes(q)) : options;
+    setRows(filtered);
+    return Promise.resolve(filtered);
+  }, [options]);
 
-    if (typeof opts === "object") {
-      if (Array.isArray(opts)) {
-        return opts.map(i => buildOption(i));
-      } else {
-        return Object.keys(opts).map((key) => ({
-          value: key,
-          label: opts[key],
-        }));
-      }
-    } else if (typeof opts === "string") {
-      return opts.split(/\r?\n/).map((item) => {
-        const [value, label] = item.split(":");
-        return { value, label: __(label || value) };
-      });
-    } else if (Array.isArray(opts)) {
-      return opts.map(item => buildOption(item));
-    }
-    
-    return [];
-  }, [data.options, buildOption]);
+  const labelOf = useCallback(
+    (value) => allOptions.find((o) => String(o.value) === String(value))?.label ?? value,
+    [allOptions]
+  );
 
-  const getPrepareOptions = useCallback((options) => {
-    return options.map(option => buildOption(option));
-  }, [buildOption]);
-
+  // A parent change leaves out values that don't belong to its group.
+  const fieldRef = useRef(null);
+  const prevParent = useRef(parentValue);
   useEffect(() => {
-    if (!fieldRef.current) return;
-    
-    const val = fieldRef.current.value || "";
-    const title = typeof data.options === "string" ? linkTitles?.[data.options.trim()]?.[val] : null;
-    const initialRows = loopar.utils.isJSON(val) 
-      ? [JSON.parse(val)] 
-      : [{ value: val, label: title || val }];
-    
-    setRows(getPrepareOptions(initialRows));
-  }, [getPrepareOptions, linkTitles]);
-
-  const getModel = useCallback(() => {
-    return model.current?.value;
-  }, []);
-
-  const getServerData = useCallback((q, page = 1, append = false) => {
-    if (data.disabled) return Promise.resolve();
-    
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    if (!data.parent || prevParent.current === parentValue) return;
+    prevParent.current = parentValue;
+    const field = fieldRef.current;
+    if (!field) return;
+    const allowed = new Set(options.map((o) => String(o.value)));
+    if (multiple) {
+      const values = multipleValues(field.value);
+      const kept = values.filter((v) => allowed.has(v));
+      if (kept.length !== values.length) field.onChange(JSON.stringify(kept));
+    } else if (field.value && !allowed.has(String(field.value))) {
+      field.onChange(null);
     }
-    
-    abortControllerRef.current = new AbortController();
-    
-    setIsLoading(true);
-    setError(null);
-    
-    return new Promise((resolve, reject) => {
-      loopar.call(getModel(), "search", {
-        query: {
-          q,
-          page,
-          limit: paginationRef.current.limit
-        },
-        signal: abortControllerRef.current.signal,
-        success: (r) => {
-          titleFields.current = r.title_fields;
-          
-          if (r.pagination) {
-            paginationRef.current = {
-              ...paginationRef.current,
-              ...r.pagination,
-              page
-            };
-          }
-          
-          const preparedRows = getPrepareOptions(
-            r.rows.map(row => ({
-              value: row.name, 
-              formattedValue: row.formattedValue,
-              label: row 
-            }))
-          );
-          
-          setRows(prevRows => {
-            if (append && page > 1) {
-              const newRows = [...prevRows, ...preparedRows];
-              return Array.from(
-                new Map(newRows.map(item => [item?.value, item])).values()
-              ).filter(Boolean);
-            }
-            return preparedRows;
-          });
-          
-          setIsLoading(false);
-          resolve(preparedRows);
-        },
-        error: (err) => {
-          if (err.name !== 'AbortError') {
-            console.error("Error fetching data:", err);
-            setError(err.message || "Error loading data");
-            setIsLoading(false);
-            reject(err);
-          }
-        },
-        freeze: false,
-      });
-    });
-  }, [data.disabled, getModel, getPrepareOptions]);
-
-  const searchTimeoutRef = useRef(null);
-
-  const search = useCallback((target, delay = true) => {
-    if (data.disabled) return Promise.resolve();
-
-    const q = target?.target?.value || "";
-    currentQueryRef.current = q;
-    paginationRef.current.page = 1;
-  
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    return new Promise((resolve) => {
-      if (isLocal) {
-        const filtered = builtOptions.filter((row) => {
-          const searchText = typeof row === "object" 
-            ? `${row.value} ${row.label}`.toLowerCase()
-            : String(row).toLowerCase();
-          return searchText.includes(q.toLowerCase());
-        }).map((row) => {
-          return typeof row === "object" 
-            ? row 
-            : { value: row, label: row };
-        });
-        
-        setRows(filtered);
-        resolve(filtered);
-      } else {
-        model.current = builtOptions[0];
-        
-        if (delay) {
-          searchTimeoutRef.current = setTimeout(() => {
-            getServerData(q, 1, false).then(resolve).catch(() => resolve([]));
-          }, 200);
-        } else {
-          getServerData(q, 1, false).then(resolve).catch(() => resolve([]));
-        }
-      }
-    });
-  }, [data.disabled, isLocal, builtOptions, getServerData]);
-
-  const loadMore = useCallback(() => {
-    if (isLocal || isLoading) return Promise.resolve();
-    
-    const { page, pages } = paginationRef.current;
-    
-    if (page >= pages) {
-      return Promise.resolve();
-    }
-    
-    const nextPage = page + 1;
-    return getServerData(currentQueryRef.current, nextPage, true);
-  }, [isLocal, isLoading, getServerData]);
-
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
-
-  const currentOption = useCallback((option) => {
-    if (!option) return null;
-    
-    const rowOption = rows.find(r => r.value === option);
-    const valueDescriptive = rowOption?.label || data.value_descriptive;
-    
-    return {
-      ...(rowOption || buildOption(option)),
-      formattedValue: props.formattedValue || valueDescriptive
-    };
-  }, [rows, data.value_descriptive, props.formattedValue, buildOption]);
-
-  const pagination = useMemo(() => ({
-    ...paginationRef.current,
-    hasMore: !isLocal && paginationRef.current.page < paginationRef.current.pages
-  }), [isLocal, rows]);
-
-  const serverEntity = useMemo(() => {
-    return !isLocal ? builtOptions[0]?.value : null;
-  }, [isLocal, builtOptions]);
-
-  const canCreate = useMemo(() => {
-    if (!serverEntity || data.disabled) return false;
-    // Same permission check Link performs for its target (award ignores case/spaces).
-    return !!award?.(String(serverEntity).toLowerCase().replaceAll(" ", ""), "create", false);
-  }, [serverEntity, data.disabled, award]);
-
-  const handleCreated = useCallback((name) => {
-    setCreateOpen(false);
-    if (!name) return;
-
-    // Optimistic row so the trigger can render the value immediately…
-    setRows(prev => (
-      prev.some(r => r?.value === name) ? prev : [{ value: name, label: name }, ...prev]
-    ));
-    fieldRef.current?.onChange(name);
-
-    model.current = model.current || builtOptions[0];
-    getServerData("", 1, false).catch(() => {});
-  }, [builtOptions, getServerData]);
+  }, [parentValue, options, multiple, data.parent]);
 
   return renderInput((field) => {
     fieldRef.current = field;
-    
+    const values = multiple ? multipleValues(field.value) : [];
+    const setValues = (next) => field.onChange(JSON.stringify(next));
+
     return (
       <>
         <FormLabel {...props} field={field} />
-        <div className="flex w-full items-start gap-1">
-          <div className="min-w-0 flex-1">
+        {multiple && data.display === "checkboxes" ? (
+          <ChoiceList
+            name={field.name}
+            options={options}
+            values={values}
+            onChange={setValues}
+            disabled={loopar.utils.trueValue(data.disabled)}
+            max={max}
+          />
+        ) : (
+          <div className="min-w-0">
             {multiple && (
               <SelectedChips
-                values={multipleValues(field.value)}
-                labelOf={(v) => currentOption(v)?.formattedValue || currentOption(v)?.label || v}
+                values={values}
+                labelOf={labelOf}
                 disabled={data.disabled}
-                onRemove={(v) => field.onChange(JSON.stringify(multipleValues(field.value).filter((x) => x !== v)))}
+                onRemove={(v) => setValues(values.filter((x) => x !== v))}
               />
             )}
             <Select
               field={field}
-              options={multiple ? rows.filter((r) => !multipleValues(field.value).includes(String(r?.value))) : rows}
+              options={multiple ? rows.filter((r) => !values.includes(String(r.value))) : rows}
               search={search}
-              loadMore={loadMore}
-              pagination={pagination}
-              data={data}
+              data={multiple && max > 0 && values.length >= max ? { ...data, disabled: 1 } : data}
               onSelect={multiple
-                ? (v) => { if (v !== undefined && v !== null && v !== "") field.onChange(JSON.stringify([...new Set([...multipleValues(field.value), String(v)])])); }
+                ? (v) => { if (v !== undefined && v !== null && v !== "") setValues([...new Set([...values, String(v)])]); }
                 : field.onChange}
-              selected={multiple ? null : currentOption(field.value)}
-              isLoading={isLoading}
-              error={error}
-              isLocal={isLocal}
+              selected={multiple || !field.value ? null : { value: field.value, label: labelOf(field.value) }}
+              isLocal={true}
               renderOption={props.renderOption}
-              model={getModel()}
             />
           </div>
-          {canCreate && (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="shrink-0"
-              aria-label={`Create ${serverEntity}`}
-              title={`Create ${serverEntity}`}
-              onClick={() => setCreateOpen(true)}
-            >
-              <PlusIcon className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-        {createOpen && (
-          <EntryModal
-            initialPath={makeUrl(`${serverEntity}/create`)}
-            onClose={() => setCreateOpen(false)}
-            onSaved={handleCreated}
-          />
         )}
         {(data.description && props.simpleInput !== true) && (
           <FormDescription>{data.description}</FormDescription>
@@ -371,35 +111,27 @@ export default function MetaSelect(props) {
   });
 }
 
-
-MetaSelect.metaFields = () => {
-  return [
-    ...BaseInput.metaFields(),
-    [
-      {
-        group: "form",
-        elements: {
-          options_source: {
-            element: SELECT,
-            data: {
-              label: "Options from",
-              options: [{ value: "static", label: "List (Options below)" }, { value: "entity", label: "Entity records" }],
-              description: "List: one option per line, value:Label. Entity: the name of the entity whose records are offered.",
-            },
-          },
-          options: {
-            element: TEXTAREA,
-            data: {
-              description:
-                "List: one option per line (value or value:Label). Entity: the entity name.",
-            },
-          },
-          multiple: {
-            element: SWITCH,
-            data: { label: "Multiple", description: "Allow choosing several values (stored as a JSON list)." },
+MetaSelect.metaFields = () => [
+  ...BaseInput.metaFields(),
+  [
+    {
+      group: "form",
+      elements: {
+        options: {
+          element: TEXTAREA,
+          data: {
+            description: "One option per line: value or value:Label. Lines starting with # open a group: # Label or # value:Label.",
           },
         },
+        parent: {
+          ...formFieldPicker(),
+          data: {
+            label: "Parent field",
+            description: "Name of another field of the form. Only the group whose value matches it is offered (e.g. # HN:Honduras → its cities when the parent is HN).",
+          },
+        },
+        ...multipleMetaFields(),
       },
-    ]
-  ];
-};
+    },
+  ],
+];

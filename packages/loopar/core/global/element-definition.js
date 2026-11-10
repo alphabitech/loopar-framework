@@ -350,6 +350,8 @@ export const elementsDefinition = {
     { element: "date_time", icon: "CalendarClock", type: TYPES.dateTime, format: 'YYYY-MM-DD HH:mm:ss' },
     { element: "time", icon: "Clock10", type: TYPES.time, format: 'HH:mm:ss' },
     { element: "select", icon: "ChevronDown", type: TYPES.text },
+    // Records of another entity (`options` = entity name).
+    { element: "connection", icon: "Cable", type: TYPES.text },
     { element: "textarea", icon: "FileText", type: TYPES.longtext },
     { element: "checkbox", icon: "SquareCheck", type: TYPES.integer },
     { element: "switch", icon: "ToggleLeft", type: TYPES.integer },
@@ -374,6 +376,8 @@ export const elementsDefinition = {
     { element: "designer", icon: "Brush", type: TYPES.longtext, ownsDraft: true },
     { element: "slot", icon: "Plug"},
     { element: "metadata", icon: "Code", type: TYPES.json},
+    // Element Editor only: picks another field of the form being designed.
+    { element: "form_field", icon: "ListTree", type: TYPES.text, show_in_design: false },
   ],
   // Read the record being printed (src/document/print/record.jsx); outside a
   // print they render a design placeholder.
@@ -667,6 +671,8 @@ class DataInterface {
   isEmptyValue() {
     // 0 and false are real values (numeric/boolean fields), not "empty".
     if (this.value === 0 || this.value === false) return false;
+    // A multiple with no values stores an empty JSON list.
+    if ([true, 'true', 1, '1'].includes(this.data.multiple) && multipleValues(this.value).length === 0) return true;
 
     return typeof this.value === "undefined" ||
       this.value === null ||
@@ -685,8 +691,21 @@ class DataInterface {
     return { valid: !Number.isNaN(n) && n >= 0 && n <= 100, message: 'Please enter a percentage between 0 and 100' };
   }
 
-  /** min_length / max_length / pattern authored on the field. */
+  /** min_length / max_length / pattern authored on the field; min/max values of a multiple. */
   validatorConstraints() {
+    if ([true, 'true', 1, '1'].includes(this.data.multiple)) {
+      const count = multipleValues(this.value).length;
+      const minItems = parseInt(this.data.min_items, 10);
+      const maxItems = parseInt(this.data.max_items, 10);
+      if (!Number.isNaN(minItems) && minItems > 0 && count < minItems) {
+        return { valid: false, message: __("{0} needs at least {1} values", [this.__label(), minItems]) };
+      }
+      if (!Number.isNaN(maxItems) && maxItems > 0 && count > maxItems) {
+        return { valid: false, message: __("{0} allows at most {1} values", [this.__label(), maxItems]) };
+      }
+      return { valid: true, message: "" };
+    }
+
     const text = String(this.value ?? "");
     const min = parseInt(this.data.min_length, 10);
     const max = parseInt(this.data.max_length, 10);
@@ -774,27 +793,7 @@ class DataInterface {
   }
 }
 
-/**
- * Where a select's (or radio group's) choices come from: "static" — the
- * `options` lines ("value:Label" per line) — or "entity" — the records of
- * the entity named in `options`. `options_source` states it; without it the
- * legacy reading applies (one line = an entity name).
- */
-export function selectSource(data = {}) {
-  const explicit = String(data?.options_source ?? "").trim().toLowerCase();
-  if (explicit === "entity" || explicit === "static") return explicit;
-  const options = data?.options;
-  if (!options || typeof options === "object") return "static";
-  return String(options).includes("\n") ? "static" : "entity";
-}
-
-/** The entity a select links to, or null for static choices. */
-export function selectEntity(data = {}) {
-  if (selectSource(data) !== "entity") return null;
-  return String(data?.options ?? "").split(/\r?\n/)[0].trim() || null;
-}
-
-/** Values of a `multiple` select / radio group (stored as a JSON array). */
+/** Values of a `multiple` select / connection / radio group (stored as a JSON array). */
 export function multipleValues(value) {
   if (Array.isArray(value)) return value.map(String);
   if (value === null || value === undefined || value === "") return [];
@@ -862,6 +861,11 @@ const isContextOnly = (group) => ELEMENT_GROUPS[group]?.contextOnly === true;
 const contextFor = (document_type) =>
   Object.values(DOCUMENT_CONTEXTS)
     .find(c => c.documentTypes.includes(document_type)) || null;
+
+/** "form" | "print" | "desk" for documents rendered inside the desk; null for web pages. */
+export const documentContextName = (document_type) =>
+  Object.entries(DOCUMENT_CONTEXTS)
+    .find(([, c]) => c.documentTypes.includes(document_type))?.[0] || null;
 
 const aiAllowedElements = (document_type) => {
   const ctx = contextFor(document_type);
@@ -1067,6 +1071,7 @@ export const AIPrompt = (prompt, document_type, current = null) => {
         All elements MUST be objects with keys: "element" (string), data (object) {label, name}. If the element can have children, include an "elements" array. Follow the exact structure shown in examples.
         Use strict the following elements only: ${elements.join(",")}.
         If you need to use a element like: ${ [...new Set(Object.keys(inputType))].join(", ")} strict use element="input" and set format in data.format: ${ [...new Set(Object.keys(inputType))].join(", ")}.
+        Use element="select" for a fixed list (options: one per line, value:Label) and element="connection" for records of another entity (options: the entity name).
         Visible texts use one vocabulary: "title" = main text of a block, "text" = body text, "label" = text of a control or form field, "description" = secondary text, "items" = a list (one entry per line), "value" = Markdown. A heading also takes "level" (one h1 per page). Texts per element: ${contentGuide}.${editInstructions}
         `,
     },

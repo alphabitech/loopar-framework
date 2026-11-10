@@ -1,5 +1,7 @@
 import { memo } from "react";
-import { BrushIcon, EyeIcon, XIcon, SaveIcon, HandGrab, Undo2, Redo2 } from "lucide-react";
+import { BrushIcon, EyeIcon, XIcon, SaveIcon, HandGrab, Undo2, Redo2, Plus, ListTree, SlidersHorizontal, Maximize2 } from "lucide-react";
+import { cn } from "@cn/lib/utils";
+import { Navigator } from "./navigator";
 import { useDesigner } from "@context/designer-context";
 import {Button as BaseButton} from "@cn/components/ui/button";
 import {DesignerForm} from "./designer-form";
@@ -19,7 +21,16 @@ function Button({...props}){
 
 export const Sidebar = memo(() => {
   const { handleSetSidebarOpen, sidebarOpen, docRef } = useDocument();
-  const { handleChangeMode, designerModeType, updatingElement, dragEnabled, setDragEnable, undo, redo, canUndo, canRedo } = useDesigner();
+  const { handleChangeMode, designerModeType, updatingElement, dragEnabled, setDragEnable, undo, redo, canUndo, canRedo, sidebarView, setSidebarView, previewInline, openPreview } = useDesigner();
+
+  const preferred = sidebarView ?? (designerModeType === "editor" ? "properties" : "elements");
+  const view = preferred === "properties" && !updatingElement ? "elements" : preferred;
+
+  const VIEWS = [
+    { name: "elements", label: __("Elements"), Icon: Plus },
+    { name: "navigator", label: __("Navigator"), Icon: ListTree },
+    { name: "properties", label: __("Properties"), Icon: SlidersHorizontal, disabled: !updatingElement },
+  ];
 
   return (
     <div 
@@ -49,14 +60,14 @@ export const Sidebar = memo(() => {
           <Button
             size="icon"
             variant="secondary"
-            title={designerModeType === "preview" ? __("Design") : __("Preview")}
+            title={previewInline ? __("Design") : __("Preview")}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               handleChangeMode();
             }}
           >
-            {designerModeType === "preview" ? <BrushIcon className="h-5 w-5"/> : <EyeIcon className="h-5 w-5"/>}
+            {previewInline ? <BrushIcon className="h-5 w-5"/> : <EyeIcon className="h-5 w-5"/>}
           </Button>
           {/* <Button
             size="icon"
@@ -95,29 +106,49 @@ export const Sidebar = memo(() => {
           </Button>
         </div>
         <Separator/>
-        <div
-          style={{height: "calc(100% - 50px)", overflowY: "auto"}}
-        >
+        {!previewInline && <div role="tablist" className="grid grid-cols-3 gap-1 py-1">
+          {VIEWS.map(({ name, label, Icon, disabled }) => (
+            <button
+              key={name}
+              type="button"
+              role="tab"
+              aria-selected={view === name}
+              disabled={disabled}
+              title={label}
+              className={cn(
+                "flex min-w-0 items-center justify-center gap-1 rounded-md px-1 py-1.5 text-xs font-medium transition-colors",
+                view === name ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                disabled && "pointer-events-none opacity-40"
+              )}
+              onClick={() => setSidebarView(name)}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0"/>
+              <span className="truncate">{label}</span>
+            </button>
+          ))}
+        </div>}
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {
-            designerModeType === "preview" ? (
-              // The palette needs the drag-and-drop canvas, which preview
-              // doesn't mount (it renders exactly what gets published).
+            previewInline ? (
+              // The palette needs the drag-and-drop canvas, which the preview
+              // doesn't mount (it renders what gets published).
               <div className="flex flex-col items-center gap-3 p-6 text-center text-sm text-muted-foreground">
                 <EyeIcon className="h-6 w-6"/>
-                <p>{__("Preview shows the page exactly as it will be published.")}</p>
-                <BaseButton
-                  variant="secondary"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleChangeMode();
-                  }}
-                >
-                  <BrushIcon className="mr-2 h-4 w-4"/>
-                  {__("Back to design")}
-                </BaseButton>
+                <p>{__("Preview renders the page as it will be published, in the designer's own width.")}</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <BaseButton variant="secondary" onClick={() => handleChangeMode()}>
+                    <BrushIcon className="mr-2 h-4 w-4"/>
+                    {__("Back to design")}
+                  </BaseButton>
+                  <BaseButton variant="secondary" onClick={openPreview}>
+                    <Maximize2 className="mr-2 h-4 w-4"/>
+                    {__("Full screen")}
+                  </BaseButton>
+                </div>
               </div>
-            ) : (designerModeType == "editor") ? (
+            ) : view === "navigator" ? (
+              <Navigator/>
+            ) : view === "properties" ? (
               <ElementEditor key={getNodeKey(updatingElement)}/>
             ) : <DesignerForm/>
           }

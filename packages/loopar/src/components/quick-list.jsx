@@ -2,6 +2,7 @@ import loopar from "loopar";
 import { cn } from "@cn/lib/utils";
 import { Link } from "@link";
 import { useDeskElement, filterField } from "@loopar/components/desk/use-desk-element";
+import { entityPicker } from "./base/entity-pickers.js";
 
 const humanize = (name) => loopar.utils.Capitalize(String(name || "").replaceAll("_", " "));
 
@@ -71,7 +72,7 @@ QuickList.metaFields = () => [
   {
     group: "content",
     elements: {
-      entity: { element: INPUT, data: { label: "Entity", placeholder: "Gym Check In" } },
+      entity: entityPicker({ label: "Entity" }),
       fields: { element: INPUT, data: { label: "Fields", placeholder: "member, check_in_time", description: "Comma separated, shown next to the name." } },
       limit: { element: INPUT, data: { label: "Rows", format: "int", default_value: 5 } },
       filter: filterField(),

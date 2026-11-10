@@ -156,3 +156,14 @@ test("bootstrap classes become their Tailwind equivalent", () => {
   assert.equal(out[1].data.class, "mb-4");
   assert.equal(out[2].data.class, "text-muted-foreground mb-0");
 });
+
+test("selects bound to an entity become connections", () => {
+  const [out] = migrateDocStructure([
+    { element: "select", data: { name: "customer", options: "Customer", options_source: "entity" } },
+    { element: "select", data: { name: "site", options: "Site" } },
+    { element: "select", data: { name: "status", options: "Open\nClosed", options_source: "static" } },
+    { element: "select", data: { name: "only", options: "Yes", options_source: "static" } },
+  ]);
+  assert.deepEqual(out.map((n) => n.element), ["connection", "connection", "select", "select"]);
+  assert.ok(out.every((n) => !("options_source" in n.data)));
+});

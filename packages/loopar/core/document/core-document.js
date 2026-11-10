@@ -1,7 +1,9 @@
 'use strict'
-import { selectSource, selectEntity, multipleValues } from '../global/element-definition.js';
+import { multipleValues } from '../global/element-definition.js';
+import { parseOptionLines, optionsForParent } from '../global/select-options.js';
 import { translateStructure } from '../global/i18n.js';
 import DynamicField from './dynamic-field.js';
+import { inferParentFilter, parseFilters } from './parent-filter.js';
 import { loopar } from '../loopar.js';
 import { fileManage } from '../file-manage.js';
 import { parseDocStructure, stripEphemeralDocStructure, injectCookieIndexes } from './tools.js';
@@ -206,7 +208,7 @@ export default class CoreDocument {
       const ent = await fileManage.getConfigFile(ref.__NAME__, ref.__ROOT__);
       const fields = loopar.utils.fieldList(ent.doc_structure);
 
-      fields.filter(field => (field.element === SELECT || field.element === FORM_TABLE) && field.data.options).map(field => {
+      fields.filter(field => (field.element === CONNECTION || field.element === FORM_TABLE) && field.data.options).map(field => {
         const options = Array.isArray(field.data.options) ? field.data.options : (field.data.options || "").split("\n")[0];
         if (options === this.__ENTITY__.name) {
           relatedEntities.push({
@@ -823,32 +825,50 @@ export default class CoreDocument {
 
   async validateLinkDocuments() {
     const errors = [];
-    for (const field of Object.values(this.#fields)) {
-      if ([SELECT, RADIO_GROUP].includes(field.element) && field.options && typeof field.options === 'string') {
-        const raw = field.formattedValue;
-        if (!raw || raw === "") continue;
-        const values = loopar.utils.trueValue(field.multiple) ? multipleValues(raw) : [raw];
-        const entity = field.element === RADIO_GROUP ? null : selectEntity(field);
+    const valueOf = (name) => this.#fields[name]?.formattedValue;
 
-        if (!entity) {
-          const keys = (field.options || "").split(/\r?\n/).map(opt => opt.split(":")[0]);
-          for (const value of values) {
-            if (!keys.includes(String(value))) {
-              errors.push(`The value ${value} for ${field.name} can only be one of the list of options`);
-            }
+    for (const field of Object.values(this.#fields)) {
+      const raw = field.formattedValue;
+      if (raw === undefined || raw === null || raw === "") continue;
+      const isList = [SELECT, RADIO_GROUP].includes(field.element);
+      if (!isList && field.element !== CONNECTION) continue;
+      if (typeof field.options !== 'string' || !field.options.trim()) {
+        if (field.element === CONNECTION) errors.push(`The field ${field.name} does not have a valid document configured, please check the document metadata or contact an Administrator.`);
+        continue;
+      }
+
+      const values = loopar.utils.trueValue(field.multiple) ? multipleValues(raw) : [raw];
+      const parentValue = field.parent ? valueOf(field.parent) : undefined;
+
+      if (isList) {
+        const allowed = new Set(optionsForParent(parseOptionLines(field.options), parentValue, !!field.parent).map(o => String(o.value)));
+        for (const value of values) {
+          if (!allowed.has(String(value))) {
+            errors.push(`The value ${value} for ${field.name} can only be one of the list of options`);
           }
-        } else {
-          const linkedRef = loopar.getRef(entity, false);
-          if (!linkedRef) {
-            errors.push(`The field ${field.name} does not have a valid document configured, please check the document metadata or contact an Administrator.`);
-          } else {
-            // Asked to the linked model: a virtual entity has no table to count.
-            const linked = await loopar.newDocument(entity);
-            for (const value of values) {
-              if (!await linked.linkExists(value)) {
-                errors.push(`The value ${value} for ${field.name} does not exist in ${entity} Entity`);
-              }
-            }
+        }
+        continue;
+      }
+
+      const entity = field.options.split(/\r?\n/)[0].trim();
+      if (!loopar.getRef(entity, false)) {
+        errors.push(`The field ${field.name} does not have a valid document configured, please check the document metadata or contact an Administrator.`);
+        continue;
+      }
+      // Asked to the linked model: a virtual entity has no table to count.
+      const linked = await loopar.newDocument(entity);
+      const targetRef = loopar.getRef(entity, false);
+      const filterField = field.parent
+        ? inferParentFilter({ target: entity, source: this.__ENTITY__.name, parent: field.parent, parentFilter: field.parent_filter })
+        : null;
+      for (const value of values) {
+        // A virtual entity answers for the cascade itself (no table to read).
+        if (!await linked.linkExists(value, { filterField, parentValue, filters: parseFilters(field.filters) })) {
+          errors.push(`The value ${value} for ${field.name} does not exist in ${entity} Entity`);
+        } else if (filterField && !targetRef?.is_virtual && linked.fields?.[filterField]) {
+          const owner = await loopar.db.getValue(entity, filterField, value);
+          if (String(owner ?? "") !== String(parentValue ?? "")) {
+            errors.push(`The value ${value} for ${field.name} does not belong to the selected ${field.parent}`);
           }
         }
       }
@@ -903,11 +923,9 @@ export default class CoreDocument {
           // value_descriptive needs saved data; child-table meta does not —
           // a new record still has to render its form_table columns.
           if (!this.__IS_NEW__ && el.element === SELECT && !loopar.utils.trueValue(data.multiple)) {
-            const options = (data.options || "").split("\n");
-    
-            if (selectSource(data) === "static") {
-              const [value, label] = (options.find(opt => (opt || "").split(":")[0] === val) || "").split(":");
-              el.data.value_descriptive = label || value;
+            const option = parseOptionLines(data.options).find(opt => opt.value === val);
+            if (option) {
+              el.data.value_descriptive = option.label;
             } else {
               // const db = loopar.db;
               // if (await db.hasEntity(null, data.options) && await db.count(data.options, data.value) > 0) {

@@ -246,7 +246,16 @@ export default class CoreController extends AuthController {
 
   async actionSearch() {
     const document = await loopar.newDocument(this.document, { module: this.module });
-    return await document.getListToSelectElement(this.q);
+    return await document.getListToSelectElement(this.q, {
+      page: this.page,
+      limit: this.limit,
+      filterField: this.filter_field,
+      filterValue: this.filter_value,
+      groupBy: this.group_by,
+      filters: this.filters,
+      sourceEntity: this.source_entity,
+      parentField: this.parent_field,
+    });
   }
 
   /**

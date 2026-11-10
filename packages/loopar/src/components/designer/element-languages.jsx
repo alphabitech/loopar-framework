@@ -107,7 +107,6 @@ export function ElementLanguages({ elementKey, element, data }) {
     <>
       <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2" onClick={start} title={__("Texts of this element in other languages")}>
         <LanguagesIcon className="size-4" />
-        {__("Languages")}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">

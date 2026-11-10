@@ -1,5 +1,6 @@
 import {Entity as EntityComponent} from "../loader.jsx"
 import { __ } from "@global/i18n";
+import { entityPicker } from "./base/entity-pickers.js";
 
 /** Embeds an entity's action (list, create, view…) inside a page. */
 const Entity = (props) =>{
@@ -27,13 +28,7 @@ Entity.metaFields = () => {
     {
       group: "General",
       elements: {
-        name: {
-          element: INPUT,
-          data: {
-            label: "Name",
-            description: "Name of Entity"
-          }
-        },
+        name: entityPicker({ label: "Name", description: "Entity or page whose action is embedded." }, "all"),
         action: {
           element: INPUT,
           data: {

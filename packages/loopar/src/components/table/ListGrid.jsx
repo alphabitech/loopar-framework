@@ -1,4 +1,5 @@
-import { selectSource } from "@global/element-definition";
+import { parseOptionLines } from "@global/select-options";
+import { multipleValues } from "@global/element-definition";
 import loopar from "loopar";
 import {Link} from "@link";
 import { useTable } from "./TableContext.jsx"
@@ -53,12 +54,12 @@ export function ListGrid(props) {
         if (col.element === "date") col.render ??= (row) => formatDate(row[name], "short");
         if (col.element === "date_time") col.render ??= (row) => formatDateTime(row[name], "short");
         if (col.element === "currency" || col.data.format === "currency") col.render ??= (row) => formatCurrency(row[name]);
-        if (col.element === "select" && typeof col.data.options === "string" && selectSource(col.data) === "static") {
-          const labels = Object.fromEntries(col.data.options.split(/\r?\n/).map((line) => {
-            const i = line.indexOf(":");
-            return i >= 0 ? [line.slice(0, i), line.slice(i + 1)] : [line, line];
-          }));
-          col.render ??= (row) => __(labels[row[name]] ?? row[name]);
+        if (["select", "radio_group"].includes(col.element) && typeof col.data.options === "string") {
+          const labels = Object.fromEntries(parseOptionLines(col.data.options).map((o) => [o.value, o.label]));
+          const multiple = [1, "1", true, "true"].includes(col.data.multiple);
+          col.render ??= (row) => multiple
+            ? multipleValues(row[name]).map((v) => __(labels[v] ?? v)).join(", ")
+            : __(labels[row[name]] ?? row[name]);
         }
 
         return col;

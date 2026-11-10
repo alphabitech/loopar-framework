@@ -93,6 +93,7 @@ export function TrafficTracker({ page }) {
       sentScroll: 0,
       lastTick: Date.now(),
       lastActivity: Date.now(),
+      stopped: false,
     };
     ref.current = s;
 
@@ -109,7 +110,19 @@ export function TrafficTracker({ page }) {
         viewport: `${window.innerWidth}x${window.innerHeight}`,
         ...utmParams(),
       }),
-    }).catch(() => {});
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((res) => {
+        if (!res?.internal) return;
+        // Own traffic: the server stored nothing, stop pinging. A logged-in
+        // user also pins the opt-out so this browser stays excluded on this
+        // origin after logout / on networks the server hasn't learned.
+        s.stopped = true;
+        if (res.internal === "user") {
+          try { localStorage.setItem(NOTRACK_KEY, "1"); } catch { /* storage blocked */ }
+        }
+      })
+      .catch(() => {});
 
     const isActive = () =>
       document.visibilityState === "visible" &&
@@ -122,6 +135,7 @@ export function TrafficTracker({ page }) {
     };
 
     const flush = ({ beacon = false } = {}) => {
+      if (s.stopped) return;
       accumulate();
       if (s.activeMs <= s.sentMs && s.maxScroll <= s.sentScroll) return;
       s.sentMs = s.activeMs;

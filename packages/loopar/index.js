@@ -36,6 +36,7 @@ import { getCompany, companyBrand, formatAddress, colorToHex } from "./core/glob
 import SystemController from "./apps/core/modules/system/controllers/system/system-controller.js";
 import CoreInstaller from "./apps/core/modules/system/forms/installer/installer.js";
 import * as Helpers from "./core/global/helper.js";
+import { trackingSalt, clientIp, ipHash, networkKey, networkHash, learnInternalNetwork, isInternalNetwork, operatorIpHashes, isControlPlaneTenant } from "./core/global/internal-networks.js";
 import { getRequest, getResponse, requestContext } from "./core/server/router/request-context.js";
 import {
   elementsNames,
@@ -71,6 +72,7 @@ export { sanitizeInput, trustedInput, isTrustedInput, policyMapOf, currentActor,
 export { WRITE_POLICY, writePolicyMap, filterInput } from "./core/global/field-policy.js";
 export { markStepUp, hasFreshStepUp, clearStepUp, requireStepUp, stepUpLocked, registerStepUpFailure, markOauthProof, takeOauthProof, STEP_UP_REQUIRED_CODE } from "./core/auth/step-up.js";
 export { connectionFromInstallData } from "./core/global/install-connection.js";
+export { inferParentFilter, findFieldMeta, parseFilters } from "./core/document/parent-filter.js";
 export {
   __,
   interpolate,
@@ -149,6 +151,15 @@ import {
 
 export {
   loopar,
+  trackingSalt,
+  clientIp,
+  networkKey,
+  networkHash,
+  learnInternalNetwork,
+  isInternalNetwork,
+  operatorIpHashes,
+  isControlPlaneTenant,
+  ipHash,
   startCore,
   getOrCreateTenantInstance,
   getTenantInstance,

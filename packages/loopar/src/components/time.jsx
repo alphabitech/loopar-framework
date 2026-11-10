@@ -49,7 +49,7 @@ export default function TimePicker(props) {
           <PopoverTrigger asChild>
             <FormControl>
               <Button
-                variant={"outline"}
+                variant="field"
                 className={cn(
                   "w-full sm:w-[240px] pl-3 text-left font-normal",
                   !display && "text-muted-foreground"

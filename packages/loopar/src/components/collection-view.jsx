@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import DefaultDetail from "./collection/default-detail.jsx";
 import { __ } from "@global/i18n";
+import { entityPicker } from "./base/entity-pickers.js";
 
 const detailModules = import.meta.glob("./*-detail.jsx", { eager: true });
 
@@ -60,10 +61,7 @@ CollectionView.metaFields = () => {
     {
       group: "custom",
       elements: {
-        options: {
-          element: INPUT,
-          data: { label: "Entity", description: "Backing entity (Project / Service / …)." },
-        },
+        options: entityPicker({ label: "Entity", description: "Backing entity (Project / Service / …)." }),
         detail_layout: {
           element: SELECT,
           data: {

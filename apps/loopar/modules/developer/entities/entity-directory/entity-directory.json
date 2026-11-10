@@ -1,0 +1,19 @@
+{
+  "name": "Entity Directory",
+  "module": "developer",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 1,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "doc_structure": "[{\"node\":\"edir_name\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Name\",\"in_list_view\":1,\"searchable\":1,\"write_policy\":\"display_only\"}},{\"node\":\"edir_label\",\"element\":\"input\",\"data\":{\"name\":\"label\",\"label\":\"Label\",\"in_list_view\":1,\"write_policy\":\"display_only\"}},{\"node\":\"edir_type\",\"element\":\"input\",\"data\":{\"name\":\"type\",\"label\":\"Type\",\"in_list_view\":1,\"write_policy\":\"display_only\"}},{\"node\":\"edir_app\",\"element\":\"input\",\"data\":{\"name\":\"app\",\"label\":\"App\",\"in_list_view\":1,\"write_policy\":\"display_only\"}}]",
+  "search_fields": "name",
+  "title_fields": "name",
+  "resources": [],
+  "__ENTITY__": "Entity"
+}
