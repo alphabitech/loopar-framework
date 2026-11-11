@@ -30,9 +30,9 @@ test("a submodule is not a sidebar entry; its parent lists it and owns its route
     assert.equal(modules.some(m => m.link === SUB), false);
 
     const parent = modules.find(m => m.link === "Integrations");
-    assert.deepEqual(parent.submodules, [SUB]);
+    assert.ok(parent.submodules.includes(SUB));
     assert.ok(parent.routes.some(r => r.description === "Turnstile"), "submodule documents keep the parent active");
-    assert.deepEqual(PermissionManager.submodulesOf("Integrations"), [SUB]);
+    assert.ok(PermissionManager.submodulesOf("Integrations").includes(SUB));
   });
 });
 

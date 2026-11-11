@@ -1,0 +1,18 @@
+{
+  "name": "Stripe Account",
+  "module": "stripe",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "doc_structure": "[{\"node\": \"row_account\", \"element\": \"row\", \"data\": {\"layout\": \"[40,30,30]\"}, \"elements\": [{\"node\": \"col_name\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"name\", \"element\": \"input\", \"data\": {\"name\": \"name\", \"label\": \"Name\", \"type\": \"text\", \"required\": 1, \"unique\": 1, \"in_list_view\": 1, \"searchable\": 1, \"write_policy\": \"create_only\", \"description\": \"A label for this account, e.g. Live or Test.\"}}]}, {\"node\": \"col_mode\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"mode\", \"element\": \"select\", \"data\": {\"name\": \"mode\", \"label\": \"Mode\", \"options\": \"test\\nlive\", \"in_list_view\": 1, \"write_policy\": \"display_only\", \"description\": \"Set by the Secret Key: sk_live_… is live, sk_test_… is test. One account per mode.\"}}]}, {\"node\": \"col_billing\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"billing\", \"element\": \"switch\", \"data\": {\"name\": \"billing\", \"label\": \"Billing account\", \"in_list_view\": 1, \"description\": \"The account this site charges with (checkout, portal, webhooks). Only one at a time.\"}}]}]}, {\"node\": \"row_pk\", \"element\": \"row\", \"data\": {\"layout\": \"[100]\"}, \"elements\": [{\"node\": \"col_pk\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"publishable_key\", \"element\": \"input\", \"data\": {\"name\": \"publishable_key\", \"label\": \"Publishable Key\", \"type\": \"text\", \"description\": \"Stripe publishable key (not a secret).\"}}]}]}, {\"node\": \"row_secrets\", \"element\": \"row\", \"data\": {\"layout\": \"[50,50]\"}, \"elements\": [{\"node\": \"col_sk\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"secret_key\", \"element\": \"password\", \"data\": {\"name\": \"secret_key\", \"label\": \"Secret Key\", \"description\": \"Stripe API secret key.\"}}]}, {\"node\": \"col_wh\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"webhook_secret\", \"element\": \"password\", \"data\": {\"name\": \"webhook_secret\", \"label\": \"Webhook Signing Secret\", \"description\": \"Signing secret of this account's webhook endpoint.\"}}]}]}]",
+  "search_fields": "name",
+  "title_fields": "name",
+  "resources": [],
+  "__ENTITY__": "Entity"
+}

@@ -118,6 +118,7 @@ export default class Installer extends CoreInstaller {
       await this.#migrateCustomers();
       await this.#migrateCompany();
       await this.#migrateSystemLanguage();
+      await this.#migrateStripeAccounts();
       return result;
     }
     await this.validate(reinstall);
@@ -387,6 +388,81 @@ export default class Installer extends CoreInstaller {
       if (meta.length) console.log("[Installer] Module Group removed");
     } catch (e) {
       console.error("[Installer] Module Group removal failed:", e.message);
+    }
+  }
+
+  /**
+   * One-time migration (7.5.15): Stripe Account is a framework entity with
+   * one record per Stripe mode. It replaces two singles: loopar's `Stripe`
+   * (public_key, secret_key) and the control app's `Stripe Account`
+   * (publishable_key, secret_key, webhook_secret, test_secret_key). Their
+   * saved values become records (the first one is the Billing account), then
+   * the single values and the old `Stripe` entity are removed. Values are
+   * only removed once their record is saved. Idempotent; delete once every
+   * tenant is past 7.5.15.
+   */
+  async #migrateStripeAccounts() {
+    const SINGLES = "Document Single Values";
+    const ACCOUNT = "Stripe Account";
+    const q = () => loopar.db.qx();
+
+    try {
+      if (!(await q().schema.hasTable(ACCOUNT)) || !(await q().schema.hasTable(SINGLES))) return;
+
+      const valuesOf = async (document) => {
+        const rows = await q()(SINGLES).select("field", "value").where({ document });
+        const out = {};
+        for (const { field, value } of rows) {
+          let plain = value;
+          if (plain && loopar.isEncryptedSecret(plain)) {
+            try { plain = loopar.decryptSecret(plain); } catch { plain = ""; }
+          }
+          out[field] = plain || "";
+        }
+        return out;
+      };
+      const modeOf = (key) => (/^(?:sk|rk)_(live|test)_/.exec(String(key || "").trim()) || [])[1] || null;
+
+      const control = await valuesOf(ACCOUNT);
+      const legacy = await valuesOf("Stripe");
+
+      // In billing order: the control account charged; its test key and the
+      // old loopar single only fill a mode that is still free.
+      const candidates = [
+        { secret_key: control.secret_key, publishable_key: control.publishable_key, webhook_secret: control.webhook_secret },
+        { secret_key: control.test_secret_key },
+        { secret_key: legacy.secret_key, publishable_key: legacy.public_key },
+      ];
+
+      let failed = false;
+      for (const candidate of candidates) {
+        const mode = modeOf(candidate.secret_key);
+        if (!mode) continue;
+        if (await loopar.db.count(ACCOUNT, { mode })) continue;
+        try {
+          const name = (await loopar.db.count(ACCOUNT, { name: mode })) ? `${mode}-migrated` : mode;
+          await (await loopar.newDocument(ACCOUNT, { ...candidate, name })).save();
+          console.log(`[Installer] Stripe Account "${name}" created from the previous settings`);
+        } catch (e) {
+          failed = true;
+          console.error(`[Installer] Stripe Account (${mode}) could not be created:`, e.message);
+        }
+      }
+      if (failed) return; // keep the old values: the next update retries
+
+      await q()(SINGLES).whereIn("document", [ACCOUNT, "Stripe"]).delete();
+
+      const meta = (await q()("Entity").select("id", "name")).filter(e => e.name === "Stripe");
+      if (meta.length) {
+        await q()("Entity").whereIn("id", meta.map(e => e.id)).delete();
+        if (await q().schema.hasTable("Permission")) {
+          const perms = (await q()("Permission").select("id", "document")).filter(p => p.document === "Stripe");
+          if (perms.length) await q()("Permission").whereIn("id", perms.map(p => p.id)).delete();
+        }
+        console.log("[Installer] Stripe (single) removed: replaced by Stripe Account");
+      }
+    } catch (e) {
+      console.error("[Installer] Stripe Account migration failed:", e.message);
     }
   }
 
