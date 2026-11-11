@@ -1,14 +1,29 @@
 import { X } from "lucide-react";
 import { __ } from "@global/i18n";
 
-/** Chips of the values of a `multiple` select / connection, each removable. */
-export function SelectedChips({ values, labelOf, onRemove, disabled }) {
+/**
+ * Chips of the values of a `multiple` select / connection, each removable.
+ * With `hrefOf`, the label links to its record (a plain click calls `onOpen`).
+ */
+export function SelectedChips({ values, labelOf, onRemove, disabled, hrefOf = null, onOpen = null }) {
   if (!values.length) return null;
   return (
     <div className="mb-1 flex flex-wrap gap-1">
       {values.map((v) => (
         <span key={v} className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 text-sm text-secondary-foreground">
-          {labelOf(v)}
+          {hrefOf ? (
+            <a
+              href={hrefOf(v)}
+              className="hover:underline underline-offset-2"
+              onClick={(e) => {
+                if (!onOpen || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+                e.preventDefault();
+                onOpen(v);
+              }}
+            >
+              {labelOf(v)}
+            </a>
+          ) : labelOf(v)}
           {!disabled && (
             <button type="button" aria-label={`${__("Remove")} ${v}`} onClick={() => onRemove(v)} className="opacity-60 hover:opacity-100">
               <X className="size-3" />

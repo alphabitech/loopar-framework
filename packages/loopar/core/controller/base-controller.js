@@ -51,9 +51,22 @@ export default class BaseController extends CoreController {
     return await this.render(list);
   }
 
+  #prefill(document, text) {
+    const fieldName = String(document.titleFields?.() || 'name').split(',').map(f => f.trim()).find(Boolean);
+    const field = fieldName && document.fields?.[fieldName];
+    if (!field || field.value) return;
+    if (![undefined, null, '', 'editable'].includes(field.write_policy)) return;
+    if (loopar.utils.trueValue(field.readonly) || field.formula) return;
+    field.value = text.slice(0, 255);
+  }
+
   async actionCreate() {
     // Field write policy, layer A: applied by newDocument itself (request input).
     const document = await loopar.newDocument(this.document, this.data);
+
+    // "Create «text»" from a connection: the text typed in its search starts
+    // the new record's first title field (when the user may write it).
+    if (!this.hasData() && this.query?.prefill) this.#prefill(document, String(this.query.prefill));
 
     if (document.__ENTITY__.is_single) {
       return loopar.throw({

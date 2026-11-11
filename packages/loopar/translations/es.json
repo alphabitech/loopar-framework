@@ -456,5 +456,9 @@
   "Your payment is secure with us. We've partnered with Stripe, a trusted and industry-leading payment platform.": "Tu pago es seguro con nosotros. Nos hemos asociado con Stripe, una plataforma de pagos confiable y líder en la industria.",
   "Your rating": "Tu calificación",
   "Your review *": "Tu reseña *",
-  "Your workspace will be at": "Tu espacio de trabajo estará en"
+  "Your workspace will be at": "Tu espacio de trabajo estará en",
+  "Create {0}": "Crear {0}",
+  "Create {0} «{1}»": "Crear {0} «{1}»",
+  "View all {0}": "Ver todos: {0}",
+  "Open {0}": "Abrir {0}"
 }

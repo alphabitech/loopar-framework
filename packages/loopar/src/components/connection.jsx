@@ -4,8 +4,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import loopar from "loopar";
 import { Select } from "./select/base-select.jsx";
 import { FormDescription } from "@cn/components/ui/form";
-import { Button } from "@cn/components/ui/button";
-import { PlusIcon } from "@radix-ui/react-icons";
+import { PlusIcon, ListIcon } from "lucide-react";
+import { __ } from "@global/i18n";
 import { useWorkspace } from "@workspace/workspace-provider";
 import { EntryModal } from "@app/entry-modal";
 import { makeUrl } from "./link.jsx";
@@ -51,7 +51,8 @@ export default function MetaConnection(props) {
   const [rows, setRows] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(null); // null | { prefill }
+  const [opened, setOpened] = useState(null); // record shown in the modal
   const [known, setKnown] = useState({}); // value → label of records seen
   // Directories (virtual entities) have no records to create.
   const [creatable, setCreatable] = useState(entity !== "Entity Directory"); // false: a directory (no records to create)
@@ -60,6 +61,7 @@ export default function MetaConnection(props) {
   const paginationRef = useRef({ page: 1, limit: PAGE_LIMIT, pages: 1 });
   const queryRef = useRef("");
   const fieldRef = useRef(null);
+  const titleFieldRef = useRef(null); // first title field: "View all" searches by it
 
   const labelOf = useCallback(
     (value) => known[value] ?? linkTitles?.[entity]?.[value] ?? (!multiple && value === fieldRef.current?.value ? data.value_descriptive : null) ?? value,
@@ -104,6 +106,7 @@ export default function MetaConnection(props) {
             group: data.group_by ? (row[data.group_by] ?? "—") : null,
           }));
           if (r.creatable === false) setCreatable(false);
+          if (r.title_fields?.length) titleFieldRef.current = r.title_fields[0];
           if (r.pagination) paginationRef.current = { ...paginationRef.current, ...r.pagination, page };
           setKnown((prev) => ({ ...prev, ...Object.fromEntries(prepared.map((o) => [o.value, o.label])) }));
           setRows((prev) => append && page > 1
@@ -166,13 +169,51 @@ export default function MetaConnection(props) {
     hasMore: paginationRef.current.page < paginationRef.current.pages,
   }), [rows]);
 
+  const entityKey = entity.toLowerCase().replaceAll(" ", "");
   const canCreate = useMemo(() => {
     if (!entity || data.disabled || !creatable) return false;
-    return !!award?.(entity.toLowerCase().replaceAll(" ", ""), "create", false);
-  }, [entity, data.disabled, creatable, award]);
+    return !!award?.(entityKey, "create", false);
+  }, [entity, entityKey, data.disabled, creatable, award]);
 
+  // The record opens in its edit form when allowed, else read-only.
+  const openAction = useMemo(() => {
+    if (!entity || !creatable) return null;
+    if (award?.(entityKey, "update", false)) return "update";
+    if (award?.(entityKey, "view", false)) return "view";
+    return null;
+  }, [entity, entityKey, creatable, award]);
+  const recordPath = useCallback(
+    (name) => makeUrl(`/desk/${entity}/${openAction}?name=${encodeURIComponent(name)}`),
+    [entity, openAction]
+  );
+
+  const actions = useCallback((q) => {
+    const typed = String(q || "").trim();
+    const out = [];
+    if (canCreate) {
+      out.push({
+        key: "create",
+        icon: <PlusIcon className="h-4 w-4" />,
+        label: typed ? __("Create {0} «{1}»", [__(entity), typed]) : __("Create {0}", [__(entity)]),
+        onSelect: () => setCreateOpen({ prefill: typed }),
+      });
+    }
+    if (creatable && award?.(entityKey, "list", false)) {
+      out.push({
+        key: "list",
+        icon: <ListIcon className="h-4 w-4" />,
+        label: __("View all {0}", [__(entity)]),
+        onSelect: () => {
+          const field = titleFieldRef.current;
+          const query = typed && field ? `?${new URLSearchParams({ [field]: typed })}` : "";
+          loopar.navigate(`/desk/${entity}/list${query}`);
+        },
+      });
+    }
+    return out;
+  }, [canCreate, creatable, award, entityKey, entity]);
   const handleCreated = useCallback((name) => {
-    setCreateOpen(false);
+    setCreateOpen(null);
     if (!name) return;
     setKnown((prev) => ({ ...prev, [name]: prev[name] ?? name }));
     const field = fieldRef.current;
@@ -208,6 +249,8 @@ export default function MetaConnection(props) {
                   labelOf={labelOf}
                   disabled={data.disabled}
                   onRemove={(v) => setValues(values.filter((x) => x !== v))}
+                  hrefOf={openAction ? recordPath : null}
+                  onOpen={setOpened}
                 />
               )}
               <Select
@@ -226,28 +269,32 @@ export default function MetaConnection(props) {
                 isLocal={false}
                 renderOption={props.renderOption}
                 model={entity}
+                actions={actions}
+                openLink={!multiple && openAction && field.value ? {
+                  href: recordPath(field.value),
+                  label: __("Open {0}", [labelOf(field.value)]),
+                  onOpen: () => setOpened(field.value),
+                } : null}
               />
             </div>
-            {canCreate && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="shrink-0"
-                aria-label={`Create ${entity}`}
-                title={`Create ${entity}`}
-                onClick={() => setCreateOpen(true)}
-              >
-                <PlusIcon className="h-4 w-4" />
-              </Button>
-            )}
           </div>
         )}
         {createOpen && (
           <EntryModal
-            initialPath={makeUrl(`${entity}/create`)}
-            onClose={() => setCreateOpen(false)}
+            initialPath={makeUrl(`${entity}/create${createOpen.prefill ? `?prefill=${encodeURIComponent(createOpen.prefill)}` : ""}`)}
+            onClose={() => setCreateOpen(null)}
             onSaved={handleCreated}
+          />
+        )}
+        {opened && (
+          <EntryModal
+            initialPath={recordPath(opened)}
+            onClose={() => setOpened(null)}
+            onSaved={() => {
+              // A renamed title shows at once: forget the cached label.
+              setKnown((prev) => { const next = { ...prev }; delete next[opened]; return next; });
+              getServerData(queryRef.current, 1, false).catch(() => {});
+            }}
           />
         )}
         {(data.description && props.simpleInput !== true) && (

@@ -3,15 +3,15 @@ import { CaretSortIcon, CheckIcon, Cross2Icon } from "@radix-ui/react-icons";
 import { cn } from "@cn/lib/utils";
 import { Button } from "@cn/components/ui/button";
 import { invalidClass } from "../input/index.js";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowUpRight } from "lucide-react";
 import { useDialogContext } from "../dialog.jsx";
 
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandSeparator,
 } from "@cn/components/ui/command";
 
 import {
@@ -36,9 +36,13 @@ export function Select({
   isLoading = false,
   error = null,
   isLocal = true,
+  actions = null,
+  openLink = null,
   ...props
 }) {
   const [open, setOpen] = useState(false);
+  // Text typed in the search box (actions such as "Create «…»" use it).
+  const [query, setQuery] = useState("");
   const [active, setActive] = useState(false);
   // Inside a Radix Dialog (Modal / EntryModal) the body gets
   // `pointer-events: none`; the PopoverContent portals to body, so unless the
@@ -168,6 +172,7 @@ export function Select({
     setOpen(shouldOpen);
     
     if (shouldOpen) {
+      setQuery("");
       startTransition(() => {
         setCurrentPage(1);
       });
@@ -178,6 +183,7 @@ export function Select({
   }, [search]);
 
   const searchHandler = useCallback((e) => {
+    setQuery(e?.target?.value || "");
     startTransition(() => {
       setCurrentPage(1);
     });
@@ -251,13 +257,49 @@ export function Select({
             onClick={clearHandler}
           />
         )}
+        {/* Room for the open link, laid over the button (an <a> can't nest in
+            it). Next to the caret, so the hover-only clear (x) appears to its
+            left and leaves no gap while hidden. */}
+        {link && <span className="w-6 shrink-0" aria-hidden="true" />}
         <CaretSortIcon className="ml-1 h-5 w-5 shrink-0 opacity-50" />
       </div>
     </Button>
   );
 
+  // ↗ to the selected record: a real link (Ctrl/Cmd/middle click → new tab);
+  // a plain click calls onOpen (e.g. a modal) when given.
+  const link = openLink?.href && current.value ? openLink : null;
+  const renderLink = () => link && (
+    <a
+      href={link.href}
+      title={link.label}
+      aria-label={link.label}
+      onMouseEnter={() => setActive(true)}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!link.onOpen || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+        e.preventDefault();
+        link.onOpen();
+      }}
+      className={cn(
+        "absolute top-1/2 -translate-y-1/2 z-10 inline-flex h-6 w-6 items-center justify-center rounded",
+        "text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
+        "right-[28px]"
+      )}
+    >
+      <ArrowUpRight className="h-4 w-4" />
+    </a>
+  );
+
+  const actionItems = (typeof actions === "function" ? actions(query) : actions) || [];
+
   if (data.disabled) {
-    return renderButton({ disabled: true });
+    return (
+      <div className="relative w-full">
+        {renderButton({ disabled: true })}
+        {renderLink()}
+      </div>
+    );
   }
 
   const showLoading = isLoading && visibleRows.length === 0;
@@ -271,6 +313,7 @@ export function Select({
   }, [isLocal, currentPage, totalLocalPages, pagination]);
 
   return (
+    <div className="relative w-full">
     <Popover open={open} onOpenChange={openHandler} modal={inDialog}>
       <PopoverTrigger asChild>
         {renderButton({
@@ -307,7 +350,8 @@ export function Select({
           )}
           
           {!isLoading && !error && visibleRows.length === 0 && (
-            <CommandEmpty>{__("No results found.")}</CommandEmpty>
+            // Not CommandEmpty: cmdk hides it while the action items are listed.
+            <div className="py-6 text-center text-sm">{__("No results found.")}</div>
           )}
           
           {!error && visibleRows.length > 0 && (
@@ -369,8 +413,32 @@ export function Select({
               )}
             </div>
           )}
+
+          {actionItems.length > 0 && (
+            <>
+              <CommandSeparator />
+              <CommandGroup>
+                {actionItems.map((action) => (
+                  <CommandItem
+                    key={action.key}
+                    value={`__action__${action.key}`}
+                    onSelect={() => {
+                      openHandler(false);
+                      action.onSelect(query);
+                    }}
+                    className="flex items-center gap-2 cursor-pointer text-muted-foreground"
+                  >
+                    {action.icon}
+                    <span className="truncate">{action.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
         </Command>
       </PopoverContent>
     </Popover>
+    {renderLink()}
+    </div>
   );
 }

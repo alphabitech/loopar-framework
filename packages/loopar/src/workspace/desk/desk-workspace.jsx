@@ -24,9 +24,9 @@ export default function DeskWorkspace(props){
           </div>
          <div
             data-print-root
-            className={`flex flex-col flex-1 w-full px-4 pt-2 pb-4 overflow-auto duration-100 ease-in ${
-              openNav ? "lg:!pl-sidebar-width" : "lg:!pl-collapse-sidebar-width"
-            } ml-3 pr-3`}
+            className={`flex flex-col flex-1 min-w-0 px-4 pt-2 pb-4 overflow-auto ${
+              openNav ? "lg:ml-sidebar-width" : "lg:ml-collapse-sidebar-width"
+            }`}
           >
               {ActiveView}
           </div>
