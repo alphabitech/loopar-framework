@@ -20,7 +20,11 @@ const SEO = () => {
   const { __META__ } = useWorkspace();
   const language = currentLanguage();
   const alternates = __META__?.site_languages?.alternates || [];
+  const seo = __META__?.seo || {};
   return <>
+  {seo.canonical && <link rel="canonical" href={seo.canonical}/>}
+  {seo.canonical && <meta property="og:url" content={seo.canonical}/>}
+  {seo.noindex && <meta name="robots" content="noindex, nofollow"/>}
   <meta property="og:locale" content={ogLocale(language)}/>
   {alternates.filter(a => a.language !== "x-default" && a.language !== language).map(a => (
     <meta key={`og-${a.language}`} property="og:locale:alternate" content={ogLocale(a.language)}/>

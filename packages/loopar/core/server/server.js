@@ -15,6 +15,7 @@ import { shouldServeProduction } from './runtime-mode.js';
 import http from "http";
 import { RealtimeManager } from "../realtime/RealtimeManager.js";
 import { kioskManifest } from "../global/kiosk-manifest.js";
+import { robotsTxt, sitemapXml } from "../global/seo.js";
 import { buildIdMiddleware, buildEndpoint, previousAssetsMiddleware } from "./build-info.js";
 import { debugCollector } from "../debug/collector.js";
 import { isRestoring, unplugTenant } from "../backup/core-ops.js";
@@ -237,6 +238,22 @@ export class Server extends Router {
       if (!loopar.requestTenantId) return next();
       res.type("application/manifest+json").set("Cache-Control", "no-cache")
         .send(JSON.stringify(kioskManifest(String(req.query?.page || ""))));
+    });
+
+    // robots.txt and sitemap.xml of the request's website, generated from its
+    // menu and published collection records (see global/seo.js).
+    const hasWebsite = () => loopar.requestTenantId && loopar.__installed__ && loopar.webApp?.name;
+    server.get("/robots.txt", (req, res, next) => {
+      if (!hasWebsite()) return next();
+      res.type("text/plain").set("Cache-Control", "public, max-age=3600").send(robotsTxt(req));
+    });
+    server.get("/sitemap.xml", async (req, res, next) => {
+      if (!hasWebsite()) return next();
+      try {
+        res.type("application/xml").set("Cache-Control", "public, max-age=3600").send(await sitemapXml(req));
+      } catch (err) {
+        next(err);
+      }
     });
 
     if (this.serveProduction) {

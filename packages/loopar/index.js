@@ -68,6 +68,7 @@ export {
   CUSTOMER_FIELD,
 } from "./core/auth/customer-scope.js";
 export { SCOPE, normalizeScope } from "./core/auth/PermissionManager.js";
+export { userLimit, deskUserCount, assertUserLimit, tenantUserUsage } from "./core/auth/tenant-limits.js";
 export { sanitizeInput, trustedInput, isTrustedInput, policyMapOf, currentActor, lockStructure } from "./core/auth/field-access.js";
 export { WRITE_POLICY, writePolicyMap, filterInput } from "./core/global/field-policy.js";
 export { markStepUp, hasFreshStepUp, clearStepUp, requireStepUp, stepUpLocked, registerStepUpFailure, markOauthProof, takeOauthProof, STEP_UP_REQUIRED_CODE } from "./core/auth/step-up.js";

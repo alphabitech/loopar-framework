@@ -93,7 +93,19 @@ function normalize(name, c = {}) {
     // Set when a backup was restored over this tenant: a core still holding
     // the old instance re-initializes it (core/backup).
     restoredAt: c.restoredAt || null,
+    // Caps of the workspace ({ users }): see core/auth/tenant-limits.js.
+    limits: normalizeLimits(c.limits),
   };
+}
+
+/** { users: "10" } → { users: 10 }; non-positive or invalid values are dropped (= no limit). */
+export function normalizeLimits(limits) {
+  const out = {};
+  for (const [key, value] of Object.entries(limits || {})) {
+    const n = parseInt(value, 10);
+    if (/^[a-z_]+$/.test(key) && Number.isFinite(n) && n > 0) out[key] = n;
+  }
+  return out;
 }
 
 /**
@@ -193,6 +205,7 @@ function translatePatch(data) {
   if (jwt !== undefined) out.jwtSecret = jwt;
   if (data.sites !== undefined) out.sites = normalizeSites(data.sites);
   if (data.redirects !== undefined) out.redirects = normalizeRedirects(data.redirects);
+  if (data.limits !== undefined) out.limits = normalizeLimits(data.limits);
   const sk = data.secretKey ?? data.SECRET_KEY;
   if (sk !== undefined) out.secretKey = sk;
   const it = data.installToken ?? data.INSTALL_TOKEN;
@@ -243,6 +256,7 @@ export async function saveTenant(data = {}) {
     secretKey: patch.secretKey ?? current.secretKey ?? null,
     sites: patch.sites ?? current.sites ?? {},
     redirects: patch.redirects ?? current.redirects ?? {},
+    limits: patch.limits ?? current.limits ?? {},
     installToken: patch.installToken ?? current.installToken ?? null,
     // Re-init marker: a core holding the old instance drops it when this
     // changes (backup restore, reset). Kept across saves so a plain save
@@ -256,6 +270,7 @@ export async function saveTenant(data = {}) {
   if (!next.secretKey) delete next.secretKey;
   if (!Object.keys(next.sites).length) delete next.sites;
   if (!Object.keys(next.redirects).length) delete next.redirects;
+  if (!Object.keys(next.limits).length) delete next.limits;
   if (!next.installToken) delete next.installToken;   // empty → scrubbed
   if (!next.restoredAt) delete next.restoredAt;
   // Drop empty cloud fields, then the object if nothing's left.

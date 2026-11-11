@@ -191,14 +191,24 @@ class PermissionManagerClass {
     await this.#reloadRole(roleName);
   }
 
+  /** Submodules of a module, as listed in the built desk menu. */
+  submodulesOf(moduleName) {
+    for (const app of (loopar.deskMenu || [])) {
+      const found = (app.modules || []).find(m => m.link === moduleName);
+      if (found) return found.submodules || [];
+    }
+    return [];
+  }
+
   canAccessModule(moduleName, username) {
     username = username ?? loopar.auth.user() ?? 'Guest';
     if (username === 'Administrator') return true;
     if (this.can(`Module:${moduleName}`, 'view', username)) return true;
 
-    const key = String(moduleName).toLowerCase();
+    // A parent module is reachable through any document of its submodules.
+    const keys = new Set([moduleName, ...this.submodulesOf(moduleName)].map(m => String(m).toLowerCase()));
     for (const ref of Object.values(loopar.getRefs() ?? {})) {
-      if (String(ref.__MODULE__ ?? '').toLowerCase() !== key) continue;
+      if (!keys.has(String(ref.__MODULE__ ?? '').toLowerCase())) continue;
       if (ref.is_child) continue;
       const doc = ref.__NAME__;
       if (this.can(doc, 'list', username) || this.can(doc, 'view', username)) return true;

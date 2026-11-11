@@ -151,6 +151,45 @@ export function GridView(props) {
 
   const showToolbar = hasSelectAll !== false || hasSearchForm !== false;
 
+  // `Document.__GROUPS__ = { field, groups: [{ value, title, icon }] }` splits
+  // the cards into titled sections (rows of an unknown group go last).
+  const grouping = Document?.__GROUPS__;
+  const sections = useMemo(() => {
+    if (!rows.length) return [];
+    if (!grouping?.field || !grouping.groups?.length) return [{ key: "all", title: "", rows }];
+
+    const known = new Set(grouping.groups.map((g) => String(g.value)));
+    const list = grouping.groups.map((g) => ({
+      key: String(g.value),
+      title: g.title,
+      icon: g.icon,
+      rows: rows.filter((row) => String(row[grouping.field]) === String(g.value)),
+    }));
+    const rest = rows.filter((row) => !known.has(String(row[grouping.field])));
+    if (rest.length) list.push({ key: "__rest__", title: "Other", rows: rest });
+    return list.filter((s) => s.rows.length);
+  }, [rows, grouping]);
+
+  const gridStyle = { gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${gridMinWidth}), 1fr))` };
+
+  const renderCard = (row) => (
+    gridTemplate ? (
+      <Fragment key={row.name}>{gridTemplate(row, defaultAction(row))}</Fragment>
+    ) : (
+      <GridCard
+        key={row.name}
+        row={row}
+        Entity={Entity}
+        titleFields={titleFields}
+        detailCols={detailCols}
+        iconCol={iconCol}
+        selected={selectedRows.includes(row.name)}
+        onSelect={(checked) => selectRow(row, checked)}
+        onDelete={(r) => deleteRow(r, true)}
+      />
+    )
+  );
+
   return (
     <>
       {showToolbar && (
@@ -163,29 +202,24 @@ export function GridView(props) {
           )}
         </div>
       )}
-      <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${gridMinWidth}), 1fr))` }}>
-        {rows.length ? rows.map((row) => (
-          gridTemplate ? (
-            <Fragment key={row.name}>{gridTemplate(row, defaultAction(row))}</Fragment>
-          ) : (
-            <GridCard
-              key={row.name}
-              row={row}
-              Entity={Entity}
-              titleFields={titleFields}
-              detailCols={detailCols}
-              iconCol={iconCol}
-              selected={selectedRows.includes(row.name)}
-              onSelect={(checked) => selectRow(row, checked)}
-              onDelete={(r) => deleteRow(r, true)}
-            />
-          )
-        )) : (
-          <div className="col-span-full flex w-full items-center justify-center p-4">
-            <EmptyTable />
+      {sections.length ? sections.map((section) => (
+        <section key={section.key} className="mb-6 last:mb-0">
+          {section.title && (
+            <h3 className="mb-3 flex items-center gap-2 border-b border-border/60 pb-2 text-sm font-semibold text-foreground">
+              {section.icon && <DynamicIcon className="h-4 w-4 text-muted-foreground" icon={section.icon} />}
+              {__(section.title)}
+              <span className="rounded-full bg-muted px-1.5 text-xs font-normal tabular-nums text-muted-foreground">{section.rows.length}</span>
+            </h3>
+          )}
+          <div className="grid gap-4" style={gridStyle}>
+            {section.rows.map(renderCard)}
           </div>
-        )}
-      </div>
+        </section>
+      )) : (
+        <div className="flex w-full items-center justify-center p-4">
+          <EmptyTable />
+        </div>
+      )}
       <div className="mt-3">
         <Pagination/>
         {props.footer}

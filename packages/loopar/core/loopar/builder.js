@@ -354,11 +354,19 @@ export class Builder {
       const byId = (a, b) => (a.id || 0) - (b.id || 0);
 
       const apps = (await this.db.getAll('App', ['id', 'name', 'description', 'icon'])).sort(byId);
-      const modules = (await this.db.getAll(
+      // The column arrives with the app update that adds submodules; the menu
+      // is also built before that update runs.
+      const hasParent = await this.db.qx().schema.hasColumn('Module', 'parent_module');
+      const allModules = (await this.db.getAll(
         'Module',
-        ['id', 'name', 'icon', 'description', 'app_name'],
-        { in_sidebar: 1 }
+        ['id', 'name', 'icon', 'description', 'app_name', 'in_sidebar', ...(hasParent ? ['parent_module'] : [])]
       )).sort(byId);
+      // Submodules never show in the sidebar: they are sections of their parent.
+      const modules = allModules.filter(m => this.utils.trueValue(m.in_sidebar) && !m.parent_module);
+      const submodulesOf = {};
+      for (const m of allModules) {
+        if (m.parent_module) (submodulesOf[m.parent_module] ??= []).push(m.name);
+      }
       const entities = (await this.db.getAll('Entity', ['id', 'name', 'is_single', 'module'])).sort(byId);
 
       const routesByModule = {};
@@ -376,7 +384,14 @@ export class Builder {
       for (const app of apps) {
         const appModules = modules
           .filter(m => this.utils.compare(m.app_name, app.name))
-          .map(m => ({ link: m.name, icon: m.icon, description: m.description, routes: routesByModule[m.name] || [] }));
+          .map(m => {
+            const submodules = submodulesOf[m.name] || [];
+            return {
+              link: m.name, icon: m.icon, description: m.description, submodules,
+              // A document of a submodule keeps its parent (and its app) active.
+              routes: [m.name, ...submodules].flatMap(name => routesByModule[name] || []),
+            };
+          });
 
         if (appModules.length) {
           menu.push({ name: app.name, description: app.description || app.name, icon: app.icon, home: homes[app.name] || null, modules: appModules });

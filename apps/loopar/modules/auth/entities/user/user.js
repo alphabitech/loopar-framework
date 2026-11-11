@@ -1,5 +1,6 @@
 'use strict'
 
+import { assertUserLimit } from 'loopar/core/auth/tenant-limits.js';
 import { BaseDocument, loopar, Op, setLanguageCookie } from "loopar";
 import { requestEmailChange, adminSetEmail } from "../../controllers/auth/email-change.js";
 
@@ -60,6 +61,7 @@ export default class User extends BaseDocument {
 
     await super.validate();
     await this.validateUserName();
+    await assertUserLimit(this);
   }
 
   async save() {

@@ -36,7 +36,54 @@ function combineSConditions(...conditions) {
 }
 
 
+/** Rows whose fields equal every `filter` value (compared as text: 1 == "1"). */
+export function matchRecords(rows, filter = {}) {
+  const entries = Object.entries(filter || {});
+  if (!entries.length) return rows;
+  return rows.filter(row => entries.every(([field, value]) => String(row?.[field] ?? "") === String(value ?? "")));
+}
+
 export default class BaseDocument extends CoreDocument {
+  /**
+   * Virtual entities (no table: an API, a file…): every record as a plain
+   * row, fresh from its source. The base has no source, so it has no records;
+   * the entity's document overrides this once and desk figures (number cards,
+   * shortcut counters, quick lists) work from it.
+   */
+  async virtualRecords() {
+    return [];
+  }
+
+  /**
+   * List of a virtual entity: its records, searched (`q`: text contained in
+   * each given field), filtered and paged in memory.
+   */
+  async #virtualList({ fields = null, filters = {}, q = null, page = null, rowsOnly = false } = {}) {
+    const listFields = fields || this.getFieldListNames();
+    const search = Object.entries(q || {}).filter(([, v]) => v != null && String(v).trim() !== "");
+    const plain = filters && typeof filters === "object" && !Array.isArray(filters) ? filters : {};
+    const all = matchRecords(await this.virtualRecords(), plain).filter(row =>
+      search.every(([field, value]) => !(field in row) || String(row[field] ?? "").toLowerCase().includes(String(value).trim().toLowerCase()))
+    );
+
+    const pageSize = 10;
+    const totalPages = Math.max(1, Math.ceil(all.length / pageSize));
+    const current = clampPage(page || loopar.getPage(this.__ENTITY__.name), totalPages);
+
+    return {...(rowsOnly ? {} : await this.__meta__(false)), ...{
+      labels: this.getFieldListLabels(),
+      fields: listFields,
+      rows: all.slice((current - 1) * pageSize, current * pageSize),
+      pagination: { page: current, pageSize, totalPages, totalRecords: all.length, sortBy: "id", sortOrder: "asc", __ENTITY__: this.__ENTITY__.name },
+      q,
+    }};
+  }
+
+  /** Records of a virtual entity matching `filter` ({ field: value } equalities). */
+  async virtualCount(filter = {}) {
+    return matchRecords(await this.virtualRecords(), filter).length;
+  }
+
   validateReservedFieldName(fieldName){
     const restricrtedClass = [BaseDocument, CoreDocument]
 
@@ -175,7 +222,7 @@ export default class BaseDocument extends CoreDocument {
     }
   }
 
-  async getList({ fields = null, filters = {}, q = null, page = null, rowsOnly = false, unscoped = false } = {}) {
+  async getList({ fields = null, filters = {}, q = null, page = null, pageSize = 10, rowsOnly = false, unscoped = false } = {}) {
     if (this.__ENTITY__.is_single) {
       return loopar.throw({
         code: 404,
@@ -183,9 +230,13 @@ export default class BaseDocument extends CoreDocument {
       });
     }
 
+    if (loopar.getRef(this.__ENTITY__.name)?.is_virtual) {
+      return await this.#virtualList({ fields, filters, q, page, rowsOnly });
+    }
+
     const pagination = {
       page: page || loopar.getPage(this.__ENTITY__.name),
-      pageSize: 10,
+      pageSize,
       totalPages: 4,
       totalRecords: 1,
       sortBy: "id",

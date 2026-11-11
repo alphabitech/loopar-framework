@@ -292,11 +292,18 @@ export default class ContactFormBase extends BaseDocument {
     }
   }
 
+  /**
+   * Where a new submission is announced: the site's Email Account when it has
+   * one, else Email Settings. Override to route a form to its own inbox.
+   */
+  async notificationRecipients() {
+    return await loopar.mail.notificationEmail();
+  }
+
   async notifyAdmin() {
     try {
-      // The site's Email Account when it has one, else Email Settings.
-      const to = await loopar.mail.notificationEmail();
-      if (!to) {
+      const to = await this.notificationRecipients();
+      if (!to || (Array.isArray(to) && !to.length)) {
         console.warn('No notification email configured');
         return;
       }

@@ -12,6 +12,7 @@ import { loopar } from '../loopar.js';
 import { fileManage } from '../file-manage.js';
 import { PermissionManager, SCOPE } from '../auth/PermissionManager.js';
 import { isAuditableEntity, CREATED_BY_COLUMN } from '../global/audit.js';
+import { matchRecords } from './base-document.js';
 import { setupChecklist, recentDocuments, deskGreeting, systemStats, activityFeed } from './desk-home.js';
 
 export const DESK_PAGE_TYPE = "Desk Page";
@@ -110,8 +111,34 @@ export function scopedQuery(entity, filter, user) {
   return { qb, ref };
 }
 
+/**
+ * Rows of a virtual entity (no table) as `user` sees them: asked to its
+ * document, which reads its source. null when `entity` isn't virtual;
+ * { denied } without the list grant.
+ */
+async function virtualRows(entity, filter, user) {
+  const ref = loopar.getRef(entity, false);
+  if (!ref?.is_virtual) return null;
+  const scope = PermissionManager.scope(ref.__NAME__, "list", user);
+  if (!scope || scope === SCOPE.CUSTOMER) return { denied: true };
+  try {
+    const doc = await loopar.newDocument(ref.__NAME__);
+    return { ref, doc, rows: matchRecords(await doc.virtualRecords(), parseDeskFilter(filter, ref)) };
+  } catch (e) {
+    // Its source didn't answer: say so instead of showing a made-up figure.
+    return { issue: e?.message || `${ref.__NAME__} is not available` };
+  }
+}
+
 /** One figure of an entity (count / sum / avg / min / max) as `user` sees it. */
 export async function aggregate(data, user) {
+  const virtual = await virtualRows(data.entity, data.filter, user);
+  if (virtual) {
+    if (virtual.denied || virtual.issue) return virtual;
+    if (data.aggregate && data.aggregate !== "count") return { issue: `${virtual.ref.__NAME__} is virtual: only count is available` };
+    return { value: virtual.rows.length };
+  }
+
   const q = scopedQuery(data.entity, data.filter, user);
   if (!q) return { denied: true };
 
@@ -125,6 +152,18 @@ export async function aggregate(data, user) {
 }
 
 async function quickList(data, user) {
+  const virtual = await virtualRows(data.entity, data.filter, user);
+  if (virtual) {
+    if (virtual.denied || virtual.issue) return virtual;
+    const known = new Set(virtual.ref.__FIELDS__ || []);
+    const fields = String(data.fields || "").split(",").map(f => f.trim()).filter(f => f && known.has(f));
+    const limit = Math.min(Math.max(parseInt(data.limit, 10) || 5, 1), 50);
+    const titleFields = String(virtual.doc.__ENTITY__?.title_fields || "").split(",").map(f => f.trim()).filter(Boolean);
+    const rows = virtual.rows.slice(0, limit);
+    const titles = Object.fromEntries(rows.map(row => [row.name, titleFields.map(f => row[f]).filter(Boolean).join(" ") || row.name]));
+    return { entity: virtual.ref.__NAME__, fields, rows, titles, labels: {} };
+  }
+
   const q = scopedQuery(data.entity, data.filter, user);
   if (!q) return { denied: true };
 

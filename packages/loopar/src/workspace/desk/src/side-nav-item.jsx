@@ -19,6 +19,7 @@ export const SideNavItem = (props) => {
     path,
     title,
     compact,
+    submodules = [],
   } = props;
 
   const linkProps = path ? external : {};
@@ -34,7 +35,8 @@ export const SideNavItem = (props) => {
 
   useEffect(() => {
     const moduleName = decodeURIComponent(pathname?.pathname.split('/')[2]);
-    setActive(moduleName === path || path == activeModule);
+    // A submodule (its page or any of its documents) keeps the parent active.
+    setActive(moduleName === path || path == activeModule || submodules.includes(moduleName) || submodules.includes(activeModule));
   }, [pathname, activeModule]);
 
 

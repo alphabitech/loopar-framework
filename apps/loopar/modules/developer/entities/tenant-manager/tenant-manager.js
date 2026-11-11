@@ -30,6 +30,7 @@ export default class TenantManager extends BaseDocument {
           domain: app?.domain,
           control_plane: app?.controlPlane ? 1 : 0,
           template_host: app?.templateHost ? 1 : 0,
+          user_limit: app?.limits?.users || '',
           sites: Object.entries(app?.sites || {}).map(([d, a]) => `${d} = ${a}`).join('\n'),
           redirects: Object.entries(app?.redirects || {}).map(([p, to]) => `${p} = ${to}`).join('\n'),
           ...Object.fromEntries(Object.entries(this.__DATA__ || {}).filter(([, v]) => v != null)),
@@ -93,9 +94,10 @@ export default class TenantManager extends BaseDocument {
 
   async __data__() {
     // Never hand tenant secrets to the form; saveTenant keeps them when absent.
-    const { jwtSecret, secretKey, installToken, sites, redirects, controlPlane, templateHost, ...data } = tenant.getTenantData(this.name);
+    const { jwtSecret, secretKey, installToken, sites, redirects, controlPlane, templateHost, limits, ...data } = tenant.getTenantData(this.name);
     return {
       ...data,
+      user_limit: limits?.users || '',
       control_plane: controlPlane ? 1 : 0,
       template_host: templateHost ? 1 : 0,
       sites: Object.entries(sites || {}).map(([d, a]) => `${d} = ${a}`).join('\n'),
@@ -110,7 +112,14 @@ export default class TenantManager extends BaseDocument {
       return loopar.throw({ status: 409, title: 'Conflict', message: 'Tenant already exists, try another name' });
     }
 
-    await tenant.saveTenant({...await this.rawValues(), sites: this.#sitesMap(), redirects: this.#redirectsMap(), ID: this.id || this.name});
+    await tenant.saveTenant({
+      ...await this.rawValues(),
+      sites: this.#sitesMap(),
+      redirects: this.#redirectsMap(),
+      // Other limits (set by a billing app) are kept; an empty value removes this one.
+      limits: { ...(tenant.readTenant(this.name)?.limits || {}), users: this.user_limit },
+      ID: this.id || this.name,
+    });
     await tenantOps.refreshCaddy();
     this.#evict();
     // The running instance isn't evicted; rebuild so its website cache
@@ -308,6 +317,11 @@ export default class TenantManager extends BaseDocument {
     await tenantOps.destroyTenant(this.name, { removePath });
     tenantRegistry.invalidate();
     return true;
+  }
+
+  /** Every tenant on this server (desk figures: number cards, shortcut counters). */
+  async virtualRecords() {
+    return await this.#getTenantList();
   }
 
   async #getTenantList(){

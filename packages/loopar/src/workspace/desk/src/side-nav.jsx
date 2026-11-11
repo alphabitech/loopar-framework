@@ -14,7 +14,7 @@ import { MainNav } from "./main-nav";
 import { __ } from "@global/i18n";
 
 const appOwns = (app, key) =>
-  !!key && (app.home === key || (app.modules || []).some(m => m.link === key || (m.routes || []).some(r => r.description === key)));
+  !!key && (app.home === key || (app.modules || []).some(m => m.link === key || (m.submodules || []).includes(key) || (m.routes || []).some(r => r.description === key)));
 
 const homePath = (app) => `/desk/${app.home}/view`;
 
@@ -266,6 +266,7 @@ function ModuleList({ app, compact }) {
           icon={module.icon}
           DefaultIcon={ChevronLeftIcon}
           path={module.link}
+          submodules={module.submodules}
           title={__(module.description)}
           compact={compact}
           className="rounded-md py-2 hover:bg-slate-300/50 dark:hover:bg-slate-700/80"

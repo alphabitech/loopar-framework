@@ -8,6 +8,7 @@ import { loopar, fileManager, PermissionManager, sidebarDashboards } from "loopa
 import { shouldServeProduction } from "../server/runtime-mode.js";
 import { kioskHeadTags } from "../global/kiosk-manifest.js";
 import { activeAnnouncement } from "../global/announcements.js";
+import { seoMeta, organizationJsonLd } from "../global/seo.js";
 import { requestLanguage, clientI18nPayload, contentLanguages, siteLanguages, siteDefaultLanguage, translateRecord, loadRegional, availableLanguages } from "../server/i18n.js";
 import { localizePath, splitLanguagePrefix } from "../global/i18n.js";
 import fs from 'fs';
@@ -46,6 +47,8 @@ export default class WorkspaceController extends AuthController {
       // language prefix and the language switcher lists them.
       WORKSPACE.site_languages = WorkspaceController.siteLanguagesMeta(this.req);
       if (workspace === "web") WORKSPACE.announcement = await activeAnnouncement(loopar.webApp?.name);
+      // Canonical URL of the page and whether the site hides from search engines.
+      if (workspace === "web") WORKSPACE.seo = seoMeta(this.req);
     } else if (workspace === "portal") {
       // The portal is the signed-in side of the site: it wears the host's web app (logo, theme).
       WORKSPACE.web_app = loopar.webApp;
@@ -177,6 +180,15 @@ export default class WorkspaceController extends AuthController {
 
     let html = template.replace(`<!--ssr-outlet-->`, fragment);
     if (hoisted) html = html.replace("</head>", `${hoisted}</head>`);
+
+    // The company's structured data (schema.org), on public pages of its site.
+    if ((__META__.name || this.workspace) === "web") {
+      const jsonLd = await organizationJsonLd(this.req).catch(() => null);
+      if (jsonLd) {
+        const json = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
+        html = html.replace("</head>", `<script type="application/ld+json">${json}</script></head>`);
+      }
+    }
     const cookieTheme = loopar.cookie.get('vite-ui-theme');
     const ssrTheme =
       cookieTheme === 'light' || cookieTheme === 'dark' ? cookieTheme : 'dark';
