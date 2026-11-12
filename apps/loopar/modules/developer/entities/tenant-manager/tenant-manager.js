@@ -131,8 +131,14 @@ export default class TenantManager extends BaseDocument {
 
   async start() {
     await this.validate();
+    const wasActive = tenant.readTenant(this.name)?.status === 'active';
     await tenantOps.activate(this.name);
-    this.#evict();
+    // A tenant that was already running keeps its instance: dropping it cuts
+    // whatever it is doing. Billing webhooks call start() "to be sure" while
+    // a new workspace is still installing, and the install lost its database
+    // and refs half-way (no Administrator, broken rollback).
+    if (wasActive) tenantRegistry.invalidate();
+    else this.#evict();
     return true;
   }
 

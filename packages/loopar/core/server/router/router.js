@@ -6,6 +6,7 @@ import { RouterUtils } from './router-utils.js';
 import { merge } from 'es-toolkit/object';
 import { Middleware } from "./middleware.js";
 import { requestContext } from './request-context.js';
+import { noWebsitePage, noWebsiteStatus } from '../no-website-page.js';
 
 /**
  * Collects every plain-method name defined anywhere on a controller's
@@ -86,6 +87,18 @@ export default class Router extends Middleware {
     this.server.use(this.setupErrorMiddleware());
   }
 
+  /** Answer of a public page when the workspace has no website (see no-website-page.js). */
+  noWebsite(req, res) {
+    let signedIn = false;
+    try { signedIn = !!loopar.auth?.user?.(); } catch { signedIn = false; }
+    if (signedIn) return this.redirect(req, res, "/desk");
+
+    return res.status(noWebsiteStatus(req._parsedUrl?.pathname))
+      .set("Content-Type", "text/html")
+      .set("Cache-Control", "no-store")
+      .send(noWebsitePage({ host: req.hostname }));
+  }
+
   /**
    * Creates and executes controller
    * @param {Object} req - Express request object
@@ -125,6 +138,11 @@ export default class Router extends Middleware {
         });
       }
     } else {
+      // A workspace without a website is not an error: its public pages say
+      // so and lead to the desk (straight there for whoever is signed in).
+      if (req.method === "GET" && RouterUtils.workspaceServesWebPages(req.__WORKSPACE_NAME__) && !loopar.webApp?.name) {
+        return this.noWebsite(req, res);
+      }
       RouterUtils.setDefaultParams(params, req.__WORKSPACE_NAME__);
       setDocument();
     }

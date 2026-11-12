@@ -93,19 +93,52 @@ function normalize(name, c = {}) {
     // Set when a backup was restored over this tenant: a core still holding
     // the old instance re-initializes it (core/backup).
     restoredAt: c.restoredAt || null,
-    // Caps of the workspace ({ users }): see core/auth/tenant-limits.js.
+    // Caps of the workspace ({ users, domain_suffix }): see core/auth/tenant-limits.js.
     limits: normalizeLimits(c.limits),
   };
 }
 
-/** { users: "10" } → { users: 10 }; non-positive or invalid values are dropped (= no limit). */
+/**
+ * { users: "10" } → { users: 10 }; non-positive or invalid values are dropped
+ * (= no limit). `domain_suffix` is the one text limit: ".example.com" means
+ * the workspace may only use domains under it (no domain of its own).
+ */
 export function normalizeLimits(limits) {
   const out = {};
   for (const [key, value] of Object.entries(limits || {})) {
+    if (key === 'domain_suffix') {
+      const suffix = String(value || '').trim().toLowerCase().replace(/^\.*/, '');
+      if (/^[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(suffix)) out[key] = `.${suffix}`;
+      continue;
+    }
     const n = parseInt(value, 10);
     if (/^[a-z_]+$/.test(key) && Number.isFinite(n) && n > 0) out[key] = n;
   }
   return out;
+}
+
+/** Every domain a tenant config answers on: the primary one and its sites'. */
+const domainsOf = (config) => [config?.domain, ...Object.keys(config?.sites || {})]
+  .map(d => String(d || '').trim().toLowerCase()).filter(Boolean);
+
+/**
+ * Refuses a NEW domain outside the workspace's `domain_suffix` limit. Local
+ * domains always pass, and domains the tenant already had are kept: a limit
+ * that arrives later (a plan change) never takes a domain away.
+ */
+export function assertDomainLimit(current, next) {
+  const suffix = next?.limits?.domain_suffix;
+  if (!suffix) return;
+  const had = new Set(domainsOf(current));
+  const refused = domainsOf(next).filter(d => !had.has(d) && !isLocalDomain(d) && !d.endsWith(suffix));
+  if (!refused.length) return;
+  const error = new Error(
+    `This workspace's plan doesn't include a custom domain: ${refused.join(', ')} can't be used. ` +
+    `Use a domain ending in ${suffix}, or upgrade the plan.`
+  );
+  error.code = 403;
+  error.title = 'Custom domain not included';
+  throw error;
 }
 
 /**
@@ -264,6 +297,7 @@ export async function saveTenant(data = {}) {
     restoredAt: patch.restoredAt ?? current.restoredAt ?? null,
     cloud: { ...(current.cloud || {}), ...(patch.cloud || {}) },
   };
+  if (!isNew) assertDomainLimit(current, next);
   if (!next.controlPlane) delete next.controlPlane;
   if (!next.templateHost) delete next.templateHost;
   if (!next.jwtSecret) delete next.jwtSecret;

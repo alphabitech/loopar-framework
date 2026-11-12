@@ -12,7 +12,7 @@
     "openai": "7.39.0",
     "otpauth": "9.5.2",
     "qrcode": "1.5.4",
-    "stripe": "23.0.0",
+    "stripe": "23.1.0",
     "zxing-wasm": "3.1.6"
   }
 }

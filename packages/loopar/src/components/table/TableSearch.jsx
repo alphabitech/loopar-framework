@@ -94,6 +94,7 @@ export function TableSearch(props){
                 },
                 ...c.data,
                 required: 0,
+                description: ""
               };
 
               data.name = c.data.name;
@@ -107,7 +108,7 @@ export function TableSearch(props){
                   render={Component => (
                     <Component
                       data={{
-                        ...data,
+                        ...data
                       }}
                       dontHaveLabel={true}
                       onChange={(e) => {

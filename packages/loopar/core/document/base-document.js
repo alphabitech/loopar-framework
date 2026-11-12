@@ -62,8 +62,19 @@ export default class BaseDocument extends CoreDocument {
     const listFields = fields || this.getFieldListNames();
     const search = Object.entries(q || {}).filter(([, v]) => v != null && String(v).trim() !== "");
     const plain = filters && typeof filters === "object" && !Array.isArray(filters) ? filters : {};
+    // Same rules as buildCondition: choice fields match exactly, switches
+    // only filter when on, everything else is a "contains".
+    const matches = (row, field, value) => {
+      if (!(field in row)) return true;
+      const element = this.fields[field]?.element;
+      const wanted = String(value).trim().toLowerCase();
+      const actual = String(row[field] ?? "").toLowerCase();
+      if ([SWITCH, CHECKBOX].includes(element)) return !loopar.utils.trueValue(value) || loopar.utils.trueValue(row[field]);
+      if ([SELECT, CONNECTION, RADIO_GROUP].includes(element)) return actual === wanted;
+      return actual.includes(wanted);
+    };
     const all = matchRecords(await this.virtualRecords(), plain).filter(row =>
-      search.every(([field, value]) => !(field in row) || String(row[field] ?? "").toLowerCase().includes(String(value).trim().toLowerCase()))
+      search.every(([field, value]) => matches(row, field, value))
     );
 
     const pageSize = 10;

@@ -8467,7 +8467,7 @@ __metadata:
     openai: "npm:7.39.0"
     otpauth: "npm:9.5.2"
     qrcode: "npm:1.5.4"
-    stripe: "npm:23.0.0"
+    stripe: "npm:23.1.0"
     zxing-wasm: "npm:3.1.6"
   languageName: unknown
   linkType: soft
@@ -12842,15 +12842,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"stripe@npm:23.0.0":
-  version: 23.0.0
-  resolution: "stripe@npm:23.0.0"
+"stripe@npm:23.1.0":
+  version: 23.1.0
+  resolution: "stripe@npm:23.1.0"
   peerDependencies:
     "@types/node": ">=20"
   peerDependenciesMeta:
     "@types/node":
       optional: true
-  checksum: 10c0/08f30d511ade3161067f70d7802fe9d9a39df05fdef68d699be9842cd352503183bf07ff06113c033bcdac47fb8af1fbbeff80b34202701f7258fc23490e7822
+  checksum: 10c0/9f17a0317824e499297efcf89e37cecdab456b019005efb54f62e3a932f59dc44663e8eac01cd04034c68d73d8748cc04d169308536c8098a273a3066b7caf4b
   languageName: node
   linkType: hard
 

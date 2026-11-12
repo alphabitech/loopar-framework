@@ -33,3 +33,36 @@ test("limits: stored on the tenant, kept across saves, removed when emptied", as
   await tenant.saveTenant({ name: "acme", limits: { users: "" } });
   assert.equal("limits" in config("acme"), false);
 });
+
+test("domain_suffix: the one text limit, normalized with its leading dot", () => {
+  assert.deepEqual(normalizeLimits({ domain_suffix: "Loopar.Build" }), { domain_suffix: ".loopar.build" });
+  assert.deepEqual(normalizeLimits({ domain_suffix: ".loopar.build", users: 3 }), { domain_suffix: ".loopar.build", users: 3 });
+  assert.deepEqual(normalizeLimits({ domain_suffix: "not a domain" }), {});
+});
+
+test("domain_suffix: a new domain outside it is refused, in the primary domain or a site", async () => {
+  await tenant.saveTenant({ name: "sub", status: "active", domain: "sub.loopar.build", limits: { domain_suffix: ".loopar.build" } });
+
+  await assert.rejects(tenant.saveTenant({ name: "sub", domain: "mybrand.com" }), /custom domain/);
+  await assert.rejects(tenant.saveTenant({ name: "sub", sites: { "shop.mybrand.com": "shop" } }), /shop\.mybrand\.com/);
+  assert.equal(config("sub").domain, "sub.loopar.build");
+
+  // Under the suffix, or local, is fine; so is any save that adds no domain.
+  await tenant.saveTenant({ name: "sub", sites: { "shop.loopar.build": "shop", "sub.localhost": "dev" } });
+  await tenant.saveTenant({ name: "sub", status: "suspended" });
+  assert.deepEqual(Object.keys(config("sub").sites), ["shop.loopar.build", "sub.localhost"]);
+});
+
+test("domain_suffix: a limit that arrives later keeps the domains the workspace already had", async () => {
+  await tenant.saveTenant({ name: "own", status: "active", domain: "mybrand.com", sites: { "www.mybrand.com": "site" } });
+  await tenant.saveTenant({ name: "own", limits: { domain_suffix: ".loopar.build" } });
+  assert.equal(config("own").domain, "mybrand.com");
+
+  await tenant.saveTenant({ name: "own", sites: { "www.mybrand.com": "site", "own.loopar.build": "site" } });
+  await assert.rejects(tenant.saveTenant({ name: "own", sites: { "www.mybrand.com": "site", "other.com": "site" } }), /other\.com/);
+
+  // Without the limit, anything goes again.
+  await tenant.saveTenant({ name: "own", limits: {} });
+  await tenant.saveTenant({ name: "own", domain: "other.com" });
+  assert.equal(config("own").domain, "other.com");
+});
