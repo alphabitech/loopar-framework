@@ -30,7 +30,7 @@ const sub = (name, fields) => loopar.db.insertRow("Subscription", { name, tenant
 
 test("Cloud Settings defaults to 5 days and validates", async () => {
   await t.run(async () => {
-    assert.deepEqual(await lifecycle.cloudSettings(), { graceDays: 5, autoDelete: true });
+    assert.deepEqual(await lifecycle.cloudSettings(), { graceDays: 5, autoDelete: true, defaultTemplate: "" });
     const s = await loopar.getDocument("Cloud Settings");
     s.deletion_grace_days = 0;
     await assert.rejects(() => s.save(), /at least 1/);

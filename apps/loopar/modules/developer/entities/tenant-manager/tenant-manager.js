@@ -302,6 +302,8 @@ export default class TenantManager extends BaseDocument {
     }
     try { tenantOps.assertDisposable(this.name); }
     catch (e) { loopar.throw({ code: 403, title: 'Forbidden', message: e.message }); }
+    try { tenantOps.assertStopped(this.name, verb); }
+    catch (e) { loopar.throw({ code: 409, title: 'Workspace is running', message: e.message }); }
   }
 
   /**

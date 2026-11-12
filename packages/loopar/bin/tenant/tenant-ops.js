@@ -104,6 +104,16 @@ export function assertDisposable(name) {
 }
 
 /**
+ * Throws while `name` is turned on: a running tenant is suspended first and
+ * reset or destroyed after, so nobody wipes by accident the one that is serving.
+ */
+export function assertStopped(name, verb = 'destroy') {
+  if (tenant.readTenant(name)?.status === 'active') {
+    throw new Error(`"${name}" is running. Turn it off first, then ${verb} it.`);
+  }
+}
+
+/**
  * Throws unless the control-plane flag of `name` may change to `on`.
  * `actor` is the tenant asking (the Desk); null for the TUI/CLI, which run
  * on the server itself.
@@ -203,6 +213,7 @@ export async function dropTenantDatabase(name) {
  */
 export async function resetTenant(name) {
   assertDisposable(name);
+  assertStopped(name, 'reset');
   const site = path.join(SITES_DIR, name);
   if (!fs.existsSync(site)) throw new Error(`Tenant "${name}" not found`);
 
@@ -228,6 +239,7 @@ export async function resetTenant(name) {
  */
 export async function destroyTenant(name, { removePath = true, dropDatabase = true } = {}) {
   assertDisposable(name);
+  assertStopped(name);
   if (removePath) {
     const sitePath = path.join(SITES_DIR, name);
     if (fs.existsSync(sitePath)) {

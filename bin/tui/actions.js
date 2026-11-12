@@ -163,7 +163,10 @@ export async function run(action) {
   }
   if (action === "destroy" || action === "reset") {
     if (!sel) return;
-    try { tenantOps.assertDisposable(sel.name); }
+    try {
+      tenantOps.assertDisposable(sel.name);
+      tenantOps.assertStopped(sel.name, action);
+    }
     catch (err) { state.message = err.message; state.messageKind = "error"; return render(); }
     state.mode = "destroy"; state.danger = action; state.input = ""; state.message = "";
     return render();
