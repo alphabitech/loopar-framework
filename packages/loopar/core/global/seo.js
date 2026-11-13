@@ -10,6 +10,7 @@
 
 import { loopar, fileManager } from 'loopar';
 import { getCompany } from './company.js';
+import { parsePageSeo } from './page-seo.js';
 import { localizePath, splitLanguagePrefix } from './i18n.js';
 import { siteLanguages, siteDefaultLanguage } from '../server/i18n.js';
 import { VALID_WORKSPACES } from './router-utils.js';
@@ -118,6 +119,18 @@ async function collectionEntities(page) {
     .map((el) => String(el.data.options).trim()))];
 }
 
+/** True when the page's own SEO settings hide it from search engines. */
+async function pageIsHidden(page) {
+  const ref = loopar.getRef(page);
+  if (!ref) return false;
+  try {
+    const seo = await loopar.db.getValue(ref.__ENTITY__, 'seo', ref.__NAME__, { ifNotFound: null });
+    return TRUE.includes(parsePageSeo(seo).noindex);
+  } catch {
+    return false;
+  }
+}
+
 /** Published records of a collection entity that have a detail page on this site. */
 async function publishedRecords(entity, app) {
   const ref = loopar.getRef(entity);
@@ -150,6 +163,7 @@ export async function sitemapEntries(webApp = loopar.webApp) {
 
   for (const item of items) {
     if (TRUE.includes(item.router_only) || !item.link) continue;
+    if (item.page && await pageIsHidden(item.page)) continue;
     if (item.parent_menu) {
       const root = rootLink(item, items);
       add(root ? `/${menuPath(root)}/${menuPath(item.link)}` : `/${menuPath(item.link)}`);

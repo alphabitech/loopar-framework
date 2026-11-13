@@ -138,12 +138,12 @@ export async function setupChecklist(user = loopar.auth.user()) {
       };
     }),
     attempt(async () => {
-      const settings = await singleValues('System Settings', ['active_web_app']);
       return {
         key: 'website',
         label: 'Website',
-        description: 'Pick the app that serves the public website of this domain.',
-        done: !!settings.active_web_app,
+        description: 'Install an app with a website (or a template); System Settings lets you pick which one is shown.',
+        // Chosen in System Settings, or taken from the first app with a website.
+        done: !!loopar.webApp?.name,
         to: deskUrl('System Settings'),
         cta: 'Choose',
       };

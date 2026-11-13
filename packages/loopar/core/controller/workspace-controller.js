@@ -37,6 +37,8 @@ export default class WorkspaceController extends AuthController {
       WORKSPACE.ui_languages = availableLanguages().filter((l) => l !== "en");
       // The designer palette offers app-provided elements of these apps only.
       WORKSPACE.installed_apps = Object.keys(loopar.installedApps || {});
+      // Whether this host serves a website: without one the desk offers no link to it.
+      WORKSPACE.has_website = !!loopar.webApp?.name;
     } else if (workspace === "web" || workspace === "kiosk") {
       // Kiosk pages are web pages without the site's navigation: same app (logo, theme).
       // Footer, copyright… in the visitor's language (App translatable fields).

@@ -1,6 +1,7 @@
 import loopar from "loopar";
-import { BrushIcon, BracesIcon, EyeIcon, SparkleIcon, HandGrab, BrushCleaning, Undo2, Redo2, LanguagesIcon } from "lucide-react";
+import { BrushIcon, BracesIcon, EyeIcon, SparkleIcon, HandGrab, BrushCleaning, Undo2, Redo2, LanguagesIcon, SearchIcon } from "lucide-react";
 import { TranslationsTab, useHasTranslations } from "./translations-tab";
+import { SeoTab, useHasSeo } from "./seo-tab";
 import { BaseFormContext } from "@form-context";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { DesignerContext, useDesigner } from "@context/designer-context";
@@ -152,6 +153,8 @@ export const BaseDesigner = (props) => {
   const {name, entity, sidebarOpen, handleSetSidebarOpen} = useDocument();
   // The layout's translations live in the document's `translations` field.
   const hasTranslations = useHasTranslations();
+  // Website pages keep their search/social settings in the document's `seo` field.
+  const hasSeo = useHasSeo();
   const [dragEnabled, setDragEnable] = useState(true);
 
   const [updatingElementName, setUpdatingElementName] = usePersist(name + "updatingElementName");
@@ -1160,6 +1163,15 @@ export const BaseDesigner = (props) => {
               </div>
             </Tab>
               ,
+              hasSeo && (
+                <Tab
+                  label={<div className="flex"><SearchIcon className="h-6 w-6 pr-2" /> {__("SEO")}</div>}
+                  name={`${selfKey}-seo_tab`}
+                  key={`${selfKey}-seo_tab`}
+                >
+                  <SeoTab />
+                </Tab>
+              ),
               hasTranslations && (
                 <Tab
                   label={<div className="flex"><LanguagesIcon className="h-6 w-6 pr-2" /> {__("Translations")}</div>}

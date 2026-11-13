@@ -93,9 +93,18 @@ const PROTECTED_DATABASES = new Set([
   'postgres', 'template0', 'template1',
 ]);
 
+/**
+ * A tenant name is its folder under sites/: one plain path segment (letters,
+ * numbers, "-" and "_"; no dots or separators). A leading "_" is allowed —
+ * throwaway tenants (__loopar_test_<pid>__) must stay removable.
+ */
+export function isTenantName(name) {
+  return typeof name === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_-]*$/.test(name);
+}
+
 /** Throws unless `name` is a tenant that may be reset or destroyed. */
 export function assertDisposable(name) {
-  if (!name || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name)) {
+  if (!isTenantName(name)) {
     throw new Error(`Invalid tenant name "${name}"`);
   }
   if (tenant.isControlPlane(name)) {
@@ -167,6 +176,9 @@ export async function dropTenantDatabase(name) {
   if (dialect === 'sqlite') { removeLocal(); return 'sqlite'; }
 
   const database = String(cfg.database || '');
+  // Connected but never installed (the setup wizard stopped after "connect"):
+  // the config names a server and no database, so there is nothing to drop.
+  if (!database) { removeLocal(); return 'none'; }
   if (!/^[A-Za-z0-9_$-]+$/.test(database) || PROTECTED_DATABASES.has(database.toLowerCase())) {
     throw new Error(`Refusing to drop database "${database}".`);
   }

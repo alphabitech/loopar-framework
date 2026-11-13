@@ -4,7 +4,7 @@ import {Link} from "@link";
 import { __ } from "@global/i18n";
 import { formatDate } from "@global/format";
 
-export default function DefaultCard({ item, fields = [], variant = "default", collectionSlug }) {
+export default function DefaultCard({ item, fields = [], variant = "default", collectionSlug, hideBadges = false, detailPath }) {
   const fieldsByName = useMemo(() => {
     const map = {};
     for (const f of (fields || [])) map[f.name] = f;
@@ -49,6 +49,7 @@ export default function DefaultCard({ item, fields = [], variant = "default", co
 
   const badges = useMemo(() => {
     const out = [];
+    if (hideBadges) return out;
     if (item?.featured) out.push("Featured");
     for (const f of fields) {
       if (f.element !== "switch" || !f.show_in_card) continue;
@@ -56,18 +57,25 @@ export default function DefaultCard({ item, fields = [], variant = "default", co
       if (item?.[f.name]) out.push(f.label || f.name);
     }
     return out;
-  }, [item, fields]);
+  }, [item, fields, hideBadges]);
 
   const to = item?.custom_url
     ? String(item.custom_url).trim()
     : (item?.slug || item?.name || "");
   const isExternal = /^https?:\/\//i.test(to);
+  // Detail lives on the page holding the collection; `detailPath` points the
+  // cards of a collection placed elsewhere (e.g. the home) to that page.
+  const detailBase = String(detailPath || "").trim().replace(/\/+$/, "");
+  const detailQuery = `collection?collection=${collectionSlug}&detailSlug=${item?.slug}`;
+  const detailTo = detailBase
+    ? `${detailBase.startsWith("/") ? "" : "/"}${detailBase}/${detailQuery}`
+    : detailQuery;
 
   if (variant === "list") {
     const minutes = parseInt(item?.reading_time, 10);
     return (
       <Link
-        to={isExternal ? to : `collection?collection=${collectionSlug}&detailSlug=${item?.slug}`}
+        to={isExternal ? to : detailTo}
         bare
         notControlled={isExternal}
         _target={isExternal ? "_blank" : undefined}
@@ -93,9 +101,38 @@ export default function DefaultCard({ item, fields = [], variant = "default", co
     );
   }
 
+  // "overlay": the cover fills the card and the title/summary sit on a dark
+  // gradient, so the text is always light regardless of the theme.
+  if (variant === "overlay") {
+    return (
+      <Link
+        to={detailTo}
+        bare
+        notControlled={isExternal}
+        _target={isExternal ? "_blank" : undefined}
+        rel={isExternal ? "noopener noreferrer" : undefined}
+        className="group relative flex h-full min-h-80 flex-col justify-end overflow-hidden rounded-2xl border-2 border-border/70 bg-secondary shadow-md transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-2xl"
+      >
+        {cover ? (
+          <img
+            src={cover.src}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10" aria-hidden="true" />
+        <div className="relative flex flex-col gap-2 p-6">
+          <h3 className="text-xl font-bold leading-tight tracking-tight !text-white drop-shadow-sm">{title}</h3>
+          {summary ? <p className="text-sm leading-relaxed !text-white/85 line-clamp-3">{summary}</p> : null}
+        </div>
+      </Link>
+    );
+  }
+
   return (
     <Link
-      to={`collection?collection=${collectionSlug}&detailSlug=${item?.slug}`}
+      to={detailTo}
       bare
       notControlled={isExternal}
       _target={isExternal ? "_blank" : undefined}

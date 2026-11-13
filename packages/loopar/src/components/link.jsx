@@ -8,6 +8,7 @@ import { activeLink } from "@workspace/defaults";
 import { useDesigner } from "@context/designer-context";
 import { VARIANTS } from "./base/ComponentDefaults";
 import { RouteParsing, setDefaultParams, buildUrl } from "@global/router-utils";
+import { isExternalTarget, safeTarget } from "@global/link-target";
 import { EntryModal } from "@app/entry-modal";
 import { currentLanguage, localizePath } from "@global/i18n";
 import { DynamicIcon } from "@icon";
@@ -95,7 +96,7 @@ const useActiveSection = (to, enabled) => {
 };
 
 export function Link({
-  to = "",
+  to: rawTo = "",
   inModal,
   onSaved,
   variant = "link",
@@ -108,15 +109,21 @@ export function Link({
   award: awardProp,
   active: activeProp,
   renderOnRestrict,
+  target: targetProp,
+  // `_target` is the designer's field name (see metaFields); "_modal" is ours,
+  // never a DOM target.
+  _target,
   ...props
 }) {
   const { setOpenNav, currentPage, workspace, award, navigate: wsNavigate, isModal } = useWorkspace();
   const [modalOpen, setModalOpen] = useState(false);
   const { designing } = useDesigner();
 
+  // The target is authored in a designer: only navigable schemes are followed.
+  const to = safeTarget(rawTo);
   const url = useMakeUrl(to);
 
-  const isAbsolute = url?.includes("http");
+  const isAbsolute = isExternalTarget(to);
   const isHashLink = to.startsWith("#");
 
   const scrollToSection = useScrollToSection(to);
@@ -189,14 +196,15 @@ export function Link({
   }
 
   if (isAbsolute || notControlled) {
-    // `_target` is the designer's field name (see metaFields) — translate it
-    // to the real DOM attribute instead of leaking `_target` into the <a>.
-    const target = props.target || props._target;
+    // An external page cannot open in a desk modal: it opens normally.
+    const chosen = targetProp || _target;
+    const target = chosen === "_modal" ? undefined : chosen;
     return (
       <a
         {...commonProps}
         href={to}
         {...(target ? { target } : {})}
+        {...(target === "_blank" ? { rel: "noopener noreferrer" } : {})}
         key={renderizableProps.key || to}
       >
         {children}
@@ -259,6 +267,7 @@ export function Link({
     <ReactLink
       {...commonProps}
       to={url}
+      {...((targetProp || _target) === "_blank" ? { target: "_blank" } : {})}
       onClick={handleClick}
       key={renderizableProps.key || url}
     >
@@ -300,12 +309,15 @@ export const iconMetaFields = () => ({
 
 export default function MetaLink({...props}) {
   const data = props.data || {};
-  const { class: dataClass, icon, icon_position, size, ...restData } = data;
+  // Permission display is the framework's call, never the structure's:
+  // `award` / `renderOnRestrict` cannot be set from designer data.
+  const { class: dataClass, icon, icon_position, size, award, renderOnRestrict, ...restData } = data;
 
   return (
     <Link
       {...props}
       {...restData}
+      inModal={restData._target === "_modal" || props.inModal}
       size={BUTTON_SIZES.some(s => s.value === size) ? size : undefined}
       className={cn(props.className, dataClass)}
       variant={VARIANTS[data.variant] || VARIANTS.default}
@@ -324,8 +336,9 @@ MetaLink.metaFields = () => [{
       element: SELECT,
       data: {
         options: [
-          { option: "self",  value: "_self"  },
-          { option: "blank", value: "_blank" },
+          { value: "_self",  label: "Same page" },
+          { value: "_blank", label: "New tab" },
+          { value: "_modal", label: "Modal (desk)" },
         ],
       },
     },

@@ -59,7 +59,7 @@ export const Meta = memo(function Meta(props) {
   const metaModule = useMetaModule(meta.element, isDesigner || def.designerOnly !== true);
   const Comp = metaModule?.default || metaModule;
 
-  if (Comp || [MARKDOWN, SEO].includes(meta.element)) {
+  if (Comp || meta.element === MARKDOWN) {
     // Hydrate metaFields defaults here — the common point for SSR, the public
     // page and the designer — so the base render no longer depends on the
     // element editor mounting to see values like feature-card's default icon.

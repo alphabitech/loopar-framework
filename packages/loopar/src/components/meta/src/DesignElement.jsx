@@ -216,6 +216,10 @@ export const DesignElement = memo(function DesignElement(props) {
   const isSelected = designing && updatingElement && getNodeKey(updatingElement) === nodeKey;
   const tone = toneOf(elementProps.element);
   const isLayout = elementsDict[elementProps.element]?.def?.group === "layout";
+  // Inline elements (link, button) keep their own width, so a flex row of
+  // them looks in the designer the way it renders; in a block parent the
+  // wrapper still spans the line.
+  const isInline = elementsDict[elementProps.element]?.def?.inline === true;
   // Type label: containers show it on hover and while selected; leaves only on
   // hover (selected leaves already carry the edit chip and the label would
   // cover their content).
@@ -225,7 +229,8 @@ export const DesignElement = memo(function DesignElement(props) {
     <HiddenContext.Provider value={disabled}>
       <div
         className={cn(
-          "relative w-full h-auto",
+          "relative h-auto",
+          isInline ? "w-auto" : "w-full",
           className,
           designing && isDroppable && !isActive && !isSelected && ["outline outline-1 outline-dashed outline-offset-2", tone.rest],
           designing && isActive && !isSelected && ["outline outline-1 outline-solid outline-offset-2", tone.active],

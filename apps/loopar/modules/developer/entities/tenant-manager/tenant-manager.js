@@ -174,9 +174,16 @@ export default class TenantManager extends BaseDocument {
 
   async validate() {
     this.#validateControlPlane();
+    if (this.__IS_NEW__ && !tenantOps.isTenantName(this.name)) {
+      return loopar.throw(`Invalid tenant name "${this.name}". Use letters, numbers, "-" and "_".`);
+    }
+    if (!this.domain?.trim() && !this.validateDomain(`${this.name}.localhost`)) {
+      // No domain = <name>.localhost, which this name can't form.
+      return loopar.throw(`"${this.name}" can't be used as a hostname (${this.name}.localhost). Set a Domain for this tenant.`);
+    }
     if (this.domain?.trim()) {
       if (!this.validateDomain(this.domain)) {
-        return loopar.throw("Invalid domain");
+        return loopar.throw(`Invalid domain "${this.domain.trim()}". Hostnames take letters, numbers and "-" only; set a valid Domain for this tenant.`);
       }
       const conflict = this.allApps.find(
         a => a.domain === this.domain && a.name !== this.name

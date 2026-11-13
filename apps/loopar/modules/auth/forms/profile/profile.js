@@ -2,6 +2,7 @@
 'use strict';
 
 import {BaseDocument, loopar} from 'loopar';
+import { systemPolicy, passwordProblem } from 'loopar/core/global/system-policy.js';
 
 export default class Profile extends BaseDocument {
   constructor(props){
@@ -23,10 +24,9 @@ export default class Profile extends BaseDocument {
       loopar.throw('New password and confirmation do not match.');
     }
 
-    const strongRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*]).{8,}/;
-    if (!strongRegex.test(new_password)) {
-      loopar.throw('Password must be at least 8 characters and include uppercase, lowercase, number and special character.');
-    }
+    // System Settings → Security decides the length and complexity required.
+    const problem = passwordProblem(new_password, await systemPolicy());
+    if (problem) loopar.throw(problem);
 
     const user = await loopar.getDocument('User', loopar.auth.user());
 

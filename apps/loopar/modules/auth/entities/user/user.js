@@ -1,6 +1,7 @@
 'use strict'
 
 import { assertUserLimit } from 'loopar/core/auth/tenant-limits.js';
+import { systemPolicy, passwordProblem } from 'loopar/core/global/system-policy.js';
 import { BaseDocument, loopar, Op, setLanguageCookie } from "loopar";
 import { requestEmailChange, adminSetEmail } from "../../controllers/auth/email-change.js";
 
@@ -9,11 +10,10 @@ export default class User extends BaseDocument {
     super(props);
   }
 
-  validatePasswordStrong(password) {
-    const strongRegex = new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*])(?=.{8,})");
-    if (!strongRegex.test(password)) {
-      loopar.throw('Password must be at least 8 characters and include uppercase, lowercase, number and special character.');
-    }
+  /** System Settings → Security decides the length and complexity required. */
+  async validatePasswordStrong(password) {
+    const problem = passwordProblem(password, await systemPolicy());
+    if (problem) loopar.throw(problem);
   }
 
   async validateUserName() {
@@ -105,7 +105,7 @@ export default class User extends BaseDocument {
       if (!password || password !== String(confirm ?? '')) {
         loopar.throw('The password and confirmation password do not match.');
       }
-      this.validatePasswordStrong(password);
+      await this.validatePasswordStrong(password);
       this.authorize('password', 'confirm_password');
       this.password = password;
       this.confirm_password = password;

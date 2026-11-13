@@ -2,7 +2,7 @@
 
 import { BaseDocument, fileManage, loopar, tenant } from 'loopar';
 import { buildInstaller } from './builder.js';
-import { themeCSS } from '../system-settings/theme-css.js';
+import { themeCSS } from '../../../settings/entities/system-settings/theme-css.js';
 import fs from 'fs';
 import path from 'path';
 

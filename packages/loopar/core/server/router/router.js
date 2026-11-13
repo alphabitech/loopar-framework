@@ -7,6 +7,7 @@ import { merge } from 'es-toolkit/object';
 import { Middleware } from "./middleware.js";
 import { requestContext } from './request-context.js';
 import { noWebsitePage, noWebsiteStatus } from '../no-website-page.js';
+import { systemPolicy, uploadProblem } from '../../global/system-policy.js';
 
 /**
  * Collects every plain-method name defined anywhere on a controller's
@@ -270,6 +271,12 @@ export default class Router extends Middleware {
           try {
             requestContext.run({ ...parentContext, req, res }, async () => {
               try {
+                // System Settings → Files: size and types this workspace accepts.
+                const policy = await systemPolicy();
+                for (const file of (req.files || [])) {
+                  const problem = uploadProblem(file, policy);
+                  if (problem) loopar.throw({ code: 413, title: "File not accepted", message: problem });
+                }
                 resolve(await makeController(req.query, req.body));
               } catch (controllerErr) {
                 reject(controllerErr);

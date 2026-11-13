@@ -1,3 +1,4 @@
+import React from "react";
 import { useContext, createContext, useMemo } from "react";
 import { usePersist } from "@services/persist-state";
 import { ViewOptionsProvider } from "./view-options";
@@ -37,6 +38,10 @@ export const DocumentProvider = ({ ctrl, layout, options, children }) => {
     <DocumentContext.Provider value={value}>
       <ViewOptionsProvider base={options}>
         {!nested && <title>{Document.meta?.title}</title>}
+        {/* Head tags of a website page (its SEO settings); React hoists them into <head>. */}
+        {!nested && (Document.seo_tags || []).map(({ tag, attrs }, i) => (
+          React.createElement(tag, { ...attrs, key: `${tag}-${attrs.name || attrs.property || attrs.rel || i}` })
+        ))}
         {children}
       </ViewOptionsProvider>
     </DocumentContext.Provider>

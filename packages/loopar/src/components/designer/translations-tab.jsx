@@ -5,6 +5,7 @@ import { __, currentLanguage } from "@global/i18n";
 import {
   TranslationsPanel, WEBSITE_BUILDERS, translationTargets, layoutTexts, panelLanguages, NoLanguages,
 } from "../translation/translations-panel";
+import { seoTexts } from "@global/page-seo";
 
 /** True when the document being designed has a `translations` field to keep the layout's translations. */
 export function useHasTranslations() {
@@ -32,7 +33,9 @@ export function TranslationsTab({ metaComponents }) {
 
   const website = WEBSITE_BUILDERS.has(Document?.Entity?.name);
   const { base, languages } = translationTargets(__META__, website);
-  const texts = useMemo(() => layoutTexts(metaComponents), [metaComponents]);
+  // A page's search/social texts (its `seo` field) are translated with its layout.
+  const seo = docRef?.getValue?.("seo") ?? "";
+  const texts = useMemo(() => [...seoTexts(seo), ...layoutTexts(metaComponents)], [metaComponents, seo]);
 
   // Read on every render: the "Languages" modal may have changed it meanwhile.
   const value = docRef?.getValue?.("translations") ?? "";

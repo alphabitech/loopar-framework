@@ -19,6 +19,7 @@ import fs, { existsSync, readdirSync, readFileSync } from "fs";
 import inflection from "inflection";
 import { shouldRunJobs } from "../config/core-config.js";
 import { tenant } from "../../bin/tenant/tenant-builder.js";
+import { pickWebApp } from '../global/web-app-pick.js';
 
 export class Builder {
   async buildRefs() {
@@ -465,7 +466,15 @@ export class Builder {
       };
 
       const settings = await this.db.getDoc('System Settings');
-      data.webApp = await loadWebApp(settings.active_web_app);
+      // System Settings' choice, or the first installed app with a website
+      // (global/web-app-pick.js): installing a site is enough to publish it.
+      let activeWebApp = settings.active_web_app || null;
+      try {
+        activeWebApp = pickWebApp(activeWebApp, await this.db.getAll('App', ['id', 'name', 'has_website']));
+      } catch (e) {
+        console.warn(`[web app] could not list installed apps: ${e.message}`);
+      }
+      data.webApp = await loadWebApp(activeWebApp);
 
       // One entry per app mapped to a site domain (tenant config `sites`);
       // loopar.webApp picks the request's one by host.

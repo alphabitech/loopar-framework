@@ -4,21 +4,22 @@ import { __ } from '../global/i18n.js';
 import BaseController from './base-controller.js';
 import { loopar } from "loopar";
 import {parseDocStructure} from '../document/tools.js';
+import { resolvePageSeo, pageSeoTags } from '../global/page-seo.js';
+import { translationLayer } from '../global/i18n-content.js';
+import { requestLanguage, siteDefaultLanguage } from '../server/i18n.js';
+import { siteOrigin } from '../global/seo.js';
 
-/** `key=value` lines of an seo element (the value may contain "="). */
-export function seoOptions(text = "") {
-  return String(text || "").split("\n").reduce((acc, line) => {
-    const i = line.indexOf("=");
-    if (i > 0) acc[line.slice(0, i).trim()] = line.slice(i + 1).trim();
-    return acc;
-  }, {});
-}
-
-/** The title an seo element of a page sets (meta_name "title"), if any. */
-function seoTitle(docStructure) {
-  const node = loopar.utils.fieldList(docStructure || "[]")
-    .find(el => el.element === "seo" && String(el.data?.meta_name || "").trim() === "title");
-  return node ? seoOptions(node.data.options).content || null : null;
+/**
+ * Head tags of a website page, in the language of the request: its `seo`
+ * settings with the page's translations applied.
+ */
+function pageSeo(page, req) {
+  const language = requestLanguage();
+  const layer = page?.translations && language !== siteDefaultLanguage()
+    ? translationLayer(page.translations, language)
+    : null;
+  const seo = resolvePageSeo(page?.seo, layer);
+  return { seo, tags: pageSeoTags(seo, { origin: siteOrigin(req) }) };
 }
 
 export default class SingleController extends BaseController {
@@ -167,6 +168,7 @@ export default class SingleController extends BaseController {
     }
 
     const pageRef = loopar.getRef(document.__ENTITY__?.name) || {};
+    const head = pageSeo(document.__ENTITY__, this.req);
 
     return await this.render({
       Entity: {
@@ -179,7 +181,9 @@ export default class SingleController extends BaseController {
       },
       activeParentMenu: await this.getParent(),
       __DOCUMENT_TITLE__: requestContext._detailTitle || (menu?.link ? __(menu.link) : this.document),
-      exactTitle: requestContext._detailTitle || seoTitle(document.__ENTITY__?.doc_structure) || null,
+      exactTitle: requestContext._detailTitle || head.seo.title || null,
+      // A record's detail has its own title: the page's social title would name the listing.
+      seo_tags: requestContext._detailTitle ? head.tags.filter(t => t.attrs.property !== "og:title") : head.tags,
       ...(detailSlug? { __DETAIL_SLUG__: detailSlug } : {}),
       ...data,
     });

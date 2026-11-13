@@ -302,8 +302,8 @@ export const elementsDefinition = {
     { element: "text_block", icon: "Type" },
     { element: "markdown", icon: "BookOpenCheck", designerOnly: true, droppable: false, content: { value: "rich", label: "line" } },
     { element: "icon", icon: "Shapes" },
-    { element: "link", icon: "Link", droppable: false, content: { label: "line" } },
-    { element: "button", icon: "SquareMousePointer", content: { label: "line", slide_text: "line", slide_confirmed_text: "line" } },
+    { element: "link", icon: "Link", inline: true, droppable: false, content: { label: "line" } },
+    { element: "button", icon: "SquareMousePointer", inline: true, content: { label: "line", slide_text: "line", slide_confirmed_text: "line" } },
     { element: "list", icon: "ListChecks", droppable: false, content: { items: "lines" } },
     { element: "separator", icon: "SeparatorHorizontal", droppable: false, content: { label: "line" } },
     { element: "spacer", icon: "MoveVertical", droppable: false },
@@ -341,7 +341,6 @@ export const elementsDefinition = {
     { element: "form", icon: "ClipboardList", content: { title: "line", action_text: "line", success_message: "text", error_message: "text" } },
   ],
   meta: [
-    { element: "seo", icon: "Search", designerOnly: true, content: { options: "text" } },
   ],
   form: [
     { element: "input", icon: "RectangleEllipsis", type: TYPES.string },
@@ -822,7 +821,7 @@ global.fieldIsWritable = (field) => {
  *
  * One context describes what a document type can hold, and drives BOTH:
  *  - the AI structure generator (`aiGroups` + `extra`, minus `exclude`), and
- *  - the designer's element palette (`paletteGroups` + `extra`).
+ *  - the designer's element palette (`paletteGroups` + `extra` + `paletteExtra`).
  *
  * The palette is a superset of the AI allowlist: a human may drag `system`
  * elements (id, padding, tailwind, designer…), the AI never authors them.
@@ -838,6 +837,9 @@ const DOCUMENT_CONTEXTS = Object.freeze({
     documentTypes: ["Form Builder", "Entity", "Contact Form Builder"],
     // Minimal structure a form needs: grid + tabs. No section/card/banner/etc.
     extra: ["row", "col", "tabs", "tab"],
+    // Offered to a human only: grouping, navigation and controller actions.
+    // None of them is writable, so they never become a column or a value.
+    paletteExtra: ["panel", "div", "link", "button"],
     aiGroups: ["form"],
     paletteGroups: ["form", "system"],
   },
@@ -902,7 +904,7 @@ export const paletteDefinition = (document_type, installedApps = null) => {
   }
 
   const groups = ctx.paletteGroups || ctx.aiGroups;
-  const extra = new Set(ctx.extra || []);
+  const extra = new Set([...(ctx.extra || []), ...(ctx.paletteExtra || [])]);
 
   return Object.entries(elementsDefinition).reduce((acc, [group, elements]) => {
     const list = ofInstalledApps(groups.includes(group)

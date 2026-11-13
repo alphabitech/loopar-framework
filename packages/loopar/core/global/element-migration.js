@@ -155,7 +155,7 @@ const DATA_KEY_MIGRATIONS = {
  */
 const FILLER_LABEL_ELEMENTS = new Set([
   "row", "col", "div", "grid", "heading", "paragraph", "text_block", "image", "icon", "banner", "carousel",
-  "gallery", "seo", "collection", "contact_form", "particles", "list", "spacer", "stats", "steps",
+  "gallery", "collection", "contact_form", "particles", "list", "spacer", "stats", "steps",
   "before_after", "contact_links", "accordion", "feature_card", "pricing_plan", "accordion_item",
   "business_hours", "video_embed", "embed", "review", "form", "entity", "menu_content", "example_viewer",
 ]);
@@ -245,17 +245,133 @@ function migrateNodeData(node, parent, ctx) {
   return changed;
 }
 
+/* ----------------------------------------------------------- page seo */
+
+/**
+ * `seo` used to be a canvas element (one node per head tag, `key=value`
+ * lines). Head tags are page settings, not content: they now live in the
+ * page's `seo` field and their translations under SEO_NODE_KEY.
+ */
+export const SEO_NODE_KEY = "__seo__";
+const SEO_TEXT_FIELDS = ["title", "description", "og_title", "og_description"];
+
+const seoOptionLines = (text = "") => String(text || "").split("\n").reduce((acc, line) => {
+  const i = line.indexOf("=");
+  if (i > 0) acc[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  return acc;
+}, {});
+
+/**
+ * Attributes of a legacy seo node. Many were written on one line
+ * (`name=description content=…`), which the element read as a single `name`
+ * attribute: the tag never worked. They are read here as intended.
+ */
+function seoAttrs(options) {
+  const attrs = seoOptionLines(options);
+  for (const id of ["name", "property"]) {
+    const inline = /^(\S+)\s+content=([\s\S]*)$/.exec(attrs[id] || "");
+    if (!inline) continue;
+    attrs[id] = inline[1];
+    if (!attrs.content) attrs.content = inline[2].trim();
+  }
+  return attrs;
+}
+
+/** The `seo` field a legacy seo node fills, or null when it is a free head tag. */
+function seoFieldOf(tag, attrs) {
+  if (tag === "title") return "title";
+  if (tag !== "meta") return null;
+  const id = String(attrs.name || attrs.property || "").trim().toLowerCase();
+  return { description: "description", "og:title": "og_title", "og:description": "og_description", "og:image": "image" }[id] || null;
+}
+
+const parseSeo = (value) => {
+  if (value && typeof value === "object") return { ...value };
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * Folds legacy seo nodes into a page's `seo` value (values already set win)
+ * and moves their translations to SEO_NODE_KEY.
+ * Returns { seo, translations, translationsChanged }; `seo` is JSON text.
+ */
+export function migrateSeoNodes(seoNodes = [], seo, translations) {
+  const out = parseSeo(seo);
+  const extra = String(out.extra || "").split("\n").filter(Boolean);
+  const fieldByKey = {};
+
+  for (const { key, tag, attrs } of seoNodes) {
+    const field = seoFieldOf(tag, attrs);
+    if (field) {
+      if (!out[field] && attrs.content) out[field] = attrs.content;
+      if (key != null) fieldByKey[key] = field;
+      continue;
+    }
+    const robots = tag === "meta" && String(attrs.name || "").toLowerCase() === "robots";
+    if (robots && /noindex/i.test(attrs.content || "")) { out.noindex = 1; continue; }
+    const line = [tag, ...Object.entries(attrs).map(([k, v]) => `${k}=${v}`)].join(" | ");
+    if (!extra.includes(line)) extra.push(line);
+  }
+
+  // The social title/description default to the page's own.
+  if (out.og_title && out.og_title === out.title) delete out.og_title;
+  if (out.og_description && out.og_description === out.description) delete out.og_description;
+  if (extra.length) out.extra = extra.join("\n");
+
+  let all = translations;
+  let translationsChanged = false;
+  const isText = typeof translations === "string";
+  if (isText) {
+    try { all = JSON.parse(translations); } catch { all = null; }
+  }
+  if (all && typeof all === "object" && seoNodes.length) {
+    const next = {};
+    for (const [lang, layer] of Object.entries(all)) {
+      if (!layer || typeof layer !== "object") { next[lang] = layer; continue; }
+      const copy = { ...layer };
+      for (const { key } of seoNodes) {
+        if (key == null || !(key in copy)) continue;
+        const entry = copy[key]?.options;
+        const text = typeof entry === "string" ? entry : entry?.value;
+        const content = seoOptionLines(text).content;
+        const field = fieldByKey[key];
+        if (content && SEO_TEXT_FIELDS.includes(field)) {
+          copy[SEO_NODE_KEY] = { ...(copy[SEO_NODE_KEY] || {}), [field]: copy[SEO_NODE_KEY]?.[field] || { value: content } };
+        }
+        delete copy[key];
+        translationsChanged = true;
+      }
+      next[lang] = copy;
+    }
+    all = next;
+  }
+
+  return {
+    seo: JSON.stringify(out),
+    translations: translationsChanged ? (isText ? JSON.stringify(all) : all) : translations,
+    translationsChanged,
+  };
+}
+
 export const LEGACY_ELEMENTS = Object.freeze(Object.keys(ELEMENT_MIGRATIONS));
 
+/** Table of the website pages (the only records with an `seo` field). */
+const SEO_TABLE = "Page Builder";
+
 /** Bump when a migration is added: tenants re-run the database pass once. */
-export const ELEMENT_MIGRATION_VERSION = 5;
+export const ELEMENT_MIGRATION_VERSION = 6;
 
 /**
  * Migrates a doc_structure (array of nodes, or its JSON text).
  * Returns [structure, changed]; the input is never mutated and the output
  * keeps the input's form (text in → text out).
  */
-export function migrateDocStructure(structure) {
+export function migrateDocStructure(structure, { extractSeo = true } = {}) {
   const isText = typeof structure === "string";
   let nodes = structure;
   if (isText) {
@@ -266,6 +382,7 @@ export function migrateDocStructure(structure) {
   let changed = false;
   const textMoves = [];
   const valueConversions = [];
+  const seoNodes = [];
   const ctx = {
     h1Taken: false,
     // Translations are stored per node and prop: a renamed prop moves them too.
@@ -293,6 +410,19 @@ export function migrateDocStructure(structure) {
   const walk = (list, parent = null) => list.reduce((acc, original) => {
     if (!original || typeof original !== "object") { acc.push(original); return acc; }
     const node = { ...original, data: { ...(original.data || {}) } };
+
+    // Head tags leave the canvas (see migrateSeoNodes); `extractSeo: false`
+    // keeps them while the record has nowhere to store them yet.
+    if (node.element === "seo") {
+      if (!extractSeo) { acc.push(node); return acc; }
+      seoNodes.push({
+        key: node.node ?? node.key ?? node.data.key ?? null,
+        tag: String(node.data.meta_name || "meta").trim().toLowerCase(),
+        attrs: seoAttrs(node.data.options),
+      });
+      changed = true;
+      return acc;
+    }
 
     const migration = ELEMENT_MIGRATIONS[node.element];
     if (migration) {
@@ -322,8 +452,8 @@ export function migrateDocStructure(structure) {
   }, []);
 
   const out = walk(nodes);
-  if (!changed) return [structure, false, textMoves, valueConversions];
-  return [isText ? JSON.stringify(out) : out, true, textMoves, valueConversions];
+  if (!changed) return [structure, false, textMoves, valueConversions, seoNodes];
+  return [isText ? JSON.stringify(out) : out, true, textMoves, valueConversions, seoNodes];
 }
 
 /**
@@ -364,15 +494,25 @@ export function migrateTranslations(translations, textMoves = []) {
   return [isText ? JSON.stringify(out) : out, true];
 }
 
-/** Migrates a document record: its doc_structure and, with it, its translations. */
-export function migrateDocument({ doc_structure, translations }) {
-  const [structure, changed, textMoves, valueConversions] = migrateDocStructure(doc_structure);
+/**
+ * Migrates a document record: its doc_structure and, with it, its
+ * translations and (pages) its `seo` settings.
+ */
+export function migrateDocument({ doc_structure, translations, seo }, { extractSeo = true } = {}) {
+  const [structure, changed, textMoves, valueConversions, seoNodes = []] = migrateDocStructure(doc_structure, { extractSeo });
   if (!changed) return { changed: false };
-  const [nextTranslations, translationsChanged] = migrateTranslations(translations, textMoves);
+  let [nextTranslations, translationsChanged] = migrateTranslations(translations, textMoves);
+  let nextSeo = null;
+  if (seoNodes.length) {
+    const folded = migrateSeoNodes(seoNodes, seo, nextTranslations);
+    nextSeo = folded.seo;
+    if (folded.translationsChanged) { nextTranslations = folded.translations; translationsChanged = true; }
+  }
   return {
     changed: true,
     doc_structure: structure,
     ...(translationsChanged ? { translations: nextTranslations } : {}),
+    ...(nextSeo !== null ? { seo: nextSeo } : {}),
     valueConversions,
   };
 }
@@ -449,6 +589,7 @@ export async function migrateElementsInDatabase(loopar, { fs, path } = {}) {
   const q = () => loopar.db.qx();
   const tables = [...new Set(["Entity", ...Object.keys(loopar.getTypes?.() || {})])];
   let updated = 0;
+  let pending = false;
   const conversions = [];
 
   for (const table of tables) {
@@ -456,11 +597,17 @@ export async function migrateElementsInDatabase(loopar, { fs, path } = {}) {
 
     const hasTranslations = await q().schema.hasColumn(table, "translations");
     const hasName = await q().schema.hasColumn(table, "name");
-    const rows = await q()(table).select("id", "doc_structure", ...(hasName ? ["name"] : []), ...(hasTranslations ? ["translations"] : []));
+    const hasSeo = await q().schema.hasColumn(table, "seo");
+    // Pages keep their head tags in `seo`: until the column exists (the app
+    // update that adds it has not run yet) their seo nodes stay in place.
+    const extractSeo = hasSeo || table !== SEO_TABLE;
+    const rows = await q()(table).select("id", "doc_structure", ...(hasName ? ["name"] : []), ...(hasTranslations ? ["translations"] : []), ...(hasSeo ? ["seo"] : []));
 
     for (const row of rows) {
-      const { changed, valueConversions = [], ...values } = migrateDocument(row);
+      if (!extractSeo && String(row.doc_structure || "").includes('"element":"seo"')) pending = true;
+      const { changed, valueConversions = [], ...values } = migrateDocument(row, { extractSeo });
       if (!changed) continue;
+      if (!hasSeo) delete values.seo;
       await q()(table).where({ id: row.id }).update(values);
       updated++;
       if (valueConversions.length && row.name) conversions.push({ table: row.name, fields: valueConversions });
@@ -481,7 +628,7 @@ export async function migrateElementsInDatabase(loopar, { fs, path } = {}) {
   }
 
   if (updated) console.log(`[element-migration] ${loopar.tenantId}: migrated ${updated} document(s)`);
-  if (marker) {
+  if (marker && !pending) {
     try { fs.writeFileSync(marker, String(ELEMENT_MIGRATION_VERSION)); } catch { /* retried next boot */ }
   }
 }

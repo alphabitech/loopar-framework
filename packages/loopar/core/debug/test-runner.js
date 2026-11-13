@@ -73,8 +73,9 @@ function childEnv(extra = {}) {
   return env;
 }
 
-// Throwaway tenants of integration tests (test/support/tenant.js).
-const TEST_TENANT = /^__loopar_test_\d+__$/;
+// Throwaway tenants of integration tests (test/support/tenant.js and the
+// install-wizard / install-rollback tests, which name their own).
+const TEST_TENANT = /^__loopar_(test|wizard|rollback)_\d+__$/;
 
 function testTenantDirs(root) {
   try {

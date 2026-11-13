@@ -5,7 +5,7 @@ import { loopar } from 'loopar';
 import { Button } from '@cn/components/ui/button';
 import { ArrowUp } from 'lucide-react';
 import { useState } from 'react';
-import ThemeCustomizer from '../../system-settings/client/src/theme';
+import ThemeCustomizer from '../../../../settings/entities/system-settings/client/src/theme';
 import { __ } from "loopar";
 
 /**

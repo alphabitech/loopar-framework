@@ -20,6 +20,7 @@ import { normalizeLanguage } from '../../global/i18n.js';
 import { siteLanguages, siteDefaultLanguage } from '../i18n.js';
 import { learnInternalNetwork, clientIp, isControlPlaneTenant } from '../../global/internal-networks.js';
 import { PermissionManager } from '../../auth/PermissionManager.js';
+import { systemPolicy } from '../../global/system-policy.js';
 
 export class Middleware {
   constructor(options) {
@@ -597,7 +598,8 @@ export class Middleware {
     }
     const loginLimiter = rateLimit({
       windowMs: minutes * 60 * 1000,
-      max: 1500, //restore to 15
+      // Per workspace: System Settings → Security (15 while nothing was saved).
+      max: async () => (await systemPolicy()).maxLoginAttempts,
       standardHeaders: true,
       legacyHeaders: false,
       ...(store ? { store } : {}),

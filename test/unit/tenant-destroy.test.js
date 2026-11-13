@@ -34,3 +34,27 @@ test("a suspended tenant passes the check", async () => {
   assert.doesNotThrow(() => tenantOps.assertStopped("off"));
   assert.doesNotThrow(() => tenantOps.assertStopped("missing"));
 });
+
+test("throwaway test tenants (leading underscore) can be reset or destroyed", () => {
+  assert.doesNotThrow(() => tenantOps.assertDisposable("__loopar_wizard_197__"));
+  assert.doesNotThrow(() => tenantOps.assertDisposable("my-site_2"));
+});
+
+test("names that aren't a plain sites/ folder are refused", () => {
+  for (const name of ["", null, "..", "../etc", "a/b", "a.b", "-rf", "a b"]) {
+    assert.throws(() => tenantOps.assertDisposable(name), /Invalid tenant name/, String(name));
+  }
+});
+
+test("a tenant connected to a server but never installed has no database to drop", async () => {
+  await tenant.saveTenant({ name: "halfway", status: "suspended" });
+  const site = path.join(root, "sites", "halfway");
+  fs.mkdirSync(path.join(site, "database"), { recursive: true });
+  fs.writeFileSync(
+    path.join(site, "config", "db.config.json"),
+    JSON.stringify({ dialect: "mysql", connection: { host: "127.0.0.1", port: "1", user: "root", password: "x" } }),
+  );
+
+  assert.equal(await tenantOps.dropTenantDatabase("halfway"), "none");
+  assert.equal(fs.existsSync(path.join(site, "database")), false);
+});

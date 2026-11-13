@@ -91,6 +91,8 @@ function Collection({ data = {} }) {
     title,
     description,
     card_variant = "default",
+    hide_badges,
+    detail_path,
     empty_message = `No items to show yet.`,
   } = data;
 
@@ -202,6 +204,8 @@ function Collection({ data = {} }) {
                   item={item}
                   fields={schemaFields}
                   variant={card_variant}
+                  detailPath={detail_path}
+                  hideBadges={hide_badges === true || hide_badges === 1 || hide_badges === "1"}
                   collectionSlug={entityName}
                 />
               ))}
@@ -259,8 +263,21 @@ Collection.metaFields = () => {
           element: SELECT,
           data: {
             label: "Card variant",
-            options: "default\ncompact\nlist",
+            options: "default\ncompact\noverlay\nlist",
+            description: "Overlay: the cover fills the card with the title and summary on top.",
           },
+        },
+        detail_path: {
+          element: INPUT,
+          data: {
+            label: "Detail page",
+            placeholder: "/services",
+            description: "Page that shows the item detail (the one holding the full collection). Set it when this collection sits on another page, such as the home.",
+          },
+        },
+        hide_badges: {
+          element: SWITCH,
+          data: { label: "Hide badges", description: "Don't show the Featured badge (and other switch badges) on the cards." },
         },
         empty_message: {
           element: TEXTAREA,
