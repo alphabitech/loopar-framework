@@ -167,7 +167,49 @@ export class EmailService {
   /**
    * Sends one email immediately (no queue).
    */
-  async send({ to, subject, html, text, attachments = [], cc, bcc, replyTo, app }) {
+  async send({ to, subject, html, text, attachments = [], cc, bcc, replyTo, app, record = true }) {
+    if (!record) return await this.deliver({ to, subject, html, text, attachments, cc, bcc, replyTo, app });
+
+    try {
+      const result = await this.deliver({ to, subject, html, text, attachments, cc, bcc, replyTo, app });
+      await this.recordDirect({ to, subject, cc, bcc, messageId: result.messageId });
+      return result;
+    } catch (error) {
+      await this.recordDirect({ to, subject, cc, bcc, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * History of a direct send in Email Queue: who, what subject, and whether
+   * the server took it. The body is NOT kept — direct mail carries one-use
+   * sign-in and recovery links. Never fails the send it describes.
+   */
+  async recordDirect({ to, subject, cc, bcc, messageId = '', error = null }) {
+    try {
+      const entry = await loopar.newDocument('Email Queue');
+      const now = new Date().toISOString();
+      entry.name = this.generateQueueId();
+      entry.to = Array.isArray(to) ? to.join(', ') : to;
+      entry.subject = subject || '';
+      entry.cc = cc || '';
+      entry.bcc = bcc || '';
+      entry.priority = 'Normal';
+      entry.status = error ? 'Failed' : 'Sent';
+      entry.attempts = 1;
+      entry.max_attempts = 1;
+      entry.scheduled_at = null;
+      entry.next_retry_at = null;
+      entry.sent_at = error ? null : now;
+      entry.message_id = messageId;
+      entry.error_log = error ? `[${now}] Direct send: ${error}\n` : '';
+      await entry.save();
+    } catch (e) {
+      console.warn('[Email] could not record a direct send:', e?.message || e);
+    }
+  }
+
+  async deliver({ to, subject, html, text, attachments = [], cc, bcc, replyTo, app }) {
     const settings = await this.resolve(app);
     const transporter = await this.getTransporter(settings);
 
@@ -298,7 +340,8 @@ export class EmailService {
         html: item.html,
         cc: item.cc || undefined,
         bcc: item.bcc || undefined,
-        attachments
+        attachments,
+        record: false // the queue item is already the history
       });
 
       if (result.success) {
@@ -436,6 +479,8 @@ export class EmailService {
 
     for (const { name } of failed) {
       const item = await loopar.getDocument('Email Queue', name);
+      // A direct send keeps no body: there is nothing to send again.
+      if (!item.html) continue;
       item.status = 'Pending';
       item.attempts = 0;
       item.next_retry_at = null;
