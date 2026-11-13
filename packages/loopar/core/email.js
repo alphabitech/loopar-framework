@@ -497,6 +497,29 @@ export class EmailService {
     }
   }
 
+  /**
+   * Sends a real message with the supplied (possibly unsaved) settings. A
+   * login can succeed and the server still refuse the sender address, so
+   * this is the check that proves mail actually leaves.
+   */
+  async sendTest(data, to) {
+    const settings = data ?? await this.getSettings();
+    const transporter = nodemailer.createTransport({ ...this.buildTransportOptions(settings), pool: false });
+    try {
+      const result = await transporter.sendMail({
+        from: `"${settings.from_name || 'Loopar'}" <${settings.from_email}>`,
+        to,
+        subject: 'Loopar test email',
+        text: `This is a test email sent from ${settings.from_email} through ${settings.host}. If you are reading it, outgoing mail works.`,
+      });
+      return { success: true, messageId: result.messageId, accepted: result.accepted || [] };
+    } catch (error) {
+      return { success: false, error: error.message };
+    } finally {
+      transporter.close();
+    }
+  }
+
   async previewTemplate(templateName, variables = {}) {
     const template = await this.getTemplate(templateName);
     

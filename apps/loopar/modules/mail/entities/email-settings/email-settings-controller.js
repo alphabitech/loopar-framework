@@ -21,4 +21,21 @@ export default class EmailSettingsController extends BaseController {
       }
       return await this.success('Connection successful');
     }
+
+    /** Sends a real message to the notification address using the form's values. */
+    async actionSendTestEmail(){
+      const data = this.query;
+      if(data.password == "********"){
+        data.password = (await loopar.getDocument("Email Settings")).password;
+      }
+      const to = String(data.notification_email || '').trim();
+      if (!data.from_email) loopar.throw({ status: 400, code: 'SENDER_REQUIRED', title: 'Sender missing', message: 'Set the Sender Email first.' });
+      if (!to) loopar.throw({ status: 400, code: 'RECIPIENT_REQUIRED', title: 'Recipient missing', message: 'Set the Notification Email first: the test is sent there.' });
+
+      const test = await loopar.mail.sendTest(data, to);
+      if (!test.success) {
+        loopar.throw({ status: 502, code: 'SMTP_SEND_FAILED', title: 'Test email not sent', message: test.error });
+      }
+      return await this.success(`Test email sent to ${to}`);
+    }
 }
