@@ -46,6 +46,16 @@ export const animations = (notContains) => {
       initial: "opacity-0 -translate-x-4",
       visible: "opacity-100 translate-x-0",
     },
+    // Motion only, no fade: for covers and backgrounds, where a fade would
+    // flash whatever is behind them.
+    "drift-left": {
+      initial: "translate-x-10",
+      visible: "translate-x-0",
+    },
+    "drift-right": {
+      initial: "-translate-x-10",
+      visible: "translate-x-0",
+    },
     "zoom-in": {
       initial: "opacity-0 scale-95",
       visible: "opacity-100 scale-100",
@@ -89,7 +99,8 @@ export const getAnimation = (animation, notContains) => {
   if (!animation) return null;
   if (animation === "random") {
     const transitions = Object.keys(animations(notContains)).filter(
-      (animation) => animation !== "random"
+      // Motion-only animations are a deliberate choice, never a random pick.
+      (animation) => animation !== "random" && !animation.startsWith("drift-")
     );
     return animations()[transitions[Math.floor(Math.random() * transitions.length)]]
   } else {

@@ -1,10 +1,11 @@
 import loopar from "loopar";
+import { scrollMemory } from "@@tools/router/scroll-memory";
 import DocumentHistory from "../../components/document-history.jsx";
 import { createFieldStore } from "./field-store";
 
 /**
  * Controller of an entry (plain JS, no React): structure lookup, field store,
- * document history, scroll restore. `env` = { props (live) }.
+ * document history, scroll placement. `env` = { props (live) }.
  * Instantiated once per mount by `useController`; reachable as `useDocument().ctrl`.
  */
 export class DocumentController {
@@ -13,7 +14,6 @@ export class DocumentController {
   #cachedStructure;
   #cachedFields;
   #cachedFieldByName;
-  #handleBeforeUnload;
 
   fields = createFieldStore();
 
@@ -133,34 +133,18 @@ export class DocumentController {
     );
   }
 
-  getPageKey() {
-    return this.Document.key;
-  }
-
-  getCurrentScrollPosition() {
-    return loopar.cookie.get(this.getPageKey()) || window.scrollY || window.pageYOffset;
-  }
-
+  /**
+   * The entry's content is mounted: top of the page after a link, the saved
+   * position after back/forward or a reload (see tools/router/scroll-memory).
+   */
   initScroll() {
     if (this.props.inModal) return;
-    const scrollPosition = loopar.cookie.get(this.getPageKey()) || 0;
-
-    window.scrollTo(0, scrollPosition);
-    if (!this.#handleBeforeUnload) this.#handleBeforeUnload = () => this.setScrollPosition();
-    window.addEventListener("beforeunload", this.#handleBeforeUnload);
-  }
-
-  setScrollPosition() {
-    if (this.props.inModal) return;
-    loopar.cookie.set(this.getPageKey(), window.scrollY || window.pageYOffset);
+    scrollMemory.settle();
   }
 
   mount() {
     this.initScroll();
   }
 
-  unmount() {
-    if (this.#handleBeforeUnload) window.removeEventListener("beforeunload", this.#handleBeforeUnload);
-    this.setScrollPosition();
-  }
+  unmount() {}
 }

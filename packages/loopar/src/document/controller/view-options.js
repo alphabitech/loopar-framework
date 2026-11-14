@@ -1,3 +1,5 @@
+import { scrollMemory } from "@@tools/router/scroll-memory";
+
 /**
  * Options vocabulary shared by `export const config`, entry defaults and
  * layout props.
@@ -21,9 +23,9 @@ export const VIEW_OPTION_KEYS = [
 /** Keyed options merge by key instead of replacing the whole map. */
 const KEYED = new Set(["slots", "actions", "handlers"]);
 
+// Views that always open at the top, even after back/forward or a reload.
 const NO_SCROLL_RESTORE = {
-  initScroll() { if (!this.props.inModal) window.scrollTo(0, 0); },
-  setScrollPosition() {},
+  initScroll() { if (!this.props.inModal) scrollMemory.settle({ top: true }); },
 };
 
 export function pickViewOptions(source = {}) {

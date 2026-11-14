@@ -120,8 +120,9 @@ export default function DefaultDetail(props) {
     if (onBack) { onBack(backHref, e); return; }
     if (typeof window !== "undefined" && backHref && !/^https?:\/\//i.test(backHref)) {
       e.preventDefault();
-      window.history.pushState({}, "", backHref === "." ? window.location.pathname : backHref);
-      window.dispatchEvent(new PopStateEvent("popstate"));
+      // A real navigation (new history entry): the listing opens at the top,
+      // while the browser's Back still returns to this detail where it was.
+      loopar.navigate(backHref === "." ? window.location.pathname : backHref);
     }
   };
 

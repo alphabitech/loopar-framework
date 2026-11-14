@@ -335,6 +335,12 @@ async function preloadCollectionView(field, requestContext) {
       if (requestContext) {
         requestContext._anyDetailMatched = true;
         requestContext._detailTitle ??= shown.title || null;
+        // The record's own search texts (optional `seo_title` / `seo_description`
+        // fields), falling back to what the detail shows.
+        requestContext._detailSeo ??= {
+          title: String(shown.seo_title || shown.title || "").trim() || null,
+          description: String(shown.seo_description || shown.summary || "").trim() || null,
+        };
       }
       return;
     }

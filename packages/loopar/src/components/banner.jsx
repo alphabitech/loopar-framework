@@ -168,11 +168,14 @@ function Banner() {
         joinedVisible ? joinedAnim.visible : joinedAnim.initial
       ),
     )}>
-      <Cover
-        className={coverClassName}
-        style={props.style}
-        animation={hasJoined ? undefined : data.animation}
-      />
+      {/* Clips the cover: an animation that moves it must not overflow the banner. */}
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        <Cover
+          className={coverClassName}
+          style={props.style}
+          animation={hasJoined ? undefined : data.animation}
+        />
+      </div>
       <Content  
         elements={props.elements}
         // "relative" is required for z-10 to apply: a static element's

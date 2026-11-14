@@ -13,6 +13,22 @@ import { siteOrigin } from '../global/seo.js';
  * Head tags of a website page, in the language of the request: its `seo`
  * settings with the page's translations applied.
  */
+/**
+ * Head tags of a record's detail: the listing page's tags with the title and
+ * description replaced by the record's own, so each detail is described by
+ * its record and not by the page that lists it.
+ */
+function detailSeoTags(tags, detail) {
+  const replaced = new Set(["og:title", ...(detail?.description ? ["description", "og:description"] : [])]);
+  const out = tags.filter(t => !replaced.has(t.attrs.name) && !replaced.has(t.attrs.property));
+  if (detail?.title) out.push({ tag: "meta", attrs: { property: "og:title", content: detail.title } });
+  if (detail?.description) {
+    out.push({ tag: "meta", attrs: { name: "description", content: detail.description } });
+    out.push({ tag: "meta", attrs: { property: "og:description", content: detail.description } });
+  }
+  return out;
+}
+
 function pageSeo(page, req) {
   const language = requestLanguage();
   const layer = page?.translations && language !== siteDefaultLanguage()
@@ -98,7 +114,8 @@ export default class SingleController extends BaseController {
       },
       activeParentMenu: await this.getParent(),
       __DOCUMENT_TITLE__: preloadedItem?.title || detailSlug,
-      exactTitle: preloadedItem?.title || null,
+      exactTitle: requestContext._detailSeo?.title || preloadedItem?.title || null,
+      seo_tags: detailSeoTags([], requestContext._detailSeo),
       __DETAIL_SLUG__: detailSlug,
       ...data,
     });
@@ -181,9 +198,9 @@ export default class SingleController extends BaseController {
       },
       activeParentMenu: await this.getParent(),
       __DOCUMENT_TITLE__: requestContext._detailTitle || (menu?.link ? __(menu.link) : this.document),
-      exactTitle: requestContext._detailTitle || head.seo.title || null,
-      // A record's detail has its own title: the page's social title would name the listing.
-      seo_tags: requestContext._detailTitle ? head.tags.filter(t => t.attrs.property !== "og:title") : head.tags,
+      exactTitle: requestContext._detailSeo?.title || requestContext._detailTitle || head.seo.title || null,
+      // A record's detail has its own title and description: the page's would describe the listing.
+      seo_tags: requestContext._detailTitle ? detailSeoTags(head.tags, requestContext._detailSeo) : head.tags,
       ...(detailSlug? { __DETAIL_SLUG__: detailSlug } : {}),
       ...data,
     });

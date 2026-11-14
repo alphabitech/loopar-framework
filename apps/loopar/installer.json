@@ -1,7 +1,7 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.5.22"
+    "version": "7.5.24"
   },
   "documents": {
     "Entity:Module": {
@@ -18,20 +18,24 @@
       "__root__": "/apps/loopar/modules/core/entities/app"
     },
     "App:loopar": {
-      "has_website": 0,
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.5.22",
+      "version": "7.5.24",
       "autor": "Administrator",
       "icon": "Infinity",
-      "gap": "",
-      "col_padding": "p-2",
+      "is_template": 0,
       "logo": "[{\"name\":\"logo.svg\",\"size\":17901,\"type\":\"image\",\"src\":\"/assets/public/logo.svg\"}]",
       "logo_dark": "[{\"name\":\"logo.svg\",\"size\":17901,\"type\":\"image\",\"src\":\"/assets/public/logo.svg\"}]",
       "logo_mini": "[]",
       "logo_mini_dark": "[]",
       "favicon": "[]",
+      "info": "Loopar Javascript Drag and Drop Framework",
+      "has_website": 0,
       "logo_height": "",
+      "default_language": "en",
+      "noindex": 0,
+      "gap": "",
+      "col_padding": "p-2",
       "has_footer": 0,
       "footer": "\"\"",
       "has_copyright": 0,
@@ -41,8 +45,7 @@
       "solid": 0,
       "opacity": "",
       "menu_items": [],
-      "menu_actions": [],
-      "info": "Loopar Javascript Drag and Drop Framework"
+      "menu_actions": []
     },
     "Module:analytics": {
       "name": "analytics",
@@ -53,20 +56,6 @@
     },
     "Entity:Page View": {
       "__root__": "/apps/loopar/modules/analytics/entities/page-view"
-    },
-    "Module:debug": {
-      "name": "debug",
-      "description": "Debug",
-      "app_name": "loopar",
-      "icon": "Bug",
-      "in_sidebar": 1
-    },
-    "Module:backup": {
-      "name": "backup",
-      "description": "Backup",
-      "app_name": "loopar",
-      "icon": "DatabaseBackup",
-      "in_sidebar": 1
     },
     "Entity:Resources": {
       "__root__": "/apps/loopar/modules/core/entities/resources"
@@ -154,14 +143,12 @@
     "Page Builder:Analytics Dashboard": {
       "__root__": "/apps/loopar/modules/analytics/pages/analytics-dashboard"
     },
-    "Page Builder:Debugger": {
-      "__root__": "/apps/loopar/modules/debug/pages/debugger"
-    },
-    "Page Builder:Backups": {
-      "__root__": "/apps/loopar/modules/backup/pages/backups"
-    },
-    "Page Builder:Translator": {
-      "__root__": "/apps/loopar/modules/core/pages/translator"
+    "Page Builder:Desk": {
+      "name": "Desk",
+      "module": "core",
+      "enable_history": 0,
+      "enable_comments": 0,
+      "doc_structure": "[{\"node\":\"8vrzca25h\",\"element\":\"markdown\",\"data\":{\"name\":\"markdown2_el54950954298\",\"id\":\"markdown33_el826184082557\",\"label\":\"Markdown3\",\"value\":\"<section class=\\\"container py-5\\\">\\n  <div class=\\\"container mx-auto max-w-screen-xl\\\">\\n    <div class=\\\"flex flex-wrap items-center\\\">\\n      <div class=\\\"w-full md:w-1/2 order-2 md:order-1\\\">\\n        <img class=\\\"w-full md:float-right md:ml-5 mb-4 md:mb-0\\\" src=\\\"/assets/public/images/ilustration1.svg\\\" />\\n      </div>\\n\\n      <div class=\\\"w-full md:w-1/2 order-1 md:order-2 text-center md:text-left\\\">\\n        <div class=\\\"md:pl-6 xl:pl-12\\\">\\n          <h1 class=\\\"text-4xl md:text-5xl font-bold mb-4\\\">Thank you for installing Loopar Framework!</h1>\\n\\n          <p class=\\\"text-lg text-gray-600 mb-5\\\">\\n            The most dynamic, agile and extensible framework that seeks to change the course of web application development.\\n          </p>\\n\\n          <a href=\\\"/Doc\\\" class=\\\"bg-gray-900 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 focus:ring-offset-gray-50 text-white font-semibold h-12 px-6 rounded-lg flex items-center justify-center sm:w-auto dark:bg-sky-500 dark:highlight-white/20 dark:hover:bg-sky-400\\\" target=\\\"_blank\\\">\\n            Documentation\\n          </a>\\n        </div>\\n      </div>\\n    </div>\\n  </div>\\n</section>\"}}]"
     },
     "Page Builder:App Manager": {
       "__root__": "/apps/loopar/modules/developer/pages/app-manager"
@@ -180,6 +167,29 @@
     },
     "Page Builder:Document Signing": {
       "__root__": "/apps/loopar/modules/web/pages/document-signing"
+    },
+    "Module:debug": {
+      "name": "debug",
+      "description": "Debug",
+      "app_name": "loopar",
+      "icon": "Bug",
+      "in_sidebar": 1
+    },
+    "Page Builder:Debugger": {
+      "__root__": "/apps/loopar/modules/debug/pages/debugger"
+    },
+    "Module:backup": {
+      "name": "backup",
+      "description": "Backup",
+      "app_name": "loopar",
+      "icon": "DatabaseBackup",
+      "in_sidebar": 1
+    },
+    "Page Builder:Backups": {
+      "__root__": "/apps/loopar/modules/backup/pages/backups"
+    },
+    "Page Builder:Translator": {
+      "__root__": "/apps/loopar/modules/core/pages/translator"
     },
     "Builder:View Builder": {
       "__root__": "/apps/loopar/modules/developer/builders/view-builder"
@@ -205,50 +215,11 @@
     "Entity:Menu": {
       "__root__": "/apps/loopar/modules/developer/entities/menu"
     },
-    "Module:Integrations": {
-      "name": "Integrations",
-      "description": "Integrations",
-      "app_name": "loopar",
-      "icon": "ComponentIcon",
-      "in_sidebar": 1
-    },
-    "Module:stripe": {
-      "name": "stripe",
-      "description": "Stripe",
-      "app_name": "loopar",
-      "icon": "CreditCard",
-      "in_sidebar": 0,
-      "parent_module": "Integrations"
-    },
-    "Entity:Stripe Account": {
-      "__root__": "/apps/loopar/modules/stripe/entities/stripe-account"
-    },
     "Entity:Connected Document": {
       "__root__": "/apps/loopar/modules/core/entities/connected-document"
     },
-    "Entity:Naming Series": {
-      "__root__": "/apps/loopar/modules/core/entities/naming-series"
-    },
-    "Entity:Workflow State": {
-      "__root__": "/apps/loopar/modules/core/entities/workflow-state"
-    },
-    "Entity:Workflow Transition": {
-      "__root__": "/apps/loopar/modules/core/entities/workflow-transition"
-    },
-    "Entity:Workflow": {
-      "__root__": "/apps/loopar/modules/core/entities/workflow"
-    },
-    "Entity:Scheduled Job": {
-      "__root__": "/apps/loopar/modules/core/entities/scheduled-job"
-    },
-    "Entity:Signature Request": {
-      "__root__": "/apps/loopar/modules/core/entities/signature-request"
-    },
     "Entity:User": {
       "__root__": "/apps/loopar/modules/auth/entities/user"
-    },
-    "Entity:User Directory": {
-      "__root__": "/apps/loopar/modules/auth/entities/user-directory"
     },
     "Entity:Document Single Values": {
       "__root__": "/apps/loopar/modules/core/entities/document-single-values"
@@ -257,15 +228,12 @@
       "name": "settings",
       "description": "Settings",
       "app_name": "loopar",
+      "parent_module": "core",
       "icon": "Settings2",
-      "in_sidebar": 0,
-      "parent_module": "core"
+      "in_sidebar": 0
     },
     "Entity:System Settings": {
       "__root__": "/apps/loopar/modules/settings/entities/system-settings"
-    },
-    "Entity:Company": {
-      "__root__": "/apps/loopar/modules/settings/entities/company"
     },
     "Entity:Menu Button": {
       "__root__": "/apps/loopar/modules/developer/entities/menu-button"
@@ -275,6 +243,13 @@
     },
     "Entity:File Manager": {
       "__root__": "/apps/loopar/modules/core/entities/file-manager"
+    },
+    "Module:Integrations": {
+      "name": "Integrations",
+      "description": "Integrations",
+      "app_name": "loopar",
+      "icon": "ComponentIcon",
+      "in_sidebar": 1
     },
     "Entity:AI Attribute": {
       "__root__": "/apps/loopar/modules/integrations/entities/ai-attribute"
@@ -291,14 +266,8 @@
     "Entity:Icon Manager": {
       "__root__": "/apps/loopar/modules/developer/entities/icon-manager"
     },
-    "Entity:Entity Directory": {
-      "__root__": "/apps/loopar/modules/developer/entities/entity-directory"
-    },
     "Entity:Email Settings": {
       "__root__": "/apps/loopar/modules/mail/entities/email-settings"
-    },
-    "Entity:Email Account": {
-      "__root__": "/apps/loopar/modules/mail/entities/email-account"
     },
     "Entity:Email Template": {
       "__root__": "/apps/loopar/modules/mail/entities/email-template"
@@ -366,6 +335,27 @@
     "Entity:Service Category": {
       "__root__": "/apps/loopar/modules/web/entities/service-category"
     },
+    "Module:stripe": {
+      "name": "stripe",
+      "description": "Stripe",
+      "app_name": "loopar",
+      "parent_module": "Integrations",
+      "icon": "CreditCard",
+      "in_sidebar": 0
+    },
+    "Entity:Stripe Account": {
+      "__root__": "/apps/loopar/modules/stripe/entities/stripe-account"
+    },
+    "Module:crm": {
+      "name": "crm",
+      "description": "CRM",
+      "app_name": "loopar",
+      "icon": "Contact",
+      "in_sidebar": 1
+    },
+    "Entity:Customer": {
+      "__root__": "/apps/loopar/modules/crm/entities/customer"
+    },
     "Entity:Oauth Settings": {
       "__root__": "/apps/loopar/modules/auth/entities/oauth-settings"
     },
@@ -390,8 +380,63 @@
     "Entity:Letterhead": {
       "__root__": "/apps/loopar/modules/core/entities/letterhead"
     },
+    "Letterhead:Clearwell Cleaning": {
+      "name": "Clearwell Cleaning",
+      "tagline": "Residential & Commercial Cleaning — Riverton",
+      "is_default": 1
+    },
+    "Entity:Post": {
+      "__root__": "/apps/loopar/modules/web/entities/post"
+    },
+    "Entity:Git Account": {
+      "__root__": "/apps/loopar/modules/developer/entities/git-account"
+    },
+    "Entity:Naming Series": {
+      "__root__": "/apps/loopar/modules/core/entities/naming-series"
+    },
+    "Entity:Workflow State": {
+      "__root__": "/apps/loopar/modules/core/entities/workflow-state"
+    },
+    "Entity:Workflow Transition": {
+      "__root__": "/apps/loopar/modules/core/entities/workflow-transition"
+    },
+    "Entity:Workflow": {
+      "__root__": "/apps/loopar/modules/core/entities/workflow"
+    },
+    "Entity:Scheduled Job": {
+      "__root__": "/apps/loopar/modules/core/entities/scheduled-job"
+    },
+    "Entity:Signature Request": {
+      "__root__": "/apps/loopar/modules/core/entities/signature-request"
+    },
+    "Entity:User Directory": {
+      "__root__": "/apps/loopar/modules/auth/entities/user-directory"
+    },
     "Entity:Dashboard Chart": {
       "__root__": "/apps/loopar/modules/core/entities/dashboard-chart"
+    },
+    "Dashboard Chart:Cloud subscriptions by status": {
+      "name": "Cloud subscriptions by status",
+      "entity": "Subscription",
+      "chart_type": "donut",
+      "label": "Subscriptions by status",
+      "aggregate": "count",
+      "group_by": "field",
+      "x_field": "status",
+      "timespan": "0",
+      "description": "Every subscription grouped by its Stripe status."
+    },
+    "Dashboard Chart:Cloud new subscriptions": {
+      "name": "Cloud new subscriptions",
+      "entity": "Subscription",
+      "chart_type": "bar",
+      "label": "New subscriptions",
+      "aggregate": "count",
+      "group_by": "time",
+      "x_field": "__created_at__",
+      "time_grain": "month",
+      "timespan": "365",
+      "description": "Subscriptions created per month, last 12 months."
     },
     "Entity:Dashboard Item": {
       "__root__": "/apps/loopar/modules/core/entities/dashboard-item"
@@ -399,30 +444,14 @@
     "Entity:Dashboard": {
       "__root__": "/apps/loopar/modules/core/entities/dashboard"
     },
-    "Entity:Post": {
-      "__root__": "/apps/loopar/modules/web/entities/post"
-    },
     "Entity:Legal Notice": {
       "__root__": "/apps/loopar/modules/web/entities/legal-notice"
     },
     "Entity:Announcement": {
       "__root__": "/apps/loopar/modules/web/entities/announcement"
     },
-    "Entity:Git Account": {
-      "__root__": "/apps/loopar/modules/developer/entities/git-account"
-    },
     "Entity:Debug Token": {
       "__root__": "/apps/loopar/modules/debug/entities/debug-token"
-    },
-    "Entity:Backup Settings": {
-      "__root__": "/apps/loopar/modules/backup/entities/backup-settings"
-    },
-    "Module:crm": {
-      "name": "crm",
-      "description": "CRM",
-      "app_name": "loopar",
-      "icon": "Contact",
-      "in_sidebar": 1
     },
     "Entity:Customer Contact": {
       "__root__": "/apps/loopar/modules/crm/entities/customer-contact"
@@ -433,15 +462,17 @@
     "Entity:Customer External ID": {
       "__root__": "/apps/loopar/modules/crm/entities/customer-external-id"
     },
-    "Entity:Customer": {
-      "__root__": "/apps/loopar/modules/crm/entities/customer"
+    "Entity:Backup Settings": {
+      "__root__": "/apps/loopar/modules/backup/entities/backup-settings"
     },
-    "Module:loopar": {
-      "name": "loopar",
-      "description": "loopar",
-      "app_name": "loopar",
-      "icon": "Infinity",
-      "in_sidebar": 0
+    "Entity:Company": {
+      "__root__": "/apps/loopar/modules/settings/entities/company"
+    },
+    "Entity:Email Account": {
+      "__root__": "/apps/loopar/modules/mail/entities/email-account"
+    },
+    "Entity:Entity Directory": {
+      "__root__": "/apps/loopar/modules/developer/entities/entity-directory"
     }
   },
   "postInstaller": {
@@ -453,12 +484,10 @@
     "Entity:Menu Action": "link",
     "Entity:Document History": "link",
     "Entity:Menu": "link",
-    "Entity:Stripe Account": "link",
     "Entity:Connected Document": "link",
     "Entity:User": "link",
     "Entity:Document Single Values": "link",
     "Entity:System Settings": "link",
-    "Entity:Company": "link",
     "Entity:Menu Button": "link",
     "Entity:File": "link",
     "Entity:File Manager": "link",
@@ -467,9 +496,7 @@
     "Entity:AI Provider": "link",
     "Entity:Tenant Manager": "link",
     "Entity:Icon Manager": "link",
-    "Entity:Entity Directory": "link",
     "Entity:Email Settings": "link",
-    "Entity:Email Account": "link",
     "Entity:Email Template": "link",
     "Entity:Email Queue": "link",
     "Entity:Contact Message": "link",
@@ -485,6 +512,8 @@
     "Entity:Cloudinary": "link",
     "Entity:Project Category": "link",
     "Entity:Service Category": "link",
+    "Entity:Stripe Account": "link",
+    "Entity:Customer": "link",
     "Entity:Oauth Settings": "link",
     "Entity:Comment Manage": "link",
     "Entity:Comment": "link",
@@ -495,14 +524,28 @@
     "Entity:Letterhead": "link",
     "Entity:Post": "link",
     "Entity:Git Account": "link",
-    "Entity:Resources": "link",
-    "Entity:Module": "link",
-    "Entity:Page View": "link",
+    "Entity:Naming Series": "link",
+    "Entity:Workflow State": "link",
+    "Entity:Workflow Transition": "link",
+    "Entity:Workflow": "link",
+    "Entity:Scheduled Job": "link",
+    "Entity:Signature Request": "link",
+    "Entity:User Directory": "link",
+    "Entity:Dashboard Chart": "link",
+    "Entity:Dashboard Item": "link",
+    "Entity:Dashboard": "link",
+    "Entity:Legal Notice": "link",
+    "Entity:Announcement": "link",
     "Entity:Debug Token": "link",
     "Entity:Customer Contact": "link",
     "Entity:Customer Contact Link": "link",
     "Entity:Customer External ID": "link",
-    "Entity:Customer": "link",
-    "Entity:Backup Settings": "link"
+    "Entity:Backup Settings": "link",
+    "Entity:Company": "link",
+    "Entity:Email Account": "link",
+    "Entity:Entity Directory": "link",
+    "Entity:Resources": "link",
+    "Entity:Module": "link",
+    "Entity:Page View": "link"
   }
 }
