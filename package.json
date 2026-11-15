@@ -4,7 +4,7 @@
   "private": true,
   "description": "Loopar — multi-tenant low-code framework. Single-core model: one tenant-less process (the generator) serves every tenant in-process.",
   "license": "MIT",
-  "repository": "github:alphabit-technology/loopar-framework",
+  "repository": "github:alphabitech/loopar-framework",
   "type": "module",
   "engines": {
     "node": ">=22.22.0"

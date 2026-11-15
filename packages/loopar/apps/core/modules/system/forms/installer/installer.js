@@ -398,7 +398,7 @@ export default class Installer extends BaseDocument {
 
     if (this.app_name === 'loopar') {
       if (!this.checkIfAppExists()) {
-        await this.clone("https://github.com/alphabit-technology/loopar.git");
+        await this.clone("https://github.com/alphabitech/loopar.git");
         await loopar.buildRefs();
         return await this.restartInstaller();
       }

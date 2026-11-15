@@ -35,7 +35,7 @@ The dev server starts automatically.
 **From Git:**
 
 ```shell
-git clone https://github.com/alphabit-technology/loopar-framework.git project-name
+git clone https://github.com/alphabitech/loopar-framework.git project-name
 cd project-name
 yarn install
 yarn start
