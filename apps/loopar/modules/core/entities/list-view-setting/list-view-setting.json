@@ -1,0 +1,19 @@
+{
+  "name": "List View Setting",
+  "module": "core",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "search_fields": "",
+  "title_fields": "",
+  "doc_structure": "[{\"node\":\"row_list_view_setting\",\"element\":\"row\",\"data\":{\"name\":\"name_and_status_container\"},\"elements\":[{\"node\":\"input_list_view_setting_name\",\"element\":\"input\",\"data\":{\"label\":\"Name\",\"name\":\"name\",\"required\":1,\"unique\":1,\"type\":\"VARCHAR\",\"in_list_view\":0,\"searchable\":0,\"write_policy\":\"create_only\",\"set_only_time\":1}}]},{\"node\":\"row_list_view_setting_main\",\"element\":\"row\",\"data\":{\"name\":\"row_list_view_setting_main\"},\"elements\":[{\"node\":\"col_list_view_setting_main\",\"element\":\"col\",\"data\":{\"name\":\"col_list_view_setting_main\"},\"elements\":[{\"node\":\"connection_list_view_setting_user\",\"element\":\"connection\",\"data\":{\"label\":\"User\",\"name\":\"owner_user\",\"options\":\"User\",\"required\":1,\"in_list_view\":1,\"list_order\":1,\"searchable\":1,\"write_policy\":\"create_only\"}},{\"node\":\"input_list_view_setting_entity\",\"element\":\"input\",\"data\":{\"label\":\"Entity\",\"name\":\"target_entity\",\"required\":1,\"in_list_view\":1,\"searchable\":1,\"write_policy\":\"create_only\",\"description\":\"The entity whose list these settings belong to.\"}},{\"node\":\"textarea_list_view_setting_json\",\"element\":\"textarea\",\"data\":{\"label\":\"Settings\",\"name\":\"settings_json\",\"rows\":8,\"description\":\"Column order, hidden and extra columns, widths and sort, as JSON. Written by the list itself when the user changes it.\"}}]}]}]",
+  "resources": [],
+  "__ENTITY__": "Entity"
+}

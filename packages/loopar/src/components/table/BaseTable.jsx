@@ -13,6 +13,8 @@ function BaseTable(props) {
           columns={props.columns}
           footer={props.footer}
           rowTemplate={props.rowTemplate}
+          onResize={props.onResize}
+          onReorder={props.onReorder}
         />
       </div>
       <div className="">

@@ -240,7 +240,11 @@ export default class Entity extends BaseDocument {
     return found;
   }
 
-  #updateOrInsertField({ field, position = null, target = null }) {
+  /**
+   * `defaults`: data keys that only apply when the field is inserted; on an
+   * existing field the developer's value stays (e.g. `in_list_view`).
+   */
+  #updateOrInsertField({ field, position = null, target = null, defaults = [] }) {
     const fields = this.doc_structure || [];
     let foundField  = false;
     let targetFound = fields;
@@ -252,7 +256,7 @@ export default class Entity extends BaseDocument {
         }
         if (field.data.name === f?.data?.name) {
           foundField = true;
-          Object.assign(f.data, field.data);
+          Object.assign(f.data, Object.fromEntries(Object.entries(field.data).filter(([key]) => !defaults.includes(key))));
         } else if (Array.isArray(f?.elements) && f.elements.length > 0) {
           searchAndInsert(f.elements);
         }
@@ -336,7 +340,9 @@ export default class Entity extends BaseDocument {
 
     this.#updateOrInsertField({ field: special.namedContainer, position: 'before' });
     for (const field of special.elementsNamed) {
-      this.#updateOrInsertField({ field, position: 'after', target: containerName });
+      // How `name` shows in lists and searches is the developer's choice; only
+      // its contract (required, unique, type) is enforced on every save.
+      this.#updateOrInsertField({ field, position: 'after', target: containerName, defaults: ['label', 'in_list_view', 'searchable'] });
     }
 
     const container = this.#getField(containerName);

@@ -1,6 +1,7 @@
 'use strict';
 
 import { getRequest } from '../server/router/request-context.js';
+import { parseSort } from '../global/list-settings.js';
 
 /**
  * List state (filters + page) lives in the URL of the request, never in the
@@ -15,7 +16,7 @@ import { getRequest } from '../server/router/request-context.js';
  * entity the request targets: any other list read inside the same request
  * (a history table, a card of a desk page…) starts clean on page 1.
  */
-export const LIST_CONTROL_PARAMS = new Set(['page', 'preloaded', 'board', 'workspace']);
+export const LIST_CONTROL_PARAMS = new Set(['page', 'sort', 'preloaded', 'board', 'workspace']);
 
 function targetQuery(entityName) {
   const req = getRequest();
@@ -50,6 +51,22 @@ export function listPage(entityName) {
   const query = targetQuery(entityName);
   const page = parseInt(lastString(query?.page), 10);
   return Number.isFinite(page) && page > 0 ? page : 1;
+}
+
+/**
+ * Sort of the current request for `entityName`: `?sort=plan,-status` →
+ * `[{ field: "plan", dir: "asc" }, { field: "status", dir: "desc" }]`; null
+ * when the URL asks for none. The model decides which fields can sort
+ * (BaseDocument.getList).
+ */
+export function listSort(entityName) {
+  const sort = parseSort(lastString(targetQuery(entityName)?.sort));
+  return sort.length ? sort : null;
+}
+
+/** Whether the current request targets the list of `entityName` (its state and the user's settings apply). */
+export function isListTarget(entityName) {
+  return targetQuery(entityName) !== null;
 }
 
 /** Page clamped to the available pages (an out-of-range URL shows the last page). */

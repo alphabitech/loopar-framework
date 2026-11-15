@@ -353,6 +353,14 @@ BaseInput.metaFields = () => {
           }
         },
         in_list_view: { element: SWITCH },
+        list_order: {
+          element: INPUT,
+          data: {
+            label: "List order",
+            format: "int",
+            description: "Position of the column in the list view: 1 is the first column, the one that opens the record. Columns without a position follow in the order of the form.",
+          }
+        },
         print_hide: { element: SWITCH },
         searchable: { element: SWITCH },
         translatable: {

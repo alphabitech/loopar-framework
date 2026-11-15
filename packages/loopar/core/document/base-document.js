@@ -8,7 +8,9 @@ import { Op } from 'db-env';
 import { multipleValues } from '../global/element-definition.js';
 import { CREATED_BY_COLUMN } from '../global/audit.js';
 import { requestOwnerFilter } from '../auth/record-scope.js';
-import { clampPage } from './list-state.js';
+import { clampPage, isListTarget } from './list-state.js';
+import { readListSettings } from './list-settings.js';
+import { isListableField, MAX_SORT_FIELDS } from '../global/list-settings.js';
 
 /** The entity a select links to, or null for inline options. */
 function linkedEntity(options) {
@@ -58,7 +60,7 @@ export default class BaseDocument extends CoreDocument {
    * List of a virtual entity: its records, searched (`q`: text contained in
    * each given field), filtered and paged in memory.
    */
-  async #virtualList({ fields = null, filters = {}, q = null, page = null, rowsOnly = false } = {}) {
+  async #virtualList({ fields = null, filters = {}, q = null, page = null, sort = null, rowsOnly = false } = {}) {
     const listFields = fields || this.getFieldListNames();
     const search = Object.entries(q || {}).filter(([, v]) => v != null && String(v).trim() !== "");
     const plain = filters && typeof filters === "object" && !Array.isArray(filters) ? filters : {};
@@ -77,6 +79,22 @@ export default class BaseDocument extends CoreDocument {
       search.every(([field, value]) => matches(row, field, value))
     );
 
+    // Sorted in memory (`?sort=plan,-status`, or the user's saved sort), by any field the records carry.
+    const settings = !fields && isListTarget(this.__ENTITY__.name) ? await readListSettings(this.__ENTITY__.name) : null;
+    const order = [].concat(sort ?? loopar.getSort(this.__ENTITY__.name) ?? settings?.sort ?? [])
+      .filter((s) => s?.field && all.some(row => s.field in row))
+      .map((s) => ({ field: s.field, dir: s.dir === "desc" ? "desc" : "asc" }));
+    if (order.length) {
+      const compare = (a, b) => String(a ?? "").localeCompare(String(b ?? ""), undefined, { numeric: true, sensitivity: "base" });
+      all.sort((a, b) => {
+        for (const { field, dir } of order) {
+          const result = compare(a[field], b[field]);
+          if (result) return dir === "desc" ? -result : result;
+        }
+        return 0;
+      });
+    }
+
     const pageSize = 10;
     const totalPages = Math.max(1, Math.ceil(all.length / pageSize));
     const current = clampPage(page || loopar.getPage(this.__ENTITY__.name), totalPages);
@@ -85,7 +103,8 @@ export default class BaseDocument extends CoreDocument {
       labels: this.getFieldListLabels(),
       fields: listFields,
       rows: all.slice((current - 1) * pageSize, current * pageSize),
-      pagination: { page: current, pageSize, totalPages, totalRecords: all.length, sortBy: "id", sortOrder: "asc", __ENTITY__: this.__ENTITY__.name },
+      pagination: { page: current, pageSize, totalPages, totalRecords: all.length, sortBy: order[0]?.field || "id", sortOrder: order[0]?.dir || "asc", sort: order, __ENTITY__: this.__ENTITY__.name },
+      list_settings: settings,
       q,
     }};
   }
@@ -126,12 +145,65 @@ export default class BaseDocument extends CoreDocument {
   }
 
   /**
-   * Columns every list row carries besides the visible ones: `id`, and `name`
-   * (the record's key: list links and cards open `?name=…`) even when the
-   * entity doesn't show it as a column.
+   * Columns every list row carries besides the visible ones: `id`, `name`
+   * (the record's key: list links and cards open `?name=…`) and the title
+   * fields (the list's title column), even when the entity doesn't show them
+   * as columns.
    */
-  #rowKeys(listFields) {
-    return ["id", ...(listFields.includes("name") ? [] : ["name"])];
+  #rowKeys(listFields, columns = null) {
+    const titles = String(this.__ENTITY__.title_fields || "").split(",").map(f => f.trim())
+      .filter(f => f && this.fields[f] && (!columns || columns.has(f)));
+    return [...new Set(["id", "name", ...titles])].filter(k => !listFields.includes(k));
+  }
+
+  /** Names of the table's real columns, or null when they can't be read. */
+  async #tableColumnNames() {
+    try {
+      const cols = await loopar.db.getTableColumns(this.__ENTITY__.name);
+      return new Set([...cols.values()].map(meta => meta.name));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Order of a list. `sort` = `[{ field, dir }]` (the URL's `?sort=plan,-status`,
+   * see list-state.js, or the user's saved sort); only real columns of the
+   * entity sort, anything else is dropped. `id` always closes the order so
+   * pages never overlap.
+   */
+  #listOrder(sort, columns = null) {
+    const seen = new Set();
+    const valid = [].concat(sort || []).filter((s) => {
+      const field = s?.field;
+      const known = field && (field === "id" || field === "name" || !!this.fields[field]) && (!columns || columns.has(field));
+      if (!known || seen.has(field)) return false;
+      seen.add(field);
+      return true;
+    }).slice(0, MAX_SORT_FIELDS).map((s) => ({ field: s.field, dir: s.dir === "desc" ? "desc" : "asc" }));
+
+    const last = valid[valid.length - 1];
+    return {
+      sort: valid,
+      sortBy: valid[0]?.field || "id",
+      sortOrder: valid[0]?.dir || "asc",
+      orderBy: [
+        ...valid.map((s) => ({ column: s.field, order: s.dir })),
+        ...(seen.has("id") ? [] : [{ column: "id", order: last?.dir || "asc" }]),
+      ],
+    };
+  }
+
+  /**
+   * Extra columns the user added to this list (settings `shown`): only plain,
+   * readable fields of the entity that are real columns.
+   */
+  #extraListFields(settings, listFields, columns = null) {
+    return (settings?.shown || []).filter((name) => {
+      const field = this.fields[name];
+      return field && !listFields.includes(name) && (!columns || columns.has(name))
+        && isListableField({ element: field.element, data: field });
+    });
   }
 
   getFieldListNames() {
@@ -233,7 +305,7 @@ export default class BaseDocument extends CoreDocument {
     }
   }
 
-  async getList({ fields = null, filters = {}, q = null, page = null, pageSize = 10, rowsOnly = false, unscoped = false } = {}) {
+  async getList({ fields = null, filters = {}, q = null, page = null, pageSize = 10, sort = null, rowsOnly = false, unscoped = false } = {}) {
     if (this.__ENTITY__.is_single) {
       return loopar.throw({
         code: 404,
@@ -242,20 +314,29 @@ export default class BaseDocument extends CoreDocument {
     }
 
     if (loopar.getRef(this.__ENTITY__.name)?.is_virtual) {
-      return await this.#virtualList({ fields, filters, q, page, rowsOnly });
+      return await this.#virtualList({ fields, filters, q, page, sort, rowsOnly });
     }
+
+    const columns = await this.#tableColumnNames();
+    // The user's settings for this list (extra columns, saved sort): only for
+    // the list the request targets, never for a list read on the side.
+    const settings = !fields && isListTarget(this.__ENTITY__.name) ? await readListSettings(this.__ENTITY__.name) : null;
+    // An explicit sort wins, then the URL's, then the one the user saved.
+    const order = this.#listOrder(sort ?? loopar.getSort(this.__ENTITY__.name) ?? settings?.sort, columns);
 
     const pagination = {
       page: page || loopar.getPage(this.__ENTITY__.name),
       pageSize,
       totalPages: 4,
       totalRecords: 1,
-      sortBy: "id",
-      sortOrder: "asc",
+      sortBy: order.sortBy,
+      sortOrder: order.sortOrder,
+      sort: order.sort,
       __ENTITY__: this.__ENTITY__.name
     };
 
     const listFields = fields || this.getFieldListNames();
+    listFields.push(...this.#extraListFields(settings, listFields, columns));
     /*if (this.__ENTITY__.name === 'Document' && currentController.document !== "Document") {
        listFields.push('is_single');
     }*/
@@ -279,7 +360,7 @@ export default class BaseDocument extends CoreDocument {
     // decide per row whether an 'own'-scoped action applies (AuthContext.canOn).
     // Only when the table has it: child/static entities are not auditable and
     // an app not yet updated lacks the column.
-    const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, ...this.#rowKeys(listFields), ...(await this.#ownerColumn())], condition);
+    const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, ...this.#rowKeys(listFields, columns), ...(await this.#ownerColumn())], condition, { orderBy: order.orderBy });
     await this.#attachLinkTitles(rows);
 
     return {...(rowsOnly ? {} : await this.__meta__(false)), ...{
@@ -287,12 +368,13 @@ export default class BaseDocument extends CoreDocument {
         fields: listFields,
         rows: rows,
         pagination: selfPagination,
+        list_settings: settings,
         q
       }
     };
   }
 
-  async getListToForm({ fields = null, filters = {}, q = null, page = null, rowsOnly = false, unscoped = false } = {}) {
+  async getListToForm({ fields = null, filters = {}, q = null, page = null, sort = null, rowsOnly = false, unscoped = false } = {}) {
     if (this.__ENTITY__.is_single) {
       return loopar.throw({
         code: 404,
@@ -300,13 +382,16 @@ export default class BaseDocument extends CoreDocument {
       });
     }
 
+    const columns = await this.#tableColumnNames();
+    const order = this.#listOrder(sort ?? loopar.getSort(this.__ENTITY__.name), columns);
+
     const pagination = {
       page: page || loopar.getPage(this.__ENTITY__.name),
       pageSize: 10,
       totalPages: 4,
       totalRecords: 1,
-      sortBy: "id",
-      sortOrder: "asc",
+      sortBy: order.sortBy,
+      sortOrder: order.sortOrder,
       __ENTITY__: this.__ENTITY__.name
     };
 
@@ -329,7 +414,7 @@ export default class BaseDocument extends CoreDocument {
     // decide per row whether an 'own'-scoped action applies (AuthContext.canOn).
     // Only when the table has it: child/static entities are not auditable and
     // an app not yet updated lacks the column.
-    const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, ...this.#rowKeys(listFields), ...(await this.#ownerColumn())], condition);
+    const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, ...this.#rowKeys(listFields, columns), ...(await this.#ownerColumn())], condition, { orderBy: order.orderBy });
 
     return rows;
   }

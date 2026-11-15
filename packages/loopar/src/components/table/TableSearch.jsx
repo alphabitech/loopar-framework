@@ -1,3 +1,4 @@
+import loopar from "loopar";
 import { MetaComponent } from "@meta-component";
 import { FormWrapper } from "@form-provider";
 import { useTable } from "./TableContext"
@@ -19,7 +20,7 @@ export function TableSearch(props){
   const searchFields = useMemo(() => {
     return baseColumns().filter(col => fieldIsWritable(col) &&
       [INPUT, TEXTAREA, SELECT, CHECKBOX, SWITCH].includes(col.element) &&
-      (col.data.searchable || col.data.name === "name") &&
+      loopar.utils.trueValue(col.data.searchable) &&
       !hiddenFields.includes(col.data.name)
     );
   }, [baseColumns, hiddenFields]);

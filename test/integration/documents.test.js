@@ -140,3 +140,16 @@ test("deleteDocument() soft-deletes: hidden from reads unless includeDeleted", a
     assert.ok(kept[0].__deleted_at__);
   });
 });
+
+test("getList() sorts by a real column and falls back to id for anything else", async () => {
+  await t.run(async () => {
+    const desc = await loopar.getList("Letterhead", { sort: { field: "name", dir: "desc" }, rowsOnly: true });
+    assert.deepEqual(desc.rows.map(r => r.name), ["Zeta", "Gamma", "Eta", "Epsilon", "Delta", "Beta", "Alpha"]);
+    assert.equal(desc.pagination.sortBy, "name");
+    assert.equal(desc.pagination.sortOrder, "desc");
+
+    const unknown = await loopar.getList("Letterhead", { sort: { field: "nope; drop table", dir: "desc" }, rowsOnly: true });
+    assert.equal(unknown.pagination.sortBy, "id");
+    assert.equal(unknown.rows[0].name, "Alpha");
+  });
+});

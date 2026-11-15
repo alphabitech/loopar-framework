@@ -1,7 +1,7 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.5.24"
+    "version": "7.5.25"
   },
   "documents": {
     "Entity:Module": {
@@ -20,7 +20,7 @@
     "App:loopar": {
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.5.24",
+      "version": "7.5.25",
       "autor": "Administrator",
       "icon": "Infinity",
       "is_template": 0,
@@ -394,6 +394,9 @@
     "Entity:Naming Series": {
       "__root__": "/apps/loopar/modules/core/entities/naming-series"
     },
+    "Entity:List View Setting": {
+      "__root__": "/apps/loopar/modules/core/entities/list-view-setting"
+    },
     "Entity:Workflow State": {
       "__root__": "/apps/loopar/modules/core/entities/workflow-state"
     },
@@ -525,6 +528,7 @@
     "Entity:Post": "link",
     "Entity:Git Account": "link",
     "Entity:Naming Series": "link",
+    "Entity:List View Setting": "link",
     "Entity:Workflow State": "link",
     "Entity:Workflow Transition": "link",
     "Entity:Workflow": "link",

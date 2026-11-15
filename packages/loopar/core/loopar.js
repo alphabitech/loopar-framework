@@ -9,7 +9,7 @@ import * as dateUtils from "./global/date-utils.js";
 import { simpleGit } from 'simple-git';
 import Auth from './auth/Auth.js';
 import { Document } from './loopar/document.js';
-import { listFilters, listPage } from './document/list-state.js';
+import { listFilters, listPage, listSort } from './document/list-state.js';
 import { tailwinInit } from './loopar/tailwindbase.js';
 import { Server } from './server/server.js';
 import { warmAndSignalReady } from './server/warm-boot.js';
@@ -321,6 +321,11 @@ export class Loopar extends Document {
   /** Page of `document`'s list, from the current request URL (see document/list-state.js). */
   getPage(document){
     return listPage(document);
+  }
+
+  /** Sort of `document`'s list (`{ field, dir }` or null), from the current request URL. */
+  getSort(document){
+    return listSort(document);
   }
 
   /** Filters of `document`'s list, from the current request URL (see document/list-state.js). */

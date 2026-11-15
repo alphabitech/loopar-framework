@@ -10,6 +10,8 @@ import { CheckIcon } from "lucide-react";
 
 import { useTable } from "./TableContext";
 import { recordLink } from "./record-link.js";
+import { titleFieldsOf } from "./list-columns.js";
+import { resolveListColumns } from "@global/list-settings";
 import { useViewOptions } from "@loopar/document";
 import { TableSearch } from "./TableSearch";
 import { EmptyTable } from "./EmptyTable";
@@ -36,9 +38,9 @@ function DetailValue({ col, value }) {
 }
 
 /** Default card used when the view doesn't provide its own `gridTemplate`. */
-function GridCard({ row, titleFields, detailCols, iconCol, selected, onSelect, Entity, onDelete }) {
+function GridCard({ row, titleFields, nameVisible, detailCols, iconCol, selected, onSelect, Entity, onDelete }) {
   const title = titleFields.map((f) => row.__titles__?.[f] ?? row[f]).filter((v) => !isEmpty(v)).join(" ") || row.name;
-  const showName = String(title).toLowerCase() !== String(row.name).toLowerCase();
+  const showName = nameVisible && String(title).toLowerCase() !== String(row.name).toLowerCase();
   const icon = iconCol ? row[iconCol.data.name] : null;
   const tag = row.type || row.module;
 
@@ -113,6 +115,7 @@ export function GridView(props) {
     deleteRow,
     baseColumns,
     Document,
+    listSettings,
   } = useTable();
 
   const { hasSearchForm, hasSelectAll, gridTemplate, gridMinWidth = "22rem" } = useViewOptions();
@@ -120,26 +123,24 @@ export function GridView(props) {
   const rows = props.rows || useTable().rows || [];
   const Entity = Document?.Entity || {};
 
-  const titleFields = useMemo(
-    () => String(Entity.title_fields || "").split(",").map((s) => s.trim()).filter(Boolean),
-    [Entity.title_fields]
-  );
-
-  // Same columns the list view shows (in_list_view), minus name/title; icon fields feed the avatar.
-  const { detailCols, iconCol } = useMemo(() => {
-    if (gridTemplate) return { detailCols: [], iconCol: null };
-    const cols = baseColumns().filter((col) =>
-      !col.isCustom &&
-      col.data?.name &&
-      col.data.name !== "name" &&
-      loopar.utils.trueValue(col.data.in_list_view)
-    );
+  // Same columns, in the same order, as the list view (in_list_view + list_order).
+  // The title is the entity's title_fields or, without them, the first column;
+  // the name shows under it only while `name` is a list column. Icon fields feed the avatar.
+  const { titleFields, nameVisible, detailCols, iconCol } = useMemo(() => {
+    const declared = titleFieldsOf(Entity);
+    if (gridTemplate) return { titleFields: declared, nameVisible: true, detailCols: [], iconCol: null };
+    const visible = resolveListColumns(baseColumns(), listSettings);
+    const cols = visible.filter((col) => col.data.name !== "name");
     const iconCol = cols.find((col) => col.element === ICON_INPUT) || null;
+    const first = visible.find((col) => col !== iconCol && ![SWITCH, CHECKBOX].includes(col.element));
+    const titleFields = declared.length ? declared : (first ? [first.data.name] : []);
     return {
+      titleFields,
+      nameVisible: visible.some((col) => col.data.name === "name"),
       iconCol,
       detailCols: cols.filter((col) => col !== iconCol && !titleFields.includes(col.data.name)).slice(0, MAX_DETAILS),
     };
-  }, [baseColumns, titleFields, gridTemplate]);
+  }, [baseColumns, Entity.title_fields, gridTemplate, listSettings]);
 
   const defaultAction = (row) => {
     if (["Entity", "Builder", "Contact Form Builder"].includes(row.type || "")) {
@@ -181,6 +182,7 @@ export function GridView(props) {
         row={row}
         Entity={Entity}
         titleFields={titleFields}
+        nameVisible={nameVisible}
         detailCols={detailCols}
         iconCol={iconCol}
         selected={selectedRows.includes(row.name)}

@@ -36,26 +36,28 @@ export class Document extends Console {
     await Doc.delete({ sofDelete, force });
   }
 
-  async getList(document, { data = {}, fields = null, filters = {}, orderBy = 'name', limit = 10, offset = 0, q = null, page = null, pageSize = 10, rowsOnly = false, unscoped = false } = {}, ifNotFound = null) {
+  async getList(document, { data = {}, fields = null, filters = {}, orderBy = 'name', limit = 10, offset = 0, q = null, page = null, pageSize = 10, sort = null, rowsOnly = false, unscoped = false } = {}, ifNotFound = null) {
     const doc = await this.newDocument(document, data);
     return await doc.getList({ 
       pageSize,
       fields, 
       filters, 
       orderBy, limit, offset, page: page || loopar.getPage(document),
+      sort,
       rowsOnly,
       unscoped,
       q 
     });
   }
 
-  async getListToForm(document, { data = {}, fields = null, filters = {}, orderBy = 'name', limit = 10, offset = 0, q = null, page = null, rowsOnly = false } = {}, ifNotFound = null) {
+  async getListToForm(document, { data = {}, fields = null, filters = {}, orderBy = 'name', limit = 10, offset = 0, q = null, page = null, sort = null, rowsOnly = false } = {}, ifNotFound = null) {
     const doc = await this.newDocument(document, data);
     return await doc.getListToForm({ 
       fields, 
       filters, 
       orderBy, 
       limit, offset, page: page || loopar.getPage(document),
+      sort,
       rowsOnly,
       q
     });

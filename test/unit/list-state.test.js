@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { requestContext } from "../../packages/loopar/core/server/router/request-context.js";
-import { listFilters, listPage, clampPage } from "../../packages/loopar/core/document/list-state.js";
+import { listFilters, listPage, listSort, isListTarget, clampPage } from "../../packages/loopar/core/document/list-state.js";
 
 const inRequest = (document, query, fn) =>
   requestContext.run({ req: { query, __CONTROLLER__: { document } } }, fn);
@@ -44,4 +44,17 @@ test("clampPage(): out-of-range pages land on the last page, never below 1", () 
   assert.equal(clampPage(2, 0), 1);
   assert.equal(clampPage(0, 5), 1);
   assert.equal(clampPage(2, 5), 2);
+});
+
+test("listSort(): `?sort=plan,-status` is the list order and never a filter", () => {
+  inRequest("Customer", { city: "Lynn", sort: "city,-name" }, () => {
+    assert.deepEqual(listSort("Customer"), [{ field: "city", dir: "asc" }, { field: "name", dir: "desc" }]);
+    assert.deepEqual(listFilters("Customer"), { city: "Lynn" });
+    assert.equal(listSort("Document History"), null);
+    assert.equal(isListTarget("Customer"), true);
+    assert.equal(isListTarget("Document History"), false);
+  });
+  inRequest("Customer", { sort: "city,city,drop table;--" }, () => assert.deepEqual(listSort("Customer"), [{ field: "city", dir: "asc" }]));
+  inRequest("Customer", { sort: " " }, () => assert.equal(listSort("Customer"), null));
+  assert.equal(listSort("Customer"), null);
 });

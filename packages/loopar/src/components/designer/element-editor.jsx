@@ -85,7 +85,7 @@ const NO_DEFAULT_VALUE = new Set(["designer", "password", "form_table", "id", "f
 const DEFAULT_VALUE_DROPPED_KEYS = new Set([
   "readonly", "formula", "disabled", "hidden", "display_on", "required", "required_on", "unique",
   "write_policy", "write_roles", "protected_change", "default_value", "value", "description",
-  "in_list_view", "searchable", "print_hide", "translatable", "internal", "required_on_website",
+  "in_list_view", "list_order", "searchable", "print_hide", "translatable", "internal", "required_on_website",
 ]);
 
 const ACTIVE_SECTION_KEY = "element-editor-active-section";

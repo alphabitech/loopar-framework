@@ -10,6 +10,28 @@ import Emitter from "@services/emitter/emitter";
 import { LoopSocket } from "@services/realtime/LoopSocket";
 import { navTrace } from "@@tools/router/nav-trace";
 import { versionWatch } from "@@tools/version/version-watch";
+import { getWorkspaceName } from "@global/router-utils";
+
+// Workspaces with their own shell and URL prefix.
+const SHELL_WORKSPACES = ["desk", "portal", "kiosk"];
+const CROSS_LOAD_KEY = "loopar:cross-workspace-load";
+
+/**
+ * True when `path` belongs to another workspace's shell. If the full load
+ * lands right back here (the server kept this workspace for that URL), the
+ * same target within a few seconds goes on as a normal fetch instead of
+ * reloading in a loop.
+ */
+function leavesWorkspace(path, current) {
+  const target = getWorkspaceName(path);
+  if (target === current || !SHELL_WORKSPACES.includes(target)) return false;
+  try {
+    const [lastPath, at] = String(sessionStorage.getItem(CROSS_LOAD_KEY) || "").split("|");
+    if (lastPath === path && Date.now() - Number(at) < 5000) return false;
+    sessionStorage.setItem(CROSS_LOAD_KEY, `${path}|${Date.now()}`);
+  } catch { /* storage blocked: the workspace check alone decides */ }
+  return true;
+}
 
 /** Read the current public session (JWT is httpOnly → ask the server). */
 async function fetchSession() {
@@ -320,6 +342,14 @@ export function WorkspaceProvider({
     const [rawPath, rawSearch = ''] = raw.split('?');
     const targetPath = rawPath || '/';
     const targetSearch = rawSearch ? `?${rawSearch}` : '';
+
+    // A route into another workspace's shell (website → /portal/…, /desk/…)
+    // is another page: load it whole. Fetched as a document of THIS
+    // workspace, the server looked for it among this one's pages (404).
+    if (primary && leavesWorkspace(targetPath, __WORKSPACE_NAME__)) {
+      window.location.replace(targetPath + targetSearch);
+      return new Promise(() => {}); // page is unloading
+    }
 
     // A newer build is live: this navigation is the safe moment to load it.
     // Full page load (drafts are flushed first by versionWatch.reload) instead

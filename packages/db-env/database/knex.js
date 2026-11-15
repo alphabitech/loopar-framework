@@ -586,6 +586,10 @@ export class KnexORM extends Connector {
       qb = qb.whereNull("__deleted_at__");
     }
 
+    // `orderBy`: [{ column, order }], already validated by the caller.
+    const orderBy = opts.orderBy ?? a.orderBy;
+    if (Array.isArray(orderBy) && orderBy.length) qb = qb.orderBy(orderBy);
+
     if (!all) {
       const { page, pageSize } = this.makePagination();
       qb = qb.limit(pageSize).offset((page - 1) * pageSize);
