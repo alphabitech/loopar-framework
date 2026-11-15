@@ -386,7 +386,6 @@ export function help() {
   log(cyan('  logs [proc]       ') + gray('Tail logs — all processes, or one named process'));
   log();
   log(white('Operations:'));
-  log(cyan('  migrate           ') + gray('One-shot: legacy sites/<t>/.env → config.json'));
   log(cyan('  watch             ') + gray('Warm release builder → build/staging under pm2 (stop: yarn stop build-watch)'));
   log(cyan('  startup           ') + gray('Register reboot-safe boot hook (run once after first deploy)'));
   log(cyan('  mfa-reset <tenant> <user>') + gray('  Turn 2FA off for a user who lost the phone and recovery codes'));

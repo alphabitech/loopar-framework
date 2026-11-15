@@ -101,8 +101,10 @@ export default class SystemController extends BaseController {
   // wizard works with no user yet. That left a fresh tenant reachable over a
   // public IP open to takeover by whoever POSTed first. The gate below closes
   // it WITHOUT touching the browser wizard:
-  //   - local / LAN origin  -> allowed, no token (dev + same-network installs).
-  //   - remote (public IP)  -> a valid install token is required. The token
+  //   - local / LAN origin on the tenant's .localhost address -> allowed, no
+  //     token (dev installs).
+  //   - anything else (public IP, or a public domain from any IP) -> a valid
+  //     install token is required. The token
   //     rides in the install link the CLI/TUI prints; opening that link drops
   //     a short-lived setup cookie, so the wizard's own POSTs carry it with no
   //     hand-typing. After install the actions are revoked and it goes inert.
@@ -171,14 +173,39 @@ export default class SystemController extends BaseController {
     }
   }
 
+  /**
+   * The request came in on a local address of the tenant (<name>.localhost).
+   * A public domain is never "local", whatever the client IP says: behind a
+   * tunnel or a proxy on this machine every visitor arrives from loopback.
+   */
+  #isLocalHost() {
+    return tenant.isLocalDomain(String(this.req?.hostname || '').toLowerCase());
+  }
+
   #assertSetupOrigin() {
     if (loopar.__installed__) return;
-    if (this.#isLocalRequest()) return;
     if (this.#hasValidSetupToken()) return;
+    if (this.#isLocalRequest() && this.#isLocalHost()) return;
     loopar.throw({
       code: 403,
       title: 'Forbidden',
-      message: 'This workspace can only be set up from its own machine or with a valid install link.',
+      message: 'This workspace can only be set up from its own machine (on its .localhost address) or with a valid install link.',
+    });
+  }
+
+  /**
+   * A tenant that was installed and now needs an update (schema drift after
+   * a deploy) is not a fresh tenant: the wizard must not run over it — it
+   * would point the tenant at a new, empty database with a new Administrator.
+   */
+  #assertNotInstalledBefore(reinstall) {
+    if (reinstall || this.getAppName() !== 'loopar') return;
+    if (loopar.__installed__ || !loopar.__wasInstalled__) return;
+    loopar.throw({
+      status: 409,
+      code: 'NEEDS_UPDATE',
+      title: 'Install',
+      message: 'This workspace is already installed and needs an update, not a new install.',
     });
   }
 
@@ -233,6 +260,7 @@ export default class SystemController extends BaseController {
       // Once installed, unInstallApp's "already installed / role" guard takes
       // over and this is inert.
       this.#assertSetupOrigin();
+      this.#assertNotInstalledBefore(reinstall);
       // `connection=current`: the wizard kept the connection already saved
       // for this tenant (provisioned / pre-seeded db.config), so its db_*
       // fields are not a new connection to apply.

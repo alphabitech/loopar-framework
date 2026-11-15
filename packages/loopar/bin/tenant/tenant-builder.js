@@ -25,10 +25,18 @@ const TENANT_FOLDERS = [
 const tenantDir  = (name) => path.join(SITES_DIR, name);
 const configPath = (name) => path.join(tenantDir(name), 'config.json');
 
+/**
+ * Folder names a tenant can't take: every tenant has them INSIDE its own
+ * folder (sites/<name>/config, sites/<name>/database), so at the root of
+ * sites/ they are never a tenant.
+ */
+export const RESERVED_TENANT_NAMES = new Set(['config', 'database']);
+
 /** Folder names under sites/ — the canonical tenant identities. */
 export function tenantNames() {
   if (!existsSync(SITES_DIR)) return [];
   return readdirSync(SITES_DIR).filter((f) => {
+    if (RESERVED_TENANT_NAMES.has(f.toLowerCase())) return false;
     try { return statSync(path.join(SITES_DIR, f)).isDirectory() && !f.startsWith('.'); }
     catch { return false; }
   });
@@ -273,6 +281,9 @@ export async function createTenantFolders(name) {
 export async function saveTenant(data = {}) {
   const name = data.name ?? data.NAME ?? data.ID;
   if (!name) throw new Error('[tenant] name/NAME is required');
+  if (RESERVED_TENANT_NAMES.has(String(name).toLowerCase())) {
+    throw new Error(`[tenant] "${name}" is a reserved name`);
+  }
 
   const isNew = !existsSync(tenantDir(name));
   if (isNew) await createTenantFolders(name);

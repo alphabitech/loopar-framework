@@ -34,7 +34,6 @@ const registry = {
   dev:     () => c.dev(),
   prod:    () => c.prod(),
   tenant:  () => c.tenantCmd(siteName, extraArg), // on | off | grant | revoke | list [name]
-  migrate: () => c.migrate(),
   stop:    () => c.stop(siteName),
   restart: () => c.restart(),
   delete:  () => c.del(siteName),

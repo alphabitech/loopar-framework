@@ -2,7 +2,7 @@
 
 **Design your app in the browser, ship the full stack.** Loopar is a multi-tenant, drag-and-drop web framework: you model entities, pages and forms visually and it scaffolds the database model, the controller and the rendered views for you.
 
-`v7.0.0` · MIT · Node 22.12+ · React (SSR + hydration), Vite 8 (Rolldown), single-core multi-tenant.
+`v7.0.0` · MIT · Node 22.22+ · React (SSR + hydration), Vite 8 (Rolldown), single-core multi-tenant.
 
 > 📖 **Full documentation:** the `loopar-webpage` app and **[loopar.build/Doc](https://loopar.build/Doc)**.
 
@@ -41,7 +41,7 @@ yarn install
 yarn start
 ```
 
-`yarn start` opens the **TUI** (interactive tenant manager). On a fresh install — a single stopped `dev` tenant — it starts it automatically; press `o` (or click the URL) to open `http://localhost:3000`.
+`yarn start` opens the **TUI** (interactive tenant manager). A fresh install comes with one tenant, `dev`, already turned on; press `o` (or click the URL) to open it at `http://dev.localhost` (through Caddy) or `http://dev.localhost:3000` (straight to the core). The core finds the tenant by its host name, so plain `http://localhost:3000` answers "Tenant not identified".
 
 ## First run
 
@@ -99,7 +99,7 @@ yarn start      # or: yarn tui
 A full tenant manager in your terminal, with mouse support (click rows and buttons, scroll with the wheel) and keyboard shortcuts. It shows every tenant in `sites/` with live pm2 status and offers per-tenant actions:
 
 - **Start / Stop / Restart** — stop and restart ask for confirmation; starting a tenant with a `DOMAIN` also registers its Caddy route, exactly like the Desk UI.
-- **Open** — launch the selected tenant's URL in your browser (key `o`, click the URL cell, or double-click the row). Tenant names are OSC 8 hyperlinks (Cmd/Ctrl+click) in terminals that support them. When Caddy routes the domain, the URL drops the port (`http://dev.localhost`); otherwise it targets the tenant port directly.
+- **Open** — launch the selected tenant's URL in your browser (key `o`, click the URL cell, or double-click the row). Tenant names are OSC 8 hyperlinks (Cmd/Ctrl+click) in terminals that support them. When Caddy routes the domain, the URL drops the port (`http://dev.localhost`); otherwise a local domain targets the core port directly (`http://dev.localhost:3000`).
 - **Backups** — key `B` (or the BACKUPS tab): the selected tenant's backups (local and remote), back up now, restore in place or as a new tenant, delete.
 - **Tests** — key `T` (or the TESTS tab) runs the test suite in a child process with live results: per-file status, pass/fail counts, each failure with its assertion diff and the output. `a` all · `u` unit · `i` integration · space picks files, Enter runs them · `f` re-runs the failed files · `x` stops.
 - **Logs** — key `l` / Tab switches to a full-screen realtime log stream of the selected tenant: recent history from the pm2 log files, then live lines via the pm2 event bus (the same mechanism `pm2 logs` uses) with timestamps, stderr in red. Arrows/wheel scroll (pauses following), `f` resumes.

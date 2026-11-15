@@ -8,10 +8,12 @@
 import "./check-node.js";
 import { coreEnvVars } from "../core/config/core-config.js";
 
-// Fill process.env from config/core.json when not set (e.g. run directly, not
-// via PM2). Runtime reads process.env.*.
+// process.env follows config/core.json (each value already falls back to the
+// inherited env when the file doesn't set it). Always applied: a PM2 restart
+// by name keeps the env of the first start, so a mode switched in core.json
+// would boot with the old NODE_ENV.
 for (const [k, v] of Object.entries(coreEnvVars())) {
-  if (process.env[k] === undefined) process.env[k] = String(v);
+  process.env[k] = String(v);
 }
 
 const { startCore } = await import("../index.js");

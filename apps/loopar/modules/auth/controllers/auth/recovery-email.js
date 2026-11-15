@@ -1,6 +1,17 @@
-import { loopar } from 'loopar';
+import { loopar, getRequest, tenant } from 'loopar';
 
-const APP_URL = process.env.DOMAIN || 'localhost:3000';
+/**
+ * Origin for the links: the host this request was routed on (the tenant
+ * registry resolved the tenant from it), else the tenant's own domain. One
+ * core serves every tenant, so there is no per-tenant DOMAIN env to read.
+ */
+function origin() {
+  const req = getRequest();
+  const host = String(req?.headers?.host || '').split(',')[0].trim();
+  if (!host) return tenant.tenantUrl(loopar.tenantId);
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim();
+  return `${proto === 'https' ? 'https' : 'http'}://${host}`;
+}
 
 /**
  * Deliver a transactional email with a cloud fallback.
@@ -57,14 +68,7 @@ async function deliverEmail({ to, subject, html }) {
 }
 
 export async function sendPasswordResetEmail(user, rawToken) {
-  // Use the tenant's real scheme/host. In dev this is http://<tenant>.localhost:port;
-  // in prod, https. DOMAIN already carries the host; default to https unless
-  // it's a .localhost dev host.
-  const isLocal = APP_URL.includes('localhost');
-  const scheme  = isLocal ? 'http' : 'https';
-  const port    = isLocal && process.env.PORT ? `:${process.env.PORT}` : '';
-  const host    = APP_URL.includes(':') ? APP_URL : `${APP_URL}${port}`;
-  const resetUrl = `${scheme}://${host}/auth/recoveryPassword?token=${rawToken}`;
+  const resetUrl = `${origin()}/auth/recoveryPassword?token=${rawToken}`;
 
   await deliverEmail({
     to: user.email,

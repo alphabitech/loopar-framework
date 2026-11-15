@@ -187,6 +187,8 @@ toKebabCase(str) {
   }
 
   getConfigFile(fileName, _path = null) {
+    // Outside a tenant there is no sites/<tenant>/config to read.
+    if (!_path && !loopar.tenantId) return {};
     const pathFile = this.fileName((`./${_path || path.join("sites", loopar.tenantId, "config")}/${fileName}`), 'json');
     try {
       const data = fs.readFileSync(path.resolve(loopar.pathRoot, pathFile), 'utf8');
@@ -197,6 +199,11 @@ toKebabCase(str) {
   }
 
   async setConfigFile(fileName, data, p = null) {
+    // Without a tenant the path collapsed to sites/config/<file>: a stray
+    // file at the root of sites/ instead of the tenant's own config.
+    if (!p && !loopar.tenantId) {
+      throw new Error(`[config] "${fileName}" can't be saved outside a tenant context`);
+    }
     const dirPath = p || path.join("sites", loopar.tenantId, `config`);
 
     await this.makeFile(dirPath, fileName, JSON.stringify(data, null, 2), 'json');

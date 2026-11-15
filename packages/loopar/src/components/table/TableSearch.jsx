@@ -19,7 +19,8 @@ export function TableSearch(props){
 
   const searchFields = useMemo(() => {
     return baseColumns().filter(col => fieldIsWritable(col) &&
-      [INPUT, TEXTAREA, SELECT, CHECKBOX, SWITCH].includes(col.element) &&
+      // The same elements BaseDocument.buildCondition filters by.
+      [INPUT, TEXTAREA, SELECT, CONNECTION, RADIO_GROUP, CHECKBOX, SWITCH].includes(col.element) &&
       loopar.utils.trueValue(col.data.searchable) &&
       !hiddenFields.includes(col.data.name)
     );
@@ -113,7 +114,7 @@ export function TableSearch(props){
                       }}
                       dontHaveLabel={true}
                       onChange={(e) => {
-                        saveData([SELECT, SWITCH, CHECKBOX].includes(c.element) || e.target.value == "" ? 0: 300)
+                        saveData([SELECT, CONNECTION, RADIO_GROUP, SWITCH, CHECKBOX].includes(c.element) || e?.target?.value == "" ? 0: 300)
                       }}
                     />
                   )}

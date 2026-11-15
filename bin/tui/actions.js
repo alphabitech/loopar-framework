@@ -5,9 +5,9 @@
  */
 import { spawn } from "child_process";
 import "loopar/bin/pm2-home.js";
-import { tenantList } from "loopar/bin/tenant/tenant-builder.js";
+import { tenantList, isLocalDomain } from "loopar/bin/tenant/tenant-builder.js";
 import * as tenantOps from "loopar/bin/tenant/tenant-ops.js";
-import { coreEnv, setCoreMode } from "loopar/core/config/core-config.js";
+import { coreEnv, setCoreMode, corePort } from "loopar/core/config/core-config.js";
 import { distIsReady } from "loopar/core/server/runtime-mode.js";
 import { withPm2, restartCoreProcess, coreProcessStatus, CORE_PROCESS_NAME } from "../cli/pm2.js";
 import { silenced, quit } from "./term.js";
@@ -48,14 +48,17 @@ export async function loadRows(withStatus = true) {
 
   const all = tenantList()
     .map((t) => {
-      // All tenant domains route to the CORE via Caddy's catch-all.
-      const viaCaddy = caddy?.hosts.has(t.domain) && caddy.port !== 80
-        ? `http://${t.domain}:${caddy.port}/desk`
-        : `http://${t.domain}/desk`;
+      // All tenant domains route to the CORE via Caddy's catch-all. When
+      // Caddy doesn't route a local domain (not installed, down), the core
+      // answers it on its own port: <name>.localhost:<port>.
+      const routed = !!caddy?.hosts.has(t.domain);
+      const url = routed
+        ? (caddy.port !== 80 ? `http://${t.domain}:${caddy.port}/desk` : `http://${t.domain}/desk`)
+        : (isLocalDomain(t.domain) ? `http://${t.domain}:${corePort()}/desk` : `http://${t.domain}/desk`);
       return {
         name: t.name,
         domain: t.domain,
-        url: viaCaddy,
+        url,
         status: t.online ? "online" : "stopped",
         controlPlane: t.controlPlane,
       };

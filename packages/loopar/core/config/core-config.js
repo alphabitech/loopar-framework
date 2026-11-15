@@ -74,9 +74,13 @@ export function debugEnabled() {
   return v === true || v === 'true' || v === 1 || v === '1';
 }
 
-/** Bind address. */
+/**
+ * Bind address. Loopback by default: Caddy reaches the core on localhost, so
+ * nothing else needs the port. Set `"host": "0.0.0.0"` in config/core.json
+ * to expose it (a proxy on another machine, a container network).
+ */
 export function coreHost() {
-  return pick(load().host, process.env.HOST, '0.0.0.0');
+  return pick(load().host, process.env.HOST, '127.0.0.1');
 }
 
 /** Shared cache (Redis) config — one store, keyed per tenant. */

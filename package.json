@@ -24,7 +24,6 @@
     "serve": "node bin/cli/index.js serve",
     "prod": "node bin/cli/index.js prod",
     "tenant": "node bin/cli/index.js tenant",
-    "migrate": "node bin/cli/index.js migrate",
     "stop": "node bin/cli/index.js stop",
     "restart": "node bin/cli/index.js restart",
     "kill": "node bin/cli/index.js kill",

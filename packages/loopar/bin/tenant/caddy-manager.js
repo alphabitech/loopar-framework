@@ -5,9 +5,16 @@ import path from "pathe";
 import os from "os";
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { coreEnv } from 'loopar/core/config/core-config.js';
+import { coreEnv, caddyAcmeEmail } from 'loopar/core/config/core-config.js';
 
 const execAsync = promisify(exec);
+
+/**
+ * `sudo` may only ask for a password in a plain interactive terminal. Under
+ * PM2 (no terminal) and inside the TUI (raw mode, alternate screen) nobody
+ * sees the prompt: -n makes it fail at once instead of hanging.
+ */
+const sudo = () => (process.stdin.isTTY && !process.stdin.isRaw ? 'sudo' : 'sudo -n');
 
 /**
  * CaddyManager — reverse proxy manager.
@@ -196,21 +203,22 @@ export default class CaddyManager {
         // brew may auto-start Caddy as a service — stop it so Loopar manages it
         try { await execAsync(`${this.brewBin} services stop caddy`); } catch (_) {}
       } else if (platform === 'linux') {
-        await execAsync('sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl');
+        await execAsync(sudo() + ' apt install -y debian-keyring debian-archive-keyring apt-transport-https curl');
         await execAsync('curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/gpg.key" | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg');
         await execAsync('curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt" | sudo tee /etc/apt/sources.list.d/caddy-stable.list');
-        await execAsync('sudo apt update && sudo apt install -y caddy');
+        await execAsync(sudo() + ' apt update && sudo apt install -y caddy');
         // apt auto-starts caddy.service (stock Caddyfile, no admin API) which
         // competes with Loopar's CaddyManager. Disable so only Loopar's runs.
-        try { await execAsync('sudo systemctl stop caddy');    } catch (_) {}
-        try { await execAsync('sudo systemctl disable caddy'); } catch (_) {}
+        try { await execAsync(sudo() + ' systemctl stop caddy');    } catch (_) {}
+        try { await execAsync(sudo() + ' systemctl disable caddy'); } catch (_) {}
       } else {
         throw new Error(`Unsupported platform: ${platform}`);
       }
       console.log("✅ Caddy installed (and detached from system service manager so Loopar can manage it)");
       return true;
     } catch (e) {
-      console.error("Failed to install Caddy:", e);
+      console.error("Failed to install Caddy:", e?.message || e);
+      console.error("Install it by hand (https://caddyserver.com/docs/install) and restart the core: yarn restart");
       return false;
     }
   }
@@ -367,7 +375,7 @@ export default class CaddyManager {
 
   async _ensurePfctlRedirect(targetPort) {
     try {
-      const { stdout } = await execAsync('sudo pfctl -s nat 2>/dev/null');
+      const { stdout } = await execAsync(sudo() + ' pfctl -s nat 2>/dev/null');
       if (stdout.includes(`-> 127.0.0.1 port ${targetPort}`)) {
         console.log(`✅ :80 → :${targetPort} redirect already active (pfctl)`);
         return;
@@ -379,21 +387,21 @@ export default class CaddyManager {
       `rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port ${targetPort}\n`
     );
 
-    await execAsync(`sudo pfctl -ef ${ruleFile}`);
+    await execAsync(`${sudo()} pfctl -ef ${ruleFile}`);
     console.log(`✅ :80 → :${targetPort} redirect active (pfctl) — domains work without port`);
   }
 
   async _ensureIptablesRedirect(targetPort) {
     try {
-      const { stdout } = await execAsync('sudo iptables -t nat -L OUTPUT --line-numbers -n 2>/dev/null');
+      const { stdout } = await execAsync(sudo() + ' iptables -t nat -L OUTPUT --line-numbers -n 2>/dev/null');
       if (stdout.includes(`redir ports ${targetPort}`)) {
         console.log(`✅ :80 → :${targetPort} redirect already active (iptables)`);
         return;
       }
     } catch (_) {}
 
-    await execAsync(`sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port ${targetPort}`);
-    await execAsync(`sudo iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 --dport 80 -j REDIRECT --to-port ${targetPort}`);
+    await execAsync(`${sudo()} iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port ${targetPort}`);
+    await execAsync(`${sudo()} iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 --dport 80 -j REDIRECT --to-port ${targetPort}`);
     console.log(`✅ :80 → :${targetPort} redirect active (iptables) — domains work without port`);
   }
 
@@ -518,11 +526,14 @@ export default class CaddyManager {
       }
     };
 
-    if (isProduction && process.env.CADDY_ACME_EMAIL) {
+    // From config/core.json (env as fallback): the CLI and the TUI write this
+    // config too, and they don't run with the core's env.
+    const acmeEmail = caddyAcmeEmail();
+    if (isProduction && acmeEmail) {
       config.apps.tls = {
         automation: {
           policies: [{
-            issuers: [{ module: "acme", email: process.env.CADDY_ACME_EMAIL }]
+            issuers: [{ module: "acme", email: acmeEmail }]
           }]
         }
       };

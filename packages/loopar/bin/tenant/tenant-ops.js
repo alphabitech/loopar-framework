@@ -7,9 +7,10 @@
 
 import fs from 'fs';
 import path from 'pathe';
-import { tenant, getTenantData } from './tenant-builder.js';
+import { tenant, getTenantData, RESERVED_TENANT_NAMES } from './tenant-builder.js';
 import CaddyManager from './caddy-manager.js';
-import { corePort } from '../../core/config/core-config.js';
+import http from 'node:http';
+import { corePort, coreHost } from '../../core/config/core-config.js';
 import knexFactory from 'knex';
 import { readDbConfig, dialectOf } from '../../core/backup/database.js';
 
@@ -99,7 +100,8 @@ const PROTECTED_DATABASES = new Set([
  * throwaway tenants (__loopar_test_<pid>__) must stay removable.
  */
 export function isTenantName(name) {
-  return typeof name === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_-]*$/.test(name);
+  return typeof name === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_-]*$/.test(name)
+    && !RESERVED_TENANT_NAMES.has(name.toLowerCase());
 }
 
 /** Throws unless `name` is a tenant that may be reset or destroyed. */
@@ -266,30 +268,46 @@ export async function destroyTenant(name, { removePath = true, dropDatabase = tr
 
 /**
  * Trigger the headless installer for a freshly-provisioned tenant: POST to the
- * tenant's `/api/System/install` through the core (the portless domain resolves
- * via Caddy → the tenant's in-process instance). Used by the cloud control plane.
+ * tenant's `/api/System/install` on the core itself, with the tenant's domain
+ * as Host (the core resolves the tenant from it). It doesn't go through the
+ * proxy: no DNS, certificate or redirect of the new domain is in the way, and
+ * a proxy answer can't be mistaken for a finished install. Used by the cloud
+ * control plane.
  *
  * @param {object} opts { domain, token?, payload? }
  */
 export async function installTenant({ domain, token = null, payload = {} }) {
   if (!domain) throw new Error('installTenant: domain is required');
-  const url = `http://${domain}/api/System/install?app_name=loopar`;
-  const body = {
+  const body = JSON.stringify({
     email: '', company: '', admin_password: '', confirm_password: '',
     ...payload,
+  });
+  const headers = {
+    Host: domain,
+    'Content-Type': 'application/json',
+    'Content-Length': Buffer.byteLength(body),
   };
-  const headers = { 'Content-Type': 'application/json' };
   if (token) headers['X-Install-Token'] = token;
 
-  const r = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-    redirect: 'manual', // the installer ends in a redirect we don't follow
+  const bind = coreHost();
+  const host = !bind || bind === '0.0.0.0' || bind === '::' ? '127.0.0.1' : bind;
+
+  const r = await new Promise((resolve, reject) => {
+    const req = http.request(
+      { host, port: corePort(), method: 'POST', path: '/api/System/install?app_name=loopar', headers },
+      (res) => {
+        let text = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => { if (text.length < 2000) text += chunk; });
+        res.on('end', () => resolve({ status: res.statusCode, text }));
+      },
+    );
+    req.on('error', reject);
+    req.end(body);
   });
+
   if (r.status >= 400) {
-    const txt = await r.text().catch(() => '<no body>');
-    throw new Error(`Install returned ${r.status}: ${txt.slice(0, 300)}`);
+    throw new Error(`Install returned ${r.status}: ${(r.text || '<no body>').slice(0, 300)}`);
   }
   return { status: r.status };
 }

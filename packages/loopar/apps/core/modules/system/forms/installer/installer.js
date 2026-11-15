@@ -6,8 +6,17 @@ import { readRenameRecords, applyRenameToDatabase } from "../../../../../../core
 import { normalizeScope } from "../../../../../../core/auth/PermissionManager.js";
 import { readAppHeader, isTemplateHeader, isTemplateHostTenant, belongsToOtherTenant, parseRequires, loadInstaller } from "./template.js";
 
-/** Requirement chain being installed (guards against cycles). */
-const installingRequirements = new Set();
+/**
+ * Requirement chain being installed (guards against cycles), one per tenant:
+ * the core serves every tenant, and two of them installing apps with the same
+ * requirement at once are not a cycle.
+ */
+const requirementChains = new Map();
+function requirementChain() {
+  const key = loopar.tenantId || '';
+  if (!requirementChains.has(key)) requirementChains.set(key, new Set());
+  return requirementChains.get(key);
+}
 
 /** The framework app: its document names are reserved for every tenant. */
 const FRAMEWORK_APP = "loopar";
@@ -361,6 +370,7 @@ export default class Installer extends BaseDocument {
 
   /** Installs the apps listed in the header's `requires` that aren't installed yet. */
   async #installRequirements(header) {
+    const installingRequirements = requirementChain();
     for (const required of parseRequires(header?.requires)) {
       if (required === this.app_name || required === FRAMEWORK_APP) continue;
       if (await loopar.appStatus(required) === "installed") continue;
