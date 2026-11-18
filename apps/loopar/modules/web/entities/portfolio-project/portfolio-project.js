@@ -12,7 +12,7 @@ function slugify(input = '') {
     .slice(0, 120);
 }
 
-export default class Project extends BaseDocument {
+export default class PortfolioProject extends BaseDocument {
   constructor(props) {
     super(props);
   }
@@ -40,7 +40,7 @@ export default class Project extends BaseDocument {
   }
 
   async #slugTaken(slug) {
-    const rows = await loopar.db.getList('Project', {
+    const rows = await loopar.db.getList('Portfolio Project', {
       fields: ['name', 'slug'],
       filters: [['slug', '=', slug]]
     });

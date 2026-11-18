@@ -46,7 +46,7 @@ function pickApp(provided) {
   return webApp?.name || null;
 }
 
-export default class ProjectController extends BaseController {
+export default class PortfolioProjectController extends BaseController {
   constructor(props) {
     super(props);
   }
@@ -72,7 +72,7 @@ export default class ProjectController extends BaseController {
     const filter = { app, published: 1 };
     if (featuredOnly) filter.featured = 1;
 
-    let qb = loopar.db.qx()('Project')
+    let qb = loopar.db.qx()('Portfolio Project')
       .select(PUBLIC_FIELDS)
       .where(filter)
       .whereNull('__deleted_at__');
@@ -82,7 +82,7 @@ export default class ProjectController extends BaseController {
       qb = qb.where('tags', 'like', `%${tag}%`);
     }
 
-    let countQb = loopar.db.qx()('Project')
+    let countQb = loopar.db.qx()('Portfolio Project')
       .count({ count: 'id' })
       .where(filter)
       .whereNull('__deleted_at__');
@@ -119,7 +119,7 @@ export default class ProjectController extends BaseController {
 
     if (!slug || !app) return null;
 
-    const row = await loopar.db.qx()('Project')
+    const row = await loopar.db.qx()('Portfolio Project')
       .select(DETAIL_FIELDS)
       .where({ slug, app, published: 1 })
       .whereNull('__deleted_at__')

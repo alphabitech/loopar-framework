@@ -10,12 +10,21 @@ import { applyTransition, workflowFor } from '../document/workflow.js';
 import { policyMapOf, currentActor } from '../auth/field-access.js';
 import { hasFreshStepUp, clearStepUp, STEP_UP_REQUIRED_CODE } from '../auth/step-up.js';
 import { canWriteFromInput, WRITE_POLICY } from '../global/field-policy.js';
+import { parseReportSpec } from '../global/list-report.js';
+import { toCsv, csvFileName } from '../global/csv.js';
+import { importRecords } from '../document/list-import.js';
+import { bulkUpdateRecords, bulkTransitionRecords } from '../document/list-bulk.js';
 import { titleize } from "inflection";
 
 const HISTORY_TABLE = 'Document History';
 const COMMENT_TABLE = 'Comment';
 
 const AUDIT_FIELDS = ['name', 'user', 'action', 'event_at', 'diff', 'metadata'];
+/** Feed items (audit events + root comments) per page, and the most one request may ask for. */
+const FEED_PAGE = 20;
+const FEED_PAGE_MAX = 200;
+/** Reply levels followed under a comment. */
+const THREAD_DEPTH_MAX = 50;
 const COMMENT_FIELDS = ['name', 'document', 'document_name', 'parent', 'user', 'guest_name', 'guest_email', 'comment', 'status', 'created_at'];
 
 const MAX_COMMENT_LEN = 2000;
@@ -29,9 +38,14 @@ export default class BaseController extends CoreController {
   hasSidebar = true;
   static enabledActions = []
 
+  /**
+   * The list page. Its views (List, Grid, Board, Calendar, Report) are the
+   * same page seen another way; the ones that need data of another shape read
+   * it from their own action: `board`, `calendar`, `report` (authorized by
+   * the `list` grant, auth/permission-aliases.js). `export` and `import` move
+   * the list's records out of and into a file, each with its own grant.
+   */
   async actionList() {
-    if (this.query?.board !== undefined) return await this.#boardColumn();
-
     // Filters come from the URL query (document/list-state.js), empties already dropped.
     const data = loopar.getQ(this.document);
 
@@ -51,6 +65,24 @@ export default class BaseController extends CoreController {
     return await this.render(list);
   }
 
+  /**
+   * "New" from a day of the calendar: `create?<start field>=…&<end field>=…`
+   * starts the record on those dates (the entity's calendar fields only).
+   */
+  #prefillDates(document) {
+    const calendar = document.__ENTITY__?.__REF__?.__CALENDAR__ || loopar.getRef(document.__ENTITY__?.name, false)?.__CALENDAR__;
+    if (!calendar) return;
+    const value = /^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$/;
+    for (const name of [calendar.start, calendar.end, calendar.allDay].filter(Boolean)) {
+      const field = document.fields?.[name];
+      const input = String(this.query?.[name] ?? '').trim();
+      if (!field || !input) continue;
+      if (loopar.utils.trueValue(field.readonly) || field.formula) continue;
+      if (name === calendar.allDay) field.value = ['1', 'true'].includes(input) ? 1 : 0;
+      else if (value.test(input)) field.value = input.replace('T', ' ');
+    }
+  }
+
   #prefill(document, text) {
     const fieldName = String(document.titleFields?.() || 'name').split(',').map(f => f.trim()).find(Boolean);
     const field = fieldName && document.fields?.[fieldName];
@@ -67,6 +99,7 @@ export default class BaseController extends CoreController {
     // "Create «text»" from a connection: the text typed in its search starts
     // the new record's first title field (when the user may write it).
     if (!this.hasData() && this.query?.prefill) this.#prefill(document, String(this.query.prefill));
+    if (!this.hasData()) this.#prefillDates(document);
 
     if (document.__ENTITY__.is_single) {
       return loopar.throw({
@@ -93,20 +126,129 @@ export default class BaseController extends CoreController {
     }
   }
 
+  /** The list's filters (URL query) for a data action, without that action's own parameters. */
+  #listSearch(exclude = []) {
+    const q = { ...loopar.getQ(this.document, { exclude }) };
+    return Object.keys(q).length ? q : null;
+  }
+
   /**
-   * Kanban column (data endpoint): `{Entity}/list?board=<state>&page=N`.
+   * Data actions answer the app (RPC). Opened as a page they lead to the
+   * list, keeping the query (filters, report).
+   */
+  #listPage() {
+    if (this.method === "POST") return null;
+    const query = new URLSearchParams(this.req?._parsedUrl?.query || "").toString();
+    return this.redirect(`list${query ? `?${query}` : ""}`);
+  }
+
+  /**
+   * Board view (data): one Kanban column — `{Entity}/board?board=<state>&page=N`.
    * Same permission, search and owner scope as the list.
    */
-  async #boardColumn() {
+  async actionBoard() {
+    const page = this.#listPage();
+    if (page) return page;
+
     const workflow = await workflowFor(this.document);
     if (!workflow) loopar.throw(`${this.document} has no active workflow.`);
-    const q = { ...loopar.getQ(this.document) };
     const document = await loopar.newDocument(this.document);
     return await document.getBoardColumn({
       field: workflow.field,
-      state: String(this.query.board),
-      q: Object.keys(q).length ? q : null,
-      page: parseInt(this.query.page, 10) || 1,
+      state: String(this.query?.board ?? ""),
+      q: this.#listSearch(["board"]),
+      page: parseInt(this.query?.page, 10) || 1,
+    });
+  }
+
+  /**
+   * Calendar view (data): `{Entity}/calendar?cal_from=&cal_to=` (the records
+   * of those days) or `?calendar=unscheduled&page=N`. Same permission, search
+   * and owner scope as the list.
+   */
+  async actionCalendar() {
+    const page = this.#listPage();
+    if (page) return page;
+
+    const document = await loopar.newDocument(this.document);
+    return await document.calendarRows({
+      unscheduled: String(this.query?.calendar) === "unscheduled",
+      from: String(this.query?.cal_from || ""),
+      to: String(this.query?.cal_to || ""),
+      q: this.#listSearch(["calendar", "cal_from", "cal_to"]),
+      page: parseInt(this.query?.page, 10) || 1,
+    });
+  }
+
+  /**
+   * Report view (data): the list's records grouped and aggregated —
+   * `{Entity}/report?report=status,due_date.month&report_values=sum.total`
+   * (global/list-report.js) plus the list's filters. Same permission, search
+   * and owner scope as the list.
+   */
+  async actionReport() {
+    const page = this.#listPage();
+    if (page) return page;
+
+    const spec = parseReportSpec(this.query) || { groups: [], values: [] };
+    const document = await loopar.newDocument(this.document);
+    return await document.reportData({ groups: spec.groups, values: spec.values, q: this.#listSearch() });
+  }
+
+  /**
+   * Export: the list's records as a CSV file — `{Entity}/export` with the
+   * list's filters and sort in the query and, in the body, `fields` (columns,
+   * in order; default: the list's) and `names` (only those records; default:
+   * every record the filters match). Needs the `export` grant; an 'own' scope
+   * narrows it to the user's records.
+   *
+   * → { filename, csv, rows, truncated }
+   */
+  async actionExport() {
+    const page = this.#listPage();
+    if (page) return page;
+
+    const list = (value) => {
+      const parsed = Array.isArray(value) ? value : (loopar.utils.isJSON(value) ? JSON.parse(value) : null);
+      return Array.isArray(parsed) && parsed.length ? parsed.map(String) : null;
+    };
+
+    const document = await loopar.newDocument(this.document);
+    const { header, rows, truncated } = await document.exportRows({
+      q: this.#listSearch(),
+      fields: list(this.body?.fields),
+      names: list(this.body?.names),
+    });
+
+    const now = new Date();
+    const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return {
+      filename: csvFileName(this.document, day),
+      csv: toCsv([header, ...rows]),
+      rows: rows.length,
+      truncated,
+    };
+  }
+
+  /**
+   * Import: records from a file into the list — `{Entity}/import` with, in
+   * the body, `records` (`[{ field: cell text }]`, the file's rows already
+   * mapped to fields), `mode` ("insert" | "upsert" by `name`) and `dry_run`
+   * (validate only). Needs the `import` grant, plus `create` / `update` for
+   * what the rows do. Every record is saved through its document.
+   *
+   * → { total, created, updated, failed, issues: [{ row, message }], dry_run }
+   */
+  async actionImport() {
+    const page = this.#listPage();
+    if (page) return page;
+
+    const raw = this.body?.records;
+    const records = Array.isArray(raw) ? raw : (loopar.utils.isJSON(raw) ? JSON.parse(raw) : []);
+    return await importRecords(this.document, {
+      records,
+      mode: String(this.body?.mode || 'insert'),
+      dryRun: [1, '1', true, 'true'].includes(this.body?.dry_run),
     });
   }
 
@@ -134,7 +276,7 @@ export default class BaseController extends CoreController {
       await document.save();
 
       return await this.success(
-        `${(Entity.name === "Entity") ? document.type || "Entity" : (isSingle ? "" : Entity.name)} ${isSingle ? Entity.name : document.name} saved successfully`, { name: document.name }
+        `${(Entity.name === "Entity") ? document.type || "Entity" : (isSingle ? "" : Entity.name)} ${isSingle ? Entity.name : document.name} saved successfully`, { name: document.name, ...document.versionStamp() }
       );
     } else {
       if(this.preloaded == true) {
@@ -152,7 +294,7 @@ export default class BaseController extends CoreController {
           // the data (AppBar subtitle, <title>, history, rename, print/edit links).
           name: document.name,
           meta: { title: titleize(String(document.name ?? this.document)), action: this.action },
-          data: await document.values(),
+          data: { ...await document.values(), ...document.versionStamp() },
           linkTitles: await document.linkTitles(),
           ...(recordMeta?.workflow ? { workflow: recordMeta.workflow } : {}),
           ...(recordMeta && typeof document.lockedFields === 'function' ? { Entity: recordMeta.Entity } : {}),
@@ -285,6 +427,41 @@ export default class BaseController extends CoreController {
     return this.redirect('list', { notify: `${this.document} ${this.name} deleted successfully` });
   }
 
+  /** The `names` a bulk action targets (body: an array, or its JSON). */
+  #bulkNames() {
+    const raw = this.body?.names;
+    return Array.isArray(raw) ? raw : (loopar.utils.isJSON(raw) ? JSON.parse(raw) : []);
+  }
+
+  /**
+   * Bulk edit: `{Entity}/bulkUpdate` with `{ names, field, value }` — sets one
+   * field on every selected record, through its document. Authorized by the
+   * `update` grant (an 'own' scope is checked per record).
+   *
+   * → { total, done, failed, issues: [{ name, message }] }
+   */
+  async actionBulkUpdate() {
+    const page = this.#listPage();
+    if (page) return page;
+    return await bulkUpdateRecords(this.document, {
+      names: this.#bulkNames(),
+      field: String(this.body?.field ?? ''),
+      value: this.body?.value,
+    });
+  }
+
+  /**
+   * Bulk workflow transition: `{Entity}/bulkTransition` with `{ names, action }`.
+   * Authorized by the `transition` grant; the workflow narrows it per record.
+   *
+   * → { total, done, failed, issues: [{ name, message }] }
+   */
+  async actionBulkTransition() {
+    const page = this.#listPage();
+    if (page) return page;
+    return await bulkTransitionRecords(this.document, { names: this.#bulkNames(), action: String(this.body?.action ?? '') });
+  }
+
   async actionBulkDelete() {
     const raw = this.body?.names;
     const names = Array.isArray(raw)
@@ -312,43 +489,46 @@ export default class BaseController extends CoreController {
     return this.documentHistory || this.document;
   }
 
-  async fetchAudit(documentName) {
-    const filters = { document: this.commentTarget(), document_name: documentName };
-    const list = await loopar.getList(HISTORY_TABLE, { fields: AUDIT_FIELDS, filters, page: parseInt(this.query?.page) || 1 });
-    return list.rows || [];
-  }
-
   /**
-   * Comments in scope for a record: comments ON the record itself, plus
-   * (when includeEvents) comments ON any of its audit events — i.e. a Comment
-   * whose target is a "Document History" row. Normalized to a common shape
-   * (event_at, action, display user); `parent` lets the client build the tree.
+   * One page of a record's feed, newest first. A feed item is an audit event
+   * or a root comment on the record, and it comes with its whole thread: the
+   * comments on the event (when includeEvents) and every reply. Rows share a
+   * shape (event_at, action, display user); `parent` lets the client build
+   * the tree.
+   *
+   * Each table pages by its own id (`cursor` = the last id served from it),
+   * so activity added while reading never shifts or repeats a page.
+   *
+   * @returns {{ rows: object[], pagination: { hasMore: boolean, next: { beforeAudit: number|null, beforeComment: number|null } } }}
    */
-  async fetchComments(documentName, { onlyApproved = false, includeEvents = true } = {}) {
+  async fetchFeed(documentName, {
+    audit = true, comments = true, onlyApproved = false, includeEvents = true,
+    cursor = {}, limit,
+  } = {}) {
     const target = this.commentTarget();
+    const size = Math.min(Math.max(parseInt(limit) || FEED_PAGE, 1), FEED_PAGE_MAX);
+    const beforeAudit = parseInt(cursor.beforeAudit) || null;
+    const beforeComment = parseInt(cursor.beforeComment) || null;
 
-    let eventIds = [];
-    if (includeEvents) {
-      const events = await loopar.db.qx()(HISTORY_TABLE)
-        .select('name')
-        .where({ document: target, document_name: documentName });
-      eventIds = events.map(e => e.name);
-    }
+    const db = (table) => loopar.db.qx()(table);
+    const older = (qb, id) => (id ? qb.where('id', '<', id) : qb);
+    const visible = (qb) => (onlyApproved ? qb.where('status', DOC_STATUS.APPROVED) : qb);
+    const ofRecord = { document: target, document_name: documentName };
 
-    let qb = loopar.db.qx()(COMMENT_TABLE)
-      .select(COMMENT_FIELDS)
-      .where((b) => {
-        b.where((g) => g.where('document', target).andWhere('document_name', documentName));
-        if (eventIds.length) {
-          b.orWhere((g) => g.where('document', HISTORY_TABLE).whereIn('document_name', eventIds));
-        }
-      });
+    // One more than the page from each table tells whether anything is left.
+    const events = audit
+      ? await older(db(HISTORY_TABLE).select(['id', ...AUDIT_FIELDS]).where(ofRecord), beforeAudit)
+        .orderBy('id', 'desc').limit(size + 1)
+      : [];
+    const roots = comments
+      ? await visible(older(
+        db(COMMENT_TABLE).select(['id', ...COMMENT_FIELDS]).where(ofRecord)
+          .where((b) => b.whereNull('parent').orWhere('parent', '')),
+        beforeComment,
+      )).orderBy('id', 'desc').limit(size + 1)
+      : [];
 
-    if (onlyApproved) qb = qb.where('status', DOC_STATUS.APPROVED);
-    qb = qb.orderBy('created_at', 'asc');
-
-    const rows = await qb;
-    return rows.map(r => ({
+    const commentRow = (r) => ({
       name: r.name,
       document: r.document,
       document_name: r.document_name,
@@ -358,14 +538,60 @@ export default class BaseController extends CoreController {
       status: r.status,
       event_at: r.created_at,
       action: 'Commented',
-    }));
+    });
+    const auditRow = ({ id, ...r }) => r;
+
+    // Merge the two newest-first lists until the page is full.
+    const time = (v) => new Date(v || 0).getTime();
+    const feed = [];
+    let e = 0, c = 0;
+    while (feed.length < size && (e < events.length || c < roots.length)) {
+      const takeEvent = c >= roots.length
+        || (e < events.length && time(events[e].event_at) >= time(roots[c].created_at));
+      feed.push(takeEvent ? auditRow(events[e++]) : commentRow(roots[c++]));
+    }
+    const pageEvents = events.slice(0, e);
+    const pageRoots = roots.slice(0, c);
+
+    const thread = [];
+    if (comments) {
+      // Comments on the page's events; their replies carry the same target.
+      if (includeEvents && pageEvents.length) {
+        thread.push(...await visible(
+          db(COMMENT_TABLE).select(COMMENT_FIELDS)
+            .where('document', HISTORY_TABLE)
+            .whereIn('document_name', pageEvents.map(r => r.name)),
+        ));
+      }
+
+      // Replies under the page's root comments, level by level.
+      let parents = pageRoots.map(r => r.name);
+      for (let depth = 0; parents.length && depth < THREAD_DEPTH_MAX; depth++) {
+        const replies = await visible(
+          db(COMMENT_TABLE).select(COMMENT_FIELDS).where(ofRecord).whereIn('parent', parents),
+        );
+        thread.push(...replies);
+        parents = replies.map(r => r.name);
+      }
+    }
+
+    return {
+      rows: [...feed, ...thread.map(commentRow)],
+      pagination: {
+        hasMore: e < events.length || c < roots.length,
+        next: {
+          beforeAudit: e ? pageEvents[e - 1].id : beforeAudit,
+          beforeComment: c ? pageRoots[c - 1].id : beforeComment,
+        },
+      },
+    };
   }
 
   /**
    * Unified desk feed: audit events + comments interleaved (newest first).
    * Sensitive (permission-gated, NOT public) so diffs only reach authorized
-   * users. Comment rows carry `parent` so the client builds the tree.
-   * Query: { documentName }   (documentHistory: optional owner override)
+   * users.
+   * Query: { documentName, limit?, beforeAudit?, beforeComment? }   (documentHistory: optional owner override)
    */
   async actionHistory(q, documentHistory) {
     q ??= this.query || {};
@@ -375,20 +601,18 @@ export default class BaseController extends CoreController {
     if (!documentName) return { rows: [], pagination: {} };
 
     const ref = loopar.getRef?.(this.document) || {};
-    const audit = ref.enable_history ? await this.fetchAudit(documentName) : [];
-    const comments = ref.enable_comments ? await this.fetchComments(documentName) : [];
-
-    const rows = [...audit, ...comments].sort(
-      (a, b) => new Date(b.event_at || 0) - new Date(a.event_at || 0)
-    );
-
-    return { rows, pagination: {} };
+    return await this.fetchFeed(documentName, {
+      audit: !!ref.enable_history,
+      comments: !!ref.enable_comments,
+      cursor: q,
+      limit: q.limit,
+    });
   }
 
   /**
    * Public comment tree for a document — APPROVED only, no audit/diffs, no
    * event-comments (the public web shows the record's discussion, not the log).
-   * Query: { documentName }
+   * Query: { documentName, limit?, beforeComment? }
    */
   async publicActionComments() {
     const q = this.query || {};
@@ -398,8 +622,9 @@ export default class BaseController extends CoreController {
     const ref = loopar.getRef?.(this.document) || {};
     if (!ref.enable_comments) return { rows: [], pagination: {} };
 
-    const rows = await this.fetchComments(documentName, { onlyApproved: true, includeEvents: false });
-    return { rows, pagination: {} };
+    return await this.fetchFeed(documentName, {
+      audit: false, onlyApproved: true, includeEvents: false, cursor: q, limit: q.limit,
+    });
   }
 
   /**

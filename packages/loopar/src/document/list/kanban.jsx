@@ -10,12 +10,13 @@ import { STATE_COLORS, runTransition } from "../form/workflow-bar";
 import { EntryModal } from "@app/entry-modal";
 import { useWorkspace } from "@workspace/workspace-provider";
 import { __ } from "@global/i18n";
+import { REPORT_PARAMS } from "@global/list-report";
 
 /**
  * Kanban board for entities with an active workflow: one column per state
  * (`show_on_board`), cards = records. Dropping a card on another column runs
  * the transition that joins both states; columns without one (for this user)
- * don't accept the drop. Data per column comes from `{Entity}/list?board=`.
+ * don't accept the drop. Data per column comes from `{Entity}/board?board=`.
  */
 
 const PAGE = 20;
@@ -132,15 +133,14 @@ export function KanbanBoard({ ctrl }) {
   const { pathname: currentUrl } = useWorkspace();
   const filters = useMemo(() => {
     const params = new URLSearchParams(String(currentUrl || "").split("?")[1] || "");
-    params.delete("page");
-    params.delete("board");
+    ["page", "sort", ...REPORT_PARAMS].forEach((k) => params.delete(k));
     return params.toString();
   }, [currentUrl]);
 
   const load = useCallback((state, page = 1) => {
     setColumns((c) => ({ ...c, [state]: c[state] ? { ...c[state], loading: true } : c[state] }));
     const query = { ...Object.fromEntries(new URLSearchParams(filters)), board: state, page };
-    loopar.call(entity, "list", { query, freeze: false })
+    loopar.call(entity, "board", { query, freeze: false })
       .then((r) => setColumns((c) => ({
         ...c,
         [state]: {

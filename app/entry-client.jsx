@@ -39,7 +39,8 @@ import { draftStore } from "@@tools/version/draft-store";
             services: {}
           }}
           permissions={__META__.permissions}
-          pathname={window.location.pathname}
+          // With its query, as the server rendered it: URL-driven views (a list's report) hydrate the same.
+          pathname={window.location.pathname + window.location.search}
         />
       </ErrorBoundary>
     </BrowserRouter>

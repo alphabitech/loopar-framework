@@ -8,6 +8,17 @@ import { elementsDict } from "@global/element-definition";
 import { useDocument } from "../base/provider";
 import { printKind, formatPrintValue, isEmptyValue, isNumericKind } from "./format-value";
 import { formatDate } from "@global/format";
+import { usePrintRecord } from "./record";
+
+/**
+ * The Document being printed: the print record's (a sheet may show a record
+ * other than the page's — a signed copy on a website), else the entry's.
+ */
+function usePrintedDocument() {
+  const record = usePrintRecord();
+  const { Document } = useDocument();
+  return record?.Document || Document || {};
+}
 
 const SECTION_ELEMENTS = new Set(["tab", "section", "panel"]);
 
@@ -62,7 +73,7 @@ function PrintKeyValue({ value }) {
 }
 
 export function PrintValue({ element, data = {}, value }) {
-  const { Document } = useDocument();
+  const Document = usePrintedDocument();
   const kind = printKind(element, data);
   if (kind === "skip") return null;
   if (kind === "images") return isEmptyValue(value) ? null : <PrintImages value={value} />;
@@ -109,7 +120,7 @@ function childColumns(el, names = null) {
 }
 
 export function PrintTable({ el, value, columns: names = null }) {
-  const { Document } = useDocument();
+  const Document = usePrintedDocument();
   const titles = Document?.linkTitles;
   const rows = parseJSON(value, []) || [];
   const namesKey = names ? names.join(",") : "";
@@ -223,13 +234,14 @@ export function PrintStructure({ ctrl: ctrlProp }) {
 }
 
 export function PrintHeader({ title, subtitle, children }) {
-  const { Document = {} } = useDocument();
+  const Document = usePrintedDocument();
   const entity = Document.Entity?.name;
   // Client-only: "today" on the server may not be today in the browser (hydration).
+  // A frozen copy (Document.printedAt) keeps the day it was made.
   const [date, setDate] = useState("");
   useEffect(() => {
-    setDate(formatDate(new Date(), "medium"));
-  }, []);
+    setDate(formatDate(Document.printedAt ? new Date(Document.printedAt) : new Date(), "medium"));
+  }, [Document.printedAt]);
 
   return (
     <header className="lp-header">

@@ -306,6 +306,34 @@ export class EmailService {
     }
   }
 
+  /**
+   * Queues an email and starts delivering it at once, without making the
+   * caller wait for the mail server: a request that sends mail answers as
+   * soon as the email is in Email Queue (its history). Returns
+   * `{ queueId, delivery }` — `delivery` settles when the attempt ends.
+   * A failed attempt stays in the queue with its error (Failed once
+   * `maxAttempts` is reached) and `onFailed(message)` lets the caller note it
+   * on its own record. Throws only when the email can't be queued.
+   */
+  async sendLater({ onFailed = null, ...email }) {
+    const queued = await this.queue(email);
+    if (!queued.success) throw new Error(queued.error || 'The email could not be queued');
+
+    const delivery = (async () => {
+      // Let the caller finish what it is writing first.
+      await new Promise((resolve) => setImmediate(resolve));
+      const item = await loopar.getDocument('Email Queue', queued.queueId);
+      const result = await this.processQueueItem(item);
+      if (!result.success) await onFailed?.(result.error);
+      return result;
+    })().catch((error) => {
+      console.warn(`[Email] background delivery of ${queued.queueId} failed:`, error.message);
+      return { success: false, id: queued.queueId, error: error.message };
+    });
+
+    return { queueId: queued.queueId, delivery };
+  }
+
   async queueBulk(emails, defaultOptions = {}) {
     const results = [];
     

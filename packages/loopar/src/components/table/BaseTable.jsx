@@ -12,6 +12,7 @@ function BaseTable(props) {
           rows={rows}
           columns={props.columns}
           footer={props.footer}
+          totals={props.totals}
           rowTemplate={props.rowTemplate}
           onResize={props.onResize}
           onReorder={props.onReorder}

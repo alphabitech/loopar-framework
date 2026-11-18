@@ -31,7 +31,8 @@ async function add(loopar, {
     document,
     document_name: documentName,
     parent: parent || null,
-    user: loopar.currentUser?.name ?? null,
+    // A named guest is the author (a customer acting through a link), whoever's session it runs in.
+    user: guest_name ? null : (loopar.currentUser?.name ?? null),
     guest_name,
     guest_email,
     comment,

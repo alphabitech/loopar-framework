@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { loopar } from "loopar";
 import { useWorkspace } from "@workspace/workspace-provider";
 import { useCaptcha, CaptchaSlot } from "./captcha-widget";
@@ -12,6 +12,10 @@ import { formatDateTime } from "@global/format";
 
 const HISTORY_DOC = "Document History";
 const STATUS = Object.freeze({ ACTIVE: 1, PENDING: 4, APPROVED: 5, REJECTED: 6 });
+// Feed items (audit events + root comments) fetched per page.
+const PAGE_SIZE = 20;
+// A feed item, as opposed to a row of its thread (a reply or a comment on an event).
+const isFeedItem = (r) => r.action !== "Commented" || (!r.parent && r.document !== HISTORY_DOC);
 
 const ICON_BY_ACTION = {
   Created: Plus, Updated: Pencil, Deleted: Trash2, Restored: RotateCcw, Commented: MessageSquare,
@@ -273,11 +277,18 @@ export default function DocumentHistory({
   const showGuestFields = enableComments && !loggedIn && !requireLogin;
   const showSignIn = enableComments && !loggedIn && requireLogin;
   const effGuestIdentity = guestIdentity ?? showGuestFields;
+  // Desk: the whole feed (audit events + every comment; permission-gated).
+  // Websites and comment-only records: the public, approved comments.
+  const readAction = historyApi?.action ?? (enableHistory && !isWeb ? "history" : "comments");
   const writeAction = commentApi?.action ?? "addComment";
   const heading = title ?? (commentsOnly ? "Comments" : "History");
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState({});
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Feed items on screen, so a refresh after a write keeps the older pages.
+  const loadedCount = useRef(0);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
@@ -285,28 +296,55 @@ export default function DocumentHistory({
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [activeKey, setActiveKey] = useState(null);
 
-  const load = useCallback(async () => {
+  // RPC straight to the entity's controller (actionHistory /
+  // publicActionComments on BaseController). `query` carries the page.
+  const fetchPage = useCallback((query = {}) => loopar.call(document, readAction, {
+    query: { documentType: document, documentName, limit: PAGE_SIZE, ...query },
+    freeze: false,
+  }), [document, documentName, readAction]);
+
+  // (Re)load from the newest item. `keep` refetches as many items as are on
+  // screen (after a comment or a moderation) instead of the first page only.
+  const load = useCallback(async ({ keep = false } = {}) => {
     if (!document || !documentName) return;
-    setLoading(true);
+    if (!keep) setLoading(true);
     setError("");
     try {
-      // `document` is guaranteed here (guard above) — RPC straight to the
-      // entity's controller (publicActionComments on BaseController).
-      const res = await loopar.call(document, "comments", {
-        query: { documentType: document, documentName },
-        freeze: false,
-      });
+      const res = await fetchPage(keep ? { limit: Math.max(PAGE_SIZE, loadedCount.current) } : {});
       setRows(Array.isArray(res?.rows) ? res.rows : []);
+      setPagination(res?.pagination || {});
     } catch (e) {
       console.error("DocumentHistory load error:", e);
       setError(e?.message || "Could not load.");
       setRows([]);
+      setPagination({});
     } finally {
       setLoading(false);
     }
-  }, [document, documentName]);
+  }, [document, documentName, fetchPage]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !pagination?.hasMore) return;
+    setLoadingMore(true);
+    setError("");
+    try {
+      const res = await fetchPage(pagination.next || {});
+      const older = Array.isArray(res?.rows) ? res.rows : [];
+      setRows(prev => {
+        const seen = new Set(prev.map(r => r.name));
+        return [...prev, ...older.filter(r => !seen.has(r.name))];
+      });
+      setPagination(res?.pagination || {});
+    } catch (e) {
+      console.error("DocumentHistory load error:", e);
+      setError(e?.message || "Could not load.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [fetchPage, pagination, loadingMore]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadedCount.current = rows.filter(isFeedItem).length; }, [rows]);
 
   // Post a comment. `opts` targets a reply (parent) or an event (targetDocument).
   const submit = useCallback(async (text, identity, opts = {}) => {
@@ -330,7 +368,7 @@ export default function DocumentHistory({
 
       setNotice(effGuestIdentity ? "Comment submitted — it will appear once approved." : "Comment submitted.");
       setActiveKey(null);
-      await load();
+      await load({ keep: true });
       return true;
     } catch (e) {
       console.error("DocumentHistory comment error:", e);
@@ -347,7 +385,7 @@ export default function DocumentHistory({
       // RPC to the entity's controller (actionModerate is inherited from
       // BaseController) — replaces the relative-URL sendAction pattern.
       await loopar.call(document, "moderate", { body: { name: node.name, status }, freeze: false });
-      await load();
+      await load({ keep: true });
     } catch (e) {
       console.error("DocumentHistory moderate error:", e);
       setError(e?.message || "Could not moderate.");
@@ -425,6 +463,18 @@ export default function DocumentHistory({
                 : <AuditNode key={node.name} node={node} ctx={ctx} />
               )}
             </ul>
+          )}
+
+          {!loading && pagination?.hasMore && (
+            <div className="flex justify-center mt-4">
+              <button
+                type="button" onClick={loadMore} disabled={loadingMore}
+                className="inline-flex items-center gap-1.5 px-3 h-8 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/60 disabled:opacity-50 transition-colors"
+              >
+                {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
+                {commentsOnly ? __("Show older comments") : __("Show older activity")}
+              </button>
+            </div>
           )}
         </div>
       )}

@@ -1,5 +1,9 @@
 import { loopar } from "loopar";
 import { fileManage } from "../file-manage.js";
+import { PERMISSION_ALIASES } from "./permission-aliases.js";
+
+// Actions authorized by another action's grant are not grantable themselves.
+const grantable = (action) => !PERMISSION_ALIASES[String(action).toLowerCase()];
 
 export class ActionScanner {
   static async getActions(documentName, root, publicOnly = false) {
@@ -32,10 +36,11 @@ export class ActionScanner {
         const enabledSet = new Set(enabled);
         return candidates
           .filter(action => enabledSet.has(clean(action)))
-          .map(clean);
+          .map(clean)
+          .filter(grantable);
       }
   
-      return candidates.map(clean);
+      return candidates.map(clean).filter(grantable);
     } catch {
       return [];
     }

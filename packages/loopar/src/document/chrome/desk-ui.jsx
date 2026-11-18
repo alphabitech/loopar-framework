@@ -12,6 +12,7 @@ const DOCUMENT_WIDTH_WITH_SIDEBAR = "lg:w-[calc(100%-300px)] w-full";
 const InnerSidebar = ({ toggleSidebar, ...props }) => {
   return (
     <div
+      data-print-hide
       className={cn(
         "fixed flex flex-col right-0 h-full z-10 p-2 border-l bg-background transition-all",
         "border-l border-border dark:border-border-dark",
@@ -57,6 +58,7 @@ export default function DeskUI(props) {
     <> 
       {/* Fixed: reachable at any scroll position (long forms, designer save in the sidebar). */}
       {hasSidebar && !sidebarOpen && <Button 
+        data-print-hide
         className="fixed right-0 p-1 z-10 text-slate-500 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-300"
         variant="ghost"
         style={{top: "calc(var(--spacing-header-height) + 0.5rem)"}}
@@ -72,7 +74,9 @@ export default function DeskUI(props) {
             Document={docRef.Document}
             toggleSidebar={toggleSidebar}
             viewTypeToggle={props.viewTypeToggle}
+            setViewType={props.setViewType}
             viewType={props.viewType}
+            applyView={props.applyView}
             sidebarOpen={hasSidebar && sidebarOpen}
             hasSidebar={hasSidebar}
             hasBreadcrumb={hasBreadcrumb}

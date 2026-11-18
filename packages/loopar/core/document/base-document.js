@@ -11,12 +11,39 @@ import { requestOwnerFilter } from '../auth/record-scope.js';
 import { clampPage, isListTarget } from './list-state.js';
 import { readListSettings } from './list-settings.js';
 import { isListableField, MAX_SORT_FIELDS } from '../global/list-settings.js';
+import { parseFilterKey, normalizeFilter, matchFilter, filterKind, SYSTEM_DATE_FIELDS } from '../global/list-filters.js';
+import { reportValueKey, emptyGroup, mergeGroup, groupValues, DEFAULT_GRAIN } from '../global/list-report.js';
+import { dayOf, bucketOf } from '../global/date-buckets.js';
+import { parseOptionLines } from '../global/select-options.js';
+import { resolveColumnFormat } from '../global/element-definition.js';
+import { calendarFields, isDay } from '../global/calendar.js';
+import { workflowFor } from './workflow.js';
 
 /** The entity a select links to, or null for inline options. */
 function linkedEntity(options) {
   const entity = typeof options === "string" ? options.trim() : "";
   if (!entity || entity.includes("\n")) return null;
   return loopar.getRef(entity, false) ? entity : null;
+}
+
+/** Groups a report reads from the table before it stops (a date grouped by month merges many of them). */
+const REPORT_MAX_SQL_GROUPS = 20000;
+/** Groups a report shows. */
+const REPORT_MAX_ROWS = 1000;
+/** Records one export carries. */
+export const EXPORT_MAX_ROWS = 50000;
+
+const pad2 = (n) => String(n).padStart(2, "0");
+/** A stored value as text for a file: dates as `YYYY-MM-DD[ HH:mm:ss]`. */
+function plainValue(value) {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) {
+    if (isNaN(value)) return "";
+    const day = `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`;
+    const time = `${pad2(value.getHours())}:${pad2(value.getMinutes())}:${pad2(value.getSeconds())}`;
+    return time === "00:00:00" ? day : `${day} ${time}`;
+  }
+  return typeof value === "object" ? JSON.stringify(value) : value;
 }
 
 function combineSConditions(...conditions) {
@@ -57,17 +84,28 @@ export default class BaseDocument extends CoreDocument {
   }
 
   /**
-   * List of a virtual entity: its records, searched (`q`: text contained in
-   * each given field), filtered and paged in memory.
+   * Records of a virtual entity that pass the list's search (`q`, the same
+   * `field` / `field.op` filters a table list takes) and `filters`
+   * (`{ field: value }` equalities), matched in memory.
    */
-  async #virtualList({ fields = null, filters = {}, q = null, page = null, sort = null, rowsOnly = false } = {}) {
-    const listFields = fields || this.getFieldListNames();
-    const search = Object.entries(q || {}).filter(([, v]) => v != null && String(v).trim() !== "");
+  async #virtualMatches(q = null, filters = {}) {
     const plain = filters && typeof filters === "object" && !Array.isArray(filters) ? filters : {};
+    const search = [];
+    for (const [key, value] of Object.entries(q || {})) {
+      if (value == null || String(value).trim() === "") continue;
+      const { field, op } = parseFilterKey(key);
+      const meta = this.#filterField(field);
+      if (!op || !meta) { search.push({ field: key, value }); continue; }
+      const kind = filterKind(meta);
+      const filter = normalizeFilter({ field, op, value, kind });
+      if (filter) search.push({ field, filter, kind });
+    }
+
     // Same rules as buildCondition: choice fields match exactly, switches
     // only filter when on, everything else is a "contains".
-    const matches = (row, field, value) => {
+    const matches = (row, { field, value, filter, kind }) => {
       if (!(field in row)) return true;
+      if (filter) return matchFilter(row[field], filter, kind);
       const element = this.fields[field]?.element;
       const wanted = String(value).trim().toLowerCase();
       const actual = String(row[field] ?? "").toLowerCase();
@@ -75,9 +113,17 @@ export default class BaseDocument extends CoreDocument {
       if ([SELECT, CONNECTION, RADIO_GROUP].includes(element)) return actual === wanted;
       return actual.includes(wanted);
     };
-    const all = matchRecords(await this.virtualRecords(), plain).filter(row =>
-      search.every(([field, value]) => matches(row, field, value))
-    );
+
+    return matchRecords(await this.virtualRecords(), plain).filter(row => search.every((s) => matches(row, s)));
+  }
+
+  /**
+   * List of a virtual entity: its records, searched (`q`: text contained in
+   * each given field), filtered and paged in memory.
+   */
+  async #virtualList({ fields = null, filters = {}, q = null, page = null, sort = null, rowsOnly = false } = {}) {
+    const listFields = fields || this.getFieldListNames();
+    const all = await this.#virtualMatches(q, filters);
 
     // Sorted in memory (`?sort=plan,-status`, or the user's saved sort), by any field the records carry.
     const settings = !fields && isListTarget(this.__ENTITY__.name) ? await readListSettings(this.__ENTITY__.name) : null;
@@ -218,20 +264,78 @@ export default class BaseDocument extends CoreDocument {
     return labels.length === 0 ? [__('Name')] : labels;
   }
 
-  buildCondition(q = null){
+  /**
+   * A field as filters, reports and exports see it (`{ element, data }`), or
+   * null. Besides the entity's fields: the record dates of an audited table
+   * (`__created_at__`, `__updated_at__`), when `columns` says it has them.
+   */
+  #filterField(name, columns = null) {
+    const field = this.fields[name];
+    if (field) return { element: field.element, data: field };
+    if (SYSTEM_DATE_FIELDS[name] && columns?.has(name)) {
+      return { element: "date_time", data: { name, label: SYSTEM_DATE_FIELDS[name] } };
+    }
+    return null;
+  }
+
+  /** Condition of a filter with an operator (global/list-filters.js). */
+  #operatorCondition({ field, op, value }, kind) {
+    const textual = kind === "text" || kind === "choice";
+    // SQL leaves NULL out of every negative comparison: "is not X" includes the empty ones.
+    const orEmpty = (condition) => ({ [Op.or]: [condition, { [field]: null }] });
+
+    switch (op) {
+      case "eq": return { [field]: value };
+      case "ne": return orEmpty({ [field]: { [Op.ne]: value } });
+      case "gt": case "gte": case "lt": case "lte": return { [field]: { [Op[op]]: value } };
+      case "between": return { [field]: { [Op.between]: value } };
+      case "in": return { [field]: { [Op.in]: value } };
+      case "nin": return orEmpty({ [field]: { [Op.notIn]: value } });
+      case "like": return { [field]: { [Op.like]: `%${value}%` } };
+      case "nlike": return orEmpty({ [field]: { [Op.notLike]: `%${value}%` } });
+      case "empty": return textual ? { [field]: { [Op.or]: [null, ""] } } : { [field]: null };
+      case "filled": return textual
+        ? { [Op.and]: [{ [field]: { [Op.ne]: null } }, { [field]: { [Op.ne]: "" } }] }
+        : { [field]: { [Op.ne]: null } };
+      default: return null;
+    }
+  }
+
+  /**
+   * Condition of a list's filters. `q`: `{ field: value }` (the search form:
+   * text contains, a choice matches, a switch only when on) and
+   * `{ "field.op": value }` (an operator: global/list-filters.js). Keys that
+   * are not fields of the entity, or whose value doesn't fit, are removed
+   * from `q`. `columns`: the table's column names, to accept record dates.
+   */
+  buildCondition(q = null, columns = null){
 
     if (q === null) return {};
-
-    Object.entries(q).forEach(([field, value]) => {
-      if (!this.fields[field] || value === '') delete q[field];
-    });
 
     const conditions = [];
 
     Object.entries(q).forEach(([key, value]) => {
+      const { field: name, op } = parseFilterKey(key);
+      const meta = this.#filterField(name, columns);
+
+      if (!meta || value === '' || value === null || value === undefined) {
+        delete q[key];
+        return;
+      }
+
+      if (op) {
+        const kind = filterKind(meta);
+        const filter = normalizeFilter({ field: name, op, value, kind });
+        const condition = filter && this.#operatorCondition(filter, kind);
+        condition ? conditions.push(condition) : delete q[key];
+        return;
+      }
+
       const field = this.fields[key];
-      
-      if (!field) return;
+      if (!field) {
+        delete q[key];
+        return;
+      }
 
       if (value && value.toString().length > 0) {
         const isSelectType = [SELECT, CONNECTION, RADIO_GROUP, SWITCH, CHECKBOX].includes(field.element);
@@ -348,7 +452,7 @@ export default class BaseDocument extends CoreDocument {
     // Scope 'own' (auth/record-scope.js): narrows rows AND the count so
     // pagination matches. Only when this entity is the one the request targets.
     const scoped = unscoped ? null : await requestOwnerFilter(this.__ENTITY__.name);
-    const condition = combineSConditions(this.buildCondition(q), filters, scoped);
+    const condition = combineSConditions(this.buildCondition(q, columns), filters, scoped);
     
     pagination.totalRecords = await this.records(condition);
     pagination.totalPages = Math.ceil(pagination.totalRecords / pagination.pageSize);
@@ -363,12 +467,21 @@ export default class BaseDocument extends CoreDocument {
     const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, ...this.#rowKeys(listFields, columns), ...(await this.#ownerColumn())], condition, { orderBy: order.orderBy });
     await this.#attachLinkTitles(rows);
 
+    // Sums of the numeric columns over every record the filters match (not
+    // just this page): only for the list the request targets.
+    const totals = !fields && rows.length && isListTarget(this.__ENTITY__.name)
+      ? await this.#listTotals(condition, listFields, columns)
+      : null;
+
     return {...(rowsOnly ? {} : await this.__meta__(false)), ...{
         labels: this.getFieldListLabels(),
         fields: listFields,
         rows: rows,
         pagination: selfPagination,
         list_settings: settings,
+        totals,
+        // The table keeps record dates (created / updated): filters and reports offer them.
+        record_dates: !!columns?.has("__created_at__"),
         q
       }
     };
@@ -402,7 +515,7 @@ export default class BaseDocument extends CoreDocument {
     }
 
     const scoped = unscoped ? null : await requestOwnerFilter(this.__ENTITY__.name);
-    const condition = combineSConditions(this.buildCondition(q), filters, scoped);
+    const condition = combineSConditions(this.buildCondition(q, columns), filters, scoped);
 
     pagination.totalRecords = await this.records(condition);
 
@@ -614,7 +727,7 @@ export default class BaseDocument extends CoreDocument {
     if (search) delete search[field];
 
     const scoped = await requestOwnerFilter(name);
-    const condition = combineSConditions(this.buildCondition(search), { [field]: state }, scoped);
+    const condition = combineSConditions(this.buildCondition(search, await this.#tableColumnNames()), { [field]: state }, scoped);
     const where = loopar.db.buildWhereCb(condition);
     const ownerColumn = await this.#ownerColumn();
     const auditable = ownerColumn.length > 0 || this.__ENTITY__.__REF__?.is_audited === 1;
@@ -633,6 +746,358 @@ export default class BaseDocument extends CoreDocument {
     ]);
 
     return { state, rows, total: Number(countRow?.count || 0), page, pageSize };
+  }
+
+  /**
+   * Calendar (data): the records of this entity by date, with the same
+   * search (`q`) and owner scope as the list. The date fields come from the
+   * entity by convention (global/calendar.js).
+   *
+   *   { from, to }      records whose range touches those days (at most `limit`)
+   *   { unscheduled }   records without a start date, newest first, paged
+   *
+   * Not `get…`: every field gets a `get<Field>` accessor, and an entity with a
+   * `calendar` field (Event) would shadow a `getCalendar` method.
+   */
+  async calendarRows({ from = null, to = null, unscheduled = false, q = null, page = 1, pageSize = 30, limit = 500 } = {}) {
+    const name = this.__ENTITY__.name;
+    const calendar = calendarFields(this.__ENTITY__.doc_structure);
+    if (!calendar) loopar.throw(`${name} has no date field to show on a calendar.`);
+    if (!unscheduled && !(isDay(from) && isDay(to) && from <= to)) {
+      loopar.throw({ code: 400, message: "Calendar range: cal_from and cal_to must be days (YYYY-MM-DD)." });
+    }
+
+    const { start, end, time, allDay, repeat, assignee } = calendar;
+    const repeatFields = repeat ? [repeat.freq, repeat.interval, repeat.days, repeat.until].filter(Boolean) : [];
+    const search = q ? { ...q } : null;
+    if (search) { delete search[start]; if (end) delete search[end]; }
+
+    const scoped = await requestOwnerFilter(name);
+    const where = loopar.db.buildWhereCb(combineSConditions(this.buildCondition(search, await this.#tableColumnNames()), scoped));
+    const ownerColumn = await this.#ownerColumn();
+    const auditable = ownerColumn.length > 0 || this.__ENTITY__.__REF__?.is_audited === 1;
+    const workflow = await workflowFor(name);
+
+    const lower = time ? `${from} 00:00:00` : from;
+    const upper = time ? `${to} 23:59:59` : to;
+
+    const base = () => {
+      let qb = loopar.db.qx()(name);
+      if (where) qb = qb.where(where);
+      if (auditable) qb = qb.whereNull("__deleted_at__");
+      if (unscheduled) return qb.whereNull(start);
+
+      qb = qb.where(start, "<=", upper);
+      // A range touches the window when it ends inside or after it; without
+      // an end date the record lives on its start day.
+      const touches = (w) => (end
+        ? w.where((r) => r.where(end, ">=", lower).orWhere((o) => o.whereNull(end).where(start, ">=", lower)))
+        : w.where(start, ">=", lower));
+      if (!repeat) return touches(qb);
+
+      // A recurring record that started earlier may repeat inside the window
+      // (until its last day): the client expands it (global/calendar.js).
+      const recurs = (w) => {
+        w.whereNotNull(repeat.freq).whereNotIn(repeat.freq, ["", "None"]);
+        if (repeat.until) w.where((u) => u.whereNull(repeat.until).orWhere(repeat.until, ">=", from));
+      };
+      return qb.where((w) => w.where(touches).orWhere(recurs));
+    };
+
+    const fields = [...new Set([
+      "id", "name", start, ...(end ? [end] : []), ...(allDay ? [allDay] : []), ...repeatFields, ...(assignee ? [assignee] : []), ...(workflow ? [workflow.field] : []),
+      ...this.getFieldSelectLabels().map((f) => f.trim()), ...this.getFieldListNames(), ...ownerColumn,
+    ].filter(Boolean))];
+
+    if (unscheduled) {
+      const [rows, countRow] = await Promise.all([
+        base().select(fields).orderBy("id", "desc").limit(pageSize).offset((Math.max(1, page) - 1) * pageSize),
+        base().count({ count: "id" }).first(),
+      ]);
+      return { rows, total: Number(countRow?.count || 0), page, pageSize };
+    }
+
+    const rows = await base().select(fields).orderBy(start, "asc").limit(limit + 1);
+    return {
+      from, to,
+      rows: rows.slice(0, limit),
+      truncated: rows.length > limit,
+      // What the calendar needs to draw rows of an entity it has no meta of (a layer).
+      titleFields: this.getFieldSelectLabels().map((f) => f.trim()).filter(Boolean),
+      states: workflow ? { field: workflow.field, colors: Object.fromEntries(workflow.states.map((s) => [s.state, s.color || "gray"])) } : null,
+    };
+  }
+
+  /** Whether the table soft-deletes: queries on the raw builder leave deleted rows out by hand. */
+  async #softDeletes() {
+    return (await this.#ownerColumn()).length > 0 || this.__ENTITY__.__REF__?.is_audited === 1;
+  }
+
+  /** A numeric field whose sum means something (not a percentage, a rating or a slider). */
+  #summable(meta) {
+    return filterKind(meta) === "number" && !["range", "rating"].includes(meta.element) && resolveColumnFormat(meta) !== "percent";
+  }
+
+  /**
+   * `{ field: sum }` of the list's numeric columns over every record
+   * `condition` matches, or null when the list has none.
+   */
+  async #listTotals(condition, listFields, columns = null) {
+    const numeric = listFields.filter((name) => {
+      const meta = this.fields[name] && this.#filterField(name);
+      return meta && (!columns || columns.has(name)) && this.#summable(meta);
+    });
+    if (!numeric.length) return null;
+
+    try {
+      let qb = loopar.db.qx()(this.__ENTITY__.name);
+      const where = loopar.db.buildWhereCb(condition);
+      if (where) qb = qb.where(where);
+      if (await this.#softDeletes()) qb = qb.whereNull("__deleted_at__");
+      for (const name of numeric) qb = qb.sum({ [name]: name });
+      const row = await qb.first();
+      return Object.fromEntries(numeric.map((name) => [name, row?.[name] == null ? null : Number(row[name])]));
+    } catch (e) {
+      console.warn(`[list] totals of ${this.__ENTITY__.name} failed:`, e?.message || e);
+      return null;
+    }
+  }
+
+  /**
+   * Report (data): this entity's records grouped and aggregated, with the
+   * same search (`q`) and owner scope as the list. See global/list-report.js.
+   *
+   *   groups   [{ field, grain }]   up to two fields; a date groups by `grain`
+   *   values   [{ fn, field }]      sum | avg | min | max of numeric fields
+   *
+   * The table groups by the stored values (SUM / COUNT / MIN / MAX, the same
+   * on every database); dates are bucketed here and their groups merged.
+   *
+   * → { groups, values, rows: [{ keys, labels, count, values }], totals, groupCount, truncated }
+   */
+  async reportData({ groups = [], values = [], q = null } = {}) {
+    const name = this.__ENTITY__.name;
+    const virtual = !!loopar.getRef(name)?.is_virtual;
+    const columns = virtual ? null : await this.#tableColumnNames();
+
+    // A plain, readable value of the entity (no secrets, nothing hidden) that is a real column.
+    const usable = (field) => {
+      const meta = this.#filterField(field, columns);
+      if (!meta || (columns && !columns.has(field))) return null;
+      if (this.fields[field] && !isListableField(meta)) return null;
+      return meta;
+    };
+
+    const groupDefs = groups.map(({ field, grain }) => {
+      const meta = usable(field);
+      if (!meta) loopar.throw({ code: 400, message: `Field "${field}" can't group a report of ${name}.` });
+      const kind = filterKind(meta);
+      return {
+        field, kind,
+        label: __(meta.data.label || field),
+        grain: ["date", "datetime"].includes(kind) ? (grain || DEFAULT_GRAIN) : null,
+        element: meta.element,
+        options: meta.data.options,
+      };
+    });
+
+    const valueDefs = values.map(({ fn, field }) => {
+      const meta = usable(field);
+      if (!meta || filterKind(meta) !== "number") {
+        loopar.throw({ code: 400, message: `Field "${field}" is not a number of ${name}.` });
+      }
+      return { fn, field, key: reportValueKey({ fn, field }), label: __(meta.data.label || field), format: resolveColumnFormat(meta) };
+    });
+
+    const groupFields = groupDefs.map((g) => g.field);
+    const valueFields = [...new Set(valueDefs.map((v) => v.field))];
+
+    // Partial results: one per stored group (table) or per record (virtual).
+    let partials;
+    if (virtual) {
+      partials = (await this.#virtualMatches(q)).map((row) => ({
+        raw: groupFields.map((f) => row[f]),
+        count: 1,
+        fields: Object.fromEntries(valueFields.map((f) => {
+          const n = row[f] === null || row[f] === undefined || row[f] === "" ? NaN : Number(row[f]);
+          return [f, Number.isFinite(n) ? { sum: n, n: 1, min: n, max: n } : { n: 0 }];
+        })),
+      }));
+    } else {
+      const scoped = await requestOwnerFilter(name);
+      const where = loopar.db.buildWhereCb(combineSConditions(this.buildCondition(q ? { ...q } : null, columns), scoped));
+
+      let qb = loopar.db.qx()(name);
+      if (where) qb = qb.where(where);
+      if (await this.#softDeletes()) qb = qb.whereNull("__deleted_at__");
+      qb = qb.select(groupFields).count({ __count: "id" });
+      valueFields.forEach((f, i) => {
+        qb = qb.sum({ [`s${i}`]: f }).count({ [`n${i}`]: f }).min({ [`lo${i}`]: f }).max({ [`hi${i}`]: f });
+      });
+      if (groupFields.length) qb = qb.groupBy(groupFields);
+
+      partials = (await qb.limit(REPORT_MAX_SQL_GROUPS + 1)).map((row) => ({
+        raw: groupFields.map((f) => row[f]),
+        count: row.__count,
+        fields: Object.fromEntries(valueFields.map((f, i) => [f, { sum: row[`s${i}`], n: row[`n${i}`], min: row[`lo${i}`], max: row[`hi${i}`] }])),
+      }));
+    }
+    const overflow = partials.length > REPORT_MAX_SQL_GROUPS;
+    if (overflow) partials.length = REPORT_MAX_SQL_GROUPS;
+
+    // Group key as shown: a date becomes its bucket, an empty value is "".
+    const keyOf = (value, def) => {
+      if (value === null || value === undefined || value === "") return "";
+      if (def.grain) {
+        const day = dayOf(value);
+        return day ? bucketOf(day, def.grain) : "";
+      }
+      if (def.kind === "bool") return loopar.utils.trueValue(value) ? "1" : "0";
+      return String(plainValue(value));
+    };
+
+    const merged = new Map();
+    const totals = emptyGroup();
+    for (const partial of partials) {
+      const keys = partial.raw.map((value, i) => keyOf(value, groupDefs[i]));
+      const id = JSON.stringify(keys);
+      let group = merged.get(id);
+      if (!group) merged.set(id, group = { keys, ...emptyGroup() });
+      mergeGroup(group, partial);
+      mergeGroup(totals, partial);
+    }
+
+    // By key, first group first; empty values close each level.
+    const compare = (a, b) => {
+      if (a === b) return 0;
+      if (a === "") return 1;
+      if (b === "") return -1;
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+    };
+    const rows = [...merged.values()].sort((a, b) => {
+      for (let i = 0; i < a.keys.length; i++) {
+        const result = compare(a.keys[i], b.keys[i]);
+        if (result) return result;
+      }
+      return 0;
+    }).slice(0, REPORT_MAX_ROWS);
+
+    // What a key reads as: the option's label, the linked record's title, Yes / No.
+    const labelMaps = await Promise.all(groupDefs.map(async (def, i) => {
+      if (def.kind === "bool") return { "1": __("Yes"), "0": __("No") };
+      if (def.element === CONNECTION) {
+        const entity = linkedEntity(def.options);
+        if (!entity) return null;
+        try {
+          const titles = await this.linkTitles(rows.filter((r) => r.keys[i] !== "").map((r) => ({ [def.field]: r.keys[i] })));
+          return titles?.[entity] || null;
+        } catch (e) {
+          console.warn(`[report] link titles of ${name}.${def.field} failed:`, e?.message || e);
+          return null;
+        }
+      }
+      if ([SELECT, RADIO_GROUP].includes(def.element) && typeof def.options === "string") {
+        return Object.fromEntries(parseOptionLines(def.options).map((o) => [String(o.value), __(o.label ?? o.value)]));
+      }
+      return null;
+    }));
+
+    return {
+      groups: groupDefs.map(({ field, label, kind, grain }) => ({ field, label, kind, grain })),
+      values: valueDefs.map(({ key, fn, field, label, format }) => ({ key, fn, field, label, format })),
+      rows: rows.map((group) => ({
+        keys: group.keys,
+        labels: group.keys.map((key, i) => labelMaps[i]?.[key] ?? null),
+        count: group.count,
+        values: groupValues(group, valueDefs),
+      })),
+      totals: { count: totals.count, values: groupValues(totals, valueDefs) },
+      groupCount: merged.size,
+      truncated: overflow || merged.size > REPORT_MAX_ROWS,
+    };
+  }
+
+  /**
+   * Export (data): the list's records as a table of text — every record the
+   * search (`q`) matches or only `names`, in the list's order, with the same
+   * owner scope. Values read as the list shows them (option labels, linked
+   * titles, Yes / No); `name` always comes first so a row can be traced back.
+   *
+   *   fields   columns to export, in order (default: the list's columns);
+   *            only list columns and plain readable fields are accepted
+   *
+   * → { header: [label], rows: [[cell]], truncated }
+   */
+  async exportRows({ q = null, sort = null, fields = null, names = null, limit = EXPORT_MAX_ROWS } = {}) {
+    const name = this.__ENTITY__.name;
+    const virtual = !!loopar.getRef(name)?.is_virtual;
+    const columns = virtual ? null : await this.#tableColumnNames();
+    const settings = isListTarget(name) ? await readListSettings(name) : null;
+
+    const listNames = this.getFieldListNames();
+    const allowed = (f) => {
+      const field = this.fields[f];
+      if (!field || field.element === PASSWORD || (columns && !columns.has(f))) return false;
+      return listNames.includes(f) || isListableField({ element: field.element, data: field });
+    };
+    const wanted = Array.isArray(fields) && fields.length
+      ? fields.map(String)
+      : [...listNames, ...this.#extraListFields(settings, listNames, columns)];
+    const exported = [...new Set(["name", ...wanted])].filter((f) => f === "name" || allowed(f)).slice(0, 200);
+
+    const picked = Array.isArray(names) && names.length ? names.map(String).slice(0, limit) : null;
+
+    let rows;
+    if (virtual) {
+      rows = (await this.#virtualMatches(q)).filter((row) => !picked || picked.includes(String(row.name)));
+    } else {
+      const scoped = await requestOwnerFilter(name);
+      const condition = combineSConditions(
+        this.buildCondition(q ? { ...q } : null, columns),
+        picked ? { name: { [Op.in]: picked } } : null,
+        scoped,
+      );
+      const order = this.#listOrder(sort ?? loopar.getSort(name) ?? settings?.sort, columns);
+
+      let qb = loopar.db.qx()(name);
+      const where = loopar.db.buildWhereCb(condition);
+      if (where) qb = qb.where(where);
+      if (await this.#softDeletes()) qb = qb.whereNull("__deleted_at__");
+      rows = await qb.select(exported).orderBy(order.orderBy).limit(limit + 1);
+    }
+
+    const truncated = rows.length > limit;
+    if (truncated) rows.length = limit;
+    await this.#attachLinkTitles(rows);
+
+    const optionLabels = {};
+    for (const f of exported) {
+      const field = this.fields[f];
+      if (field && [SELECT, RADIO_GROUP].includes(field.element) && typeof field.options === "string") {
+        optionLabels[f] = Object.fromEntries(parseOptionLines(field.options).map((o) => [String(o.value), __(o.label ?? o.value)]));
+      }
+    }
+
+    const cell = (row, f) => {
+      const value = row[f];
+      const title = row.__titles__?.[f];
+      if (title !== undefined && title !== null && title !== "") return title;
+      if (value === null || value === undefined || value === "") return "";
+      const element = this.fields[f]?.element;
+      if ([SWITCH, CHECKBOX].includes(element)) return loopar.utils.trueValue(value) ? __("Yes") : __("No");
+      if (optionLabels[f]) {
+        return [1, "1", true, "true"].includes(this.fields[f].multiple)
+          ? multipleValues(value).map((v) => optionLabels[f][String(v)] ?? v).join(", ")
+          : optionLabels[f][String(value)] ?? value;
+      }
+      return plainValue(value);
+    };
+
+    return {
+      header: exported.map((f) => __(this.fields[f]?.label || (f === "name" ? "Name" : f))),
+      rows: rows.map((row) => exported.map((f) => cell(row, f))),
+      truncated,
+    };
   }
 
   async records(condition = []) {

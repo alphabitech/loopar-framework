@@ -7,7 +7,7 @@ const inRequest = (document, query, fn) =>
   requestContext.run({ req: { query, __CONTROLLER__: { document } } }, fn);
 
 test("listFilters(): every non-control query param is a filter, as a raw string", () => {
-  inRequest("Customer", { name: "juan", code: "00123", page: "2", preloaded: "true", board: "Open", workspace: "desk" }, () => {
+  inRequest("Customer", { name: "juan", code: "00123", page: "2", preloaded: "true", workspace: "desk", report: "city", report_values: "sum.total", report_chart: "line" }, () => {
     assert.deepEqual(listFilters("Customer"), { name: "juan", code: "00123" });
   });
 });
@@ -21,6 +21,12 @@ test("listFilters(): empty values are dropped, repeated params keep the last val
 test("listFilters(): exclude removes page-specific params (module page `type`)", () => {
   inRequest("Module", { type: "Entity", name: "user" }, () => {
     assert.deepEqual(listFilters("Module", { exclude: ["type"] }), { name: "user" });
+  });
+});
+
+test("listFilters(): filters with an operator pass as they come; a data action leaves its own params out", () => {
+  inRequest("Invoice", { "total.gte": "1000", "due_date.between": "2026-11-01..2026-11-30", board: "Open" }, () => {
+    assert.deepEqual(listFilters("Invoice", { exclude: ["board"] }), { "total.gte": "1000", "due_date.between": "2026-11-01..2026-11-30" });
   });
 });
 

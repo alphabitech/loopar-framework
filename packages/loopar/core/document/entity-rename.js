@@ -106,13 +106,71 @@ async function referenceTables() {
   return out;
 }
 
+/** knex's default prefix for the indexes of a table: "Portfolio Project" → "portfolio project_". */
+const indexPrefix = (table) => `${String(table).replace(/\.|-/g, "_").toLowerCase()}_`;
+
+/**
+ * Index names follow their table (`<table>_<column>_unique`), but renaming a
+ * table keeps them — and in SQLite and Postgres they are unique per
+ * database, so a later entity taking the old table name could not create
+ * its own. Renames the indexes of `to` still named after `from`.
+ * Idempotent; an index that can't be renamed never fails the rename.
+ */
+export async function renameTableIndexes(from, to) {
+  const db = loopar.db;
+  const q = () => db.qx();
+  const rowsOf = (result) => db.unwrapRawRows?.(result) ?? result?.rows ?? result ?? [];
+  const oldPrefix = indexPrefix(from), newPrefix = indexPrefix(to);
+  const renamed = [];
+  if (oldPrefix === newPrefix) return renamed;
+  const target = (name) => (String(name).toLowerCase().startsWith(oldPrefix) ? newPrefix + String(name).slice(oldPrefix.length) : null);
+
+  try {
+    if (db.isSQLiteLike) {
+      // No ALTER INDEX in SQLite: drop it and run its own CREATE under the new name.
+      const rows = rowsOf(await q().raw("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL", [to]));
+      for (const { name, sql } of rows) {
+        const next = target(name);
+        if (!next) continue;
+        await q().raw("DROP INDEX ??", [name]);
+        await q().raw(String(sql).replace(name, next).replace(/\?/g, "\\?"));
+        renamed.push([name, next]);
+      }
+    } else if (db.isPostgresLike) {
+      const rows = rowsOf(await q().raw("SELECT indexname AS name FROM pg_indexes WHERE schemaname = current_schema() AND tablename = ?", [to]));
+      for (const { name } of rows) {
+        const next = target(name);
+        if (!next) continue;
+        await q().raw("ALTER INDEX ?? RENAME TO ??", [name, next]);
+        renamed.push([name, next]);
+      }
+    } else if (db.isMySQLLike) {
+      const rows = rowsOf(await q().raw("SHOW INDEX FROM ??", [to]));
+      for (const name of new Set(rows.map(r => r.Key_name))) {
+        const next = target(name);
+        if (!next) continue;
+        await q().raw("ALTER TABLE ?? RENAME INDEX ?? TO ??", [to, name, next]);
+        renamed.push([name, next]);
+      }
+    }
+  } catch (e) {
+    console.error(`[rename] indexes of "${to}" still named after "${from}":`, e.message);
+  }
+  return renamed;
+}
+
 /**
  * The database part of a rename, for the current tenant. Idempotent: does
  * nothing once `from` is gone and `to` exists. Runs inside a transaction
  * opened by the caller (or opens its own).
  *   { type: "Page Builder", from: "Getting Started", to: "Ren Getting Started" }
+ *
+ * `name_reused: true` — the app ships a NEW entity under the old name (the
+ * old `Project` became `Portfolio Project` and another `Project` took its
+ * place). Both names then exist on every tenant that already replayed the
+ * rename, so the target existing is what marks it as applied.
  */
-export async function applyRenameToDatabase({ type, from, to }) {
+export async function applyRenameToDatabase({ type, from, to, name_reused = false }) {
   const q = () => loopar.db.qx();
   const metaTable = type || "Entity";
   const report = { meta: 0, table: false, references: {} };
@@ -121,7 +179,12 @@ export async function applyRenameToDatabase({ type, from, to }) {
 
   const existsOld = await q()(metaTable).where({ name: from }).first();
   const existsNew = await q()(metaTable).where({ name: to }).first();
-  if (!existsOld && existsNew) return report; // already applied here
+  // Already applied here (with `name_reused`, `from` now names another entity).
+  // Tenants renamed before index names followed their table get them fixed.
+  if (existsNew && (!existsOld || name_reused)) {
+    if (await hasTable(to)) await renameTableIndexes(from, to);
+    return report;
+  }
   if (existsOld && existsNew) {
     throw new Error(`Cannot rename ${metaTable} "${from}": "${to}" already exists in this tenant.`);
   }
@@ -142,6 +205,7 @@ export async function applyRenameToDatabase({ type, from, to }) {
       await q().schema.dropTable(to);
     }
     await q().schema.renameTable(from, to);
+    await renameTableIndexes(from, to);
     report.table = true;
   }
 

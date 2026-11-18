@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react';
-import { readdirSync, lstatSync } from 'fs';
+import { readdirSync, lstatSync, realpathSync } from 'fs';
 import { resolve } from 'pathe';
 import { compression, defineAlgorithm } from 'vite-plugin-compression2';
 import { constants } from 'zlib';
@@ -8,7 +8,16 @@ import tailwindcss from '@tailwindcss/vite';
 import svgr from 'vite-plugin-svgr';
 
 const framework = process.cwd();
-const loopar = 'node_modules/loopar';
+
+// Workspace packages are symlinked into node_modules. Aliases must point at
+// their REAL folder: for an alias that goes through node_modules/, Vite's dev
+// server treats every .js/.ts file behind it as a dependency — it appends
+// `?v=<deps hash>` and serves it `immutable` for a year, so the browser keeps
+// the first copy and never sees later edits (until a hard reload).
+const real = (path) => {
+  try { return realpathSync(path); } catch { return path; }
+};
+const loopar = real(resolve(framework, 'node_modules/loopar'));
 
 const BUILD_COMPRESS = (process.env.BUILD_COMPRESS ?? 'brotli').toLowerCase();
 const BROTLI_QUALITY = Number(process.env.BUILD_BROTLI_QUALITY ?? 9);
@@ -22,7 +31,7 @@ const compressionAlgorithms = [
 ].filter(Boolean);
 
 const resRoot = (...args) => resolve(framework, ...args);
-const resLoopar = (...args) => resRoot(loopar, ...args);
+const resLoopar = (...args) => resolve(loopar, ...args);
 
 const Alias = (dir, dirOnly = false) => {
   return readdirSync(dir).reduce((acc, name) => {
@@ -66,7 +75,7 @@ export default defineConfig(({ command }) => {
 
         ...Alias(resLoopar('src/components')),
         ...Alias(resLoopar('src'), true),
-        '@cn': resolve('node_modules/cn/src'),
+        '@cn': resolve(real(resRoot('node_modules/cn')), 'src'),
         '@app': resRoot('app/'),
         'loopar': resLoopar('src/loopar.jsx'),
         '@loopar': resLoopar('src/'),

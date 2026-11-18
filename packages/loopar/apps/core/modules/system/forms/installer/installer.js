@@ -467,6 +467,23 @@ export default class Installer extends BaseDocument {
     const moduleRoute = loopar.makePath('apps', this.app_name);
     let appData = await fileManage.getConfigFile('installer', moduleRoute);
 
+    // Renames recorded by this app (apps/<app>/renames.json): the files were
+    // renamed once in the repo, but each tenant's database still has the old
+    // names. Replay them before anything reads the schema from the files:
+    // ensureFrameworkColumns (below) would otherwise alter the table that
+    // still carries the old name to the shape of whatever entity the files
+    // now call that way. Idempotent.
+    for (const rename of readRenameRecords(loopar.makePath('apps', this.app_name))) {
+      try {
+        const report = await applyRenameToDatabase(rename);
+        if (report.meta || report.table) {
+          console.log([`Renamed ${rename.type}: "${rename.from}" → "${rename.to}"`, report]);
+        }
+      } catch (e) {
+        console.error(`[installer] rename ${rename.from} → ${rename.to} failed:`, e.message);
+      }
+    }
+
     if (reinstall) {
       await this.ensureFrameworkColumns();
 
@@ -493,20 +510,6 @@ export default class Installer extends BaseDocument {
         const app = await loopar.getDocument("App", this.app_name);
         await app.buildInstaller();
         appData = await fileManage.getConfigFile('installer', moduleRoute);
-      }
-    }
-
-    // Renames recorded by this app (apps/<app>/renames.json): the files were
-    // renamed once in the repo, but each tenant's database still has the old
-    // names. Replay them before installing documents. Idempotent.
-    for (const rename of readRenameRecords(loopar.makePath('apps', this.app_name))) {
-      try {
-        const report = await applyRenameToDatabase(rename);
-        if (report.meta || report.table) {
-          console.log([`Renamed ${rename.type}: "${rename.from}" → "${rename.to}"`, report]);
-        }
-      } catch (e) {
-        console.error(`[installer] rename ${rename.from} → ${rename.to} failed:`, e.message);
       }
     }
 

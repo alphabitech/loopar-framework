@@ -12,8 +12,12 @@ import { bootTestTenant } from "../support/tenant.js";
 const ROWS = 12;
 let t;
 
-const transitions = () => orderChildRows(loopar.db.qx()("Workflow Transition")
-  .where({ parent_document: "Workflow" })).select("id", "name", "action", "confirm", "style");
+/** Rows of this test's workflow (the installer seeds others, with their own rows). */
+const transitions = async () => {
+  const { id } = await loopar.db.qx()("Workflow").where({ name: "Letterhead" }).first("id");
+  return orderChildRows(loopar.db.qx()("Workflow Transition")
+    .where({ parent_document: "Workflow", parent_id: id })).select("id", "name", "action", "confirm", "style");
+};
 
 /** Counts the inserts and updates of `entity` made while `fn` runs. */
 async function countWrites(entity, fn) {

@@ -2,14 +2,8 @@ import { loopar, PermissionManager, CREATED_BY_COLUMN } from "loopar";
 import { SCOPE, isReadOnlyWrite } from "./PermissionManager.js";
 import { portalIdentity, customerCondition, isCustomerRecord, customerFieldOf, CUSTOMER_FIELD } from "./customer-scope.js";
 import { validateCsrfToken } from './csrf.js';
+import { permissionActionOf } from './permission-aliases.js';
 import { workspaceCapabilities, workspaceRequiresAuth, getWorkspaceName, workspaceServesWebPages } from "../global/router-utils.js";
-
-/**
- * Actions authorized with the grant of another action: changing a protected
- * field of a record needs the `update` permission on it (plus a fresh
- * re-authentication, checked by the action itself).
- */
-const PERMISSION_ALIASES = Object.freeze({ changeprotected: 'update' });
 
 export default class AuthController {
   async validateCsrf() {
@@ -115,7 +109,7 @@ export default class AuthController {
 
   /** Effective scope for this request: 'all' | 'own' | 'customer' | null. */
   ownerScope(user = loopar.auth.user()) {
-    return PermissionManager.scope(this.document, this.action, user);
+    return PermissionManager.scope(this.document, permissionActionOf(this.action), user);
   }
 
   /** Filter to narrow a list to the user's records. Override for compound rules (may be async). */
@@ -238,7 +232,7 @@ export default class AuthController {
 
     if ((this.freeActions || []).includes(this.action)) return true;
 
-    const permissionAction = PERMISSION_ALIASES[String(this.action).toLowerCase()] || this.action;
+    const permissionAction = permissionActionOf(this.action);
 
     let scope = PermissionManager.scope(
       this.document,

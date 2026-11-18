@@ -7,7 +7,7 @@ import { inferParentFilter, parseFilters } from './parent-filter.js';
 import { loopar } from '../loopar.js';
 import { fileManage } from '../file-manage.js';
 import { parseDocStructure, stripEphemeralDocStructure, injectCookieIndexes } from './tools.js';
-import { FRAMEWORK_OWNED_COLUMN_NAMES, CHILD_POSITION_COLUMN, orderChildRows } from '../global/audit.js';
+import { FRAMEWORK_OWNED_COLUMN_NAMES, CHILD_POSITION_COLUMN, VERSION_COLUMN, orderChildRows } from '../global/audit.js';
 import { documentManage } from './document-manage.js';
 import { isHashedSecret } from '../global/secrets.js';
 import { nextSeriesName } from './naming-series.js';
@@ -484,11 +484,12 @@ export default class CoreDocument {
         const data = this.valuesToSetDataBase(true);
 
         if (Object.keys(data).length) {
+          // Applies only over the version this document was read from.
           await loopar.db.updateRow(
             this.__ENTITY__.name,
             this.__DOCUMENT_NAME__,
             data,
-            this.__ENTITY__.is_single
+            { expectedVersion: this.#expectedVersion(args) }
           );
         }
       }
@@ -510,6 +511,38 @@ export default class CoreDocument {
     this.#rebaseOriginal();
 
     this.afterSave && await this.afterSave();
+    // What this save (and its hooks) stored is now what the instance holds.
+    await this.syncVersion();
+  }
+
+  /**
+   * The `__version__` this document was read from — the stored one, or the
+   * one the form that sent the data was loaded with. Null = no check: new
+   * records, singles, installs, tables without the column, and
+   * `save({ overwrite: true })` for code that knowingly writes over whatever
+   * is stored.
+   */
+  #expectedVersion(args = {}) {
+    if (args.overwrite || loopar.installing || this.__IS_NEW__ || this.__ENTITY__.is_single) return null;
+    const version = this.__DATA__?.[VERSION_COLUMN];
+    return version === undefined || version === null || version === '' ? null : version;
+  }
+
+  /**
+   * Adopts the stored version of this record. save() does it when it ends;
+   * call it after writing this record's own row behind the instance
+   * (loopar.db.setValue…), or its next save() is rejected as stale.
+   */
+  async syncVersion() {
+    if (loopar.installing || this.__ENTITY__.is_single || !this.__DOCUMENT_NAME__) return;
+    const version = await loopar.db.rowVersion(this.__ENTITY__.name, this.__DOCUMENT_NAME__);
+    if (version !== null) this.__DATA__[VERSION_COLUMN] = version;
+  }
+
+  /** `{ __version__ }` for the client: a form sends it back with its save. */
+  versionStamp() {
+    const version = this.__DATA__?.[VERSION_COLUMN];
+    return version === undefined || version === null || this.__IS_NEW__ ? {} : { [VERSION_COLUMN]: Number(version) };
   }
 
   /**
@@ -999,6 +1032,8 @@ export default class CoreDocument {
         name: __ENTITY__.name,
         module: __ENTITY__.module,
         title_fields: __ENTITY__.title_fields,
+        // View a list opens in until the user picks another (List, Grid, Kanban, Calendar).
+        ...(__ENTITY__.default_list_view ? { default_list_view: __ENTITY__.default_list_view } : {}),
         doc_structure: __ENTITY__.doc_structure,
         ...(this.is_builder ? {is_builder: true} : {}),
         is_single: __ENTITY__.is_single,
@@ -1008,7 +1043,7 @@ export default class CoreDocument {
         // Same source the server enforces (AuthController): no New / Edit / Save.
         read_only: loopar.utils.trueToBinary(__REF__.read_only),
       },
-      ...(withData || 1==1 ? { data: await this.rawValues() } : {}),
+      ...(withData || 1==1 ? { data: { ...await this.rawValues(), ...this.versionStamp() } } : {}),
       ...(workflow ? { workflow: await describeWorkflow(this, workflow) } : {}),
       spacing: this.__SPACING__
     }

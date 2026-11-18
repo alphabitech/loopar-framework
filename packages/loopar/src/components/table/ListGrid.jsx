@@ -7,6 +7,7 @@ import { recordLink } from "./record-link.js"
 import { titleFieldsOf } from "./list-columns.js"
 import { resolveListColumns, TITLE_COLUMN } from "@global/list-settings";
 import { ListColumnsMenu } from "./ListColumnsMenu.jsx";
+import { ListFilters } from "./ListFilters.jsx";
 import { useViewOptions } from "@loopar/document";
 import BaseTable from "./BaseTable.jsx"
 import {useMemo} from "react";
@@ -172,10 +173,12 @@ export function ListGrid(props) {
         <div className="min-w-0 flex-1">
           <TableSearch onChange={search}/>
         </div>
+        <ListFilters/>
         {customizable && <ListColumnsMenu/>}
       </div>
       <BaseTable
         {...props}
+        totals={Document.totals}
         hasPagination={props.hasPagination !== false}
         columns={customMappedColumns}
         onResize={customizable ? resizeColumn : undefined}

@@ -172,8 +172,9 @@ export default class PageController extends SingleConrtroller {
     const ref = loopar.getRef?.("Page Builder") || {};
     if (!ref.enable_comments) return { rows: [], pagination: {} };
 
-    const rows = await this.fetchComments(documentName, { onlyApproved: true, includeEvents: false });
-    return { rows, pagination: {} };
+    return await this.fetchFeed(documentName, {
+      audit: false, onlyApproved: true, includeEvents: false, cursor: this.query, limit: this.query?.limit,
+    });
   }
 
   // Kept for compatibility while the client migrates to `submitForm`.

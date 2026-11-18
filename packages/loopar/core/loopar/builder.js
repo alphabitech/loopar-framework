@@ -7,6 +7,7 @@ import * as simpleIcons from 'simple-icons';
 import { fileManage } from "../file-manage.js";
 import { elementsDict, elementsDefinition } from "../global/element-definition.js";
 import { formulaFields } from "../global/formula.js";
+import { calendarFields } from "../global/calendar.js";
 import { writePolicyMap } from "../global/field-policy.js";
 import { deskHomes, listDeskPages } from "../document/desk-page.js";
 import { isAuditableEntity, AUDIT_COLUMN_NAMES, orderChildRows } from "../global/audit.js";
@@ -152,6 +153,8 @@ export class Builder {
         __TRANSLATABLE__: getTranslatableFields(fields),
         // Computed fields: { fieldName: formula }, recomputed on every save.
         __FORMULAS__: formulaFields(fields),
+        // Date fields the calendar draws this entity by (global/calendar.js), or null.
+        __CALENDAR__: calendarFields(fields),
         // Who may write each restricted field and through which path
         // (see global/field-policy.js). Built from the entity JSON — server side.
         __WRITE_POLICY__: writePolicyMap(fields),

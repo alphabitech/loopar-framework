@@ -1,0 +1,19 @@
+{
+  "name": "Saved View",
+  "module": "core",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "search_fields": "title",
+  "title_fields": "title",
+  "doc_structure": "[{\"node\":\"row_saved_view\",\"element\":\"row\",\"data\":{\"name\":\"saved_view_name_container\"},\"elements\":[{\"node\":\"input_saved_view_name\",\"element\":\"input\",\"data\":{\"label\":\"Name\",\"name\":\"name\",\"required\":1,\"unique\":1,\"type\":\"VARCHAR\",\"in_list_view\":0,\"searchable\":0,\"write_policy\":\"create_only\",\"set_only_time\":1}}]},{\"node\":\"row_saved_view_main\",\"element\":\"row\",\"data\":{\"name\":\"row_saved_view_main\"},\"elements\":[{\"node\":\"col_saved_view_main\",\"element\":\"col\",\"data\":{\"name\":\"col_saved_view_main\"},\"elements\":[{\"node\":\"input_saved_view_title\",\"element\":\"input\",\"data\":{\"label\":\"Title\",\"name\":\"title\",\"required\":1,\"in_list_view\":1,\"list_order\":1,\"searchable\":1}},{\"node\":\"connection_saved_view_user\",\"element\":\"connection\",\"data\":{\"label\":\"User\",\"name\":\"owner_user\",\"options\":\"User\",\"required\":1,\"in_list_view\":1,\"searchable\":1,\"write_policy\":\"create_only\"}},{\"node\":\"input_saved_view_entity\",\"element\":\"input\",\"data\":{\"label\":\"Entity\",\"name\":\"target_entity\",\"required\":1,\"in_list_view\":1,\"searchable\":1,\"write_policy\":\"create_only\",\"description\":\"The entity whose list this view belongs to.\"}},{\"node\":\"input_saved_view_type\",\"element\":\"input\",\"data\":{\"label\":\"View type\",\"name\":\"view_type\",\"in_list_view\":1,\"description\":\"List, Grid, Kanban, Calendar or Report.\"}},{\"node\":\"switch_saved_view_shared\",\"element\":\"switch\",\"data\":{\"label\":\"Shared\",\"name\":\"shared\",\"in_list_view\":1,\"description\":\"Everyone who can open the list sees this view.\"}},{\"node\":\"textarea_saved_view_query\",\"element\":\"textarea\",\"data\":{\"label\":\"Query\",\"name\":\"query\",\"rows\":4,\"description\":\"The list's URL query: filters, sort and report. Written by the list itself when the user saves a view.\"}},{\"node\":\"select_saved_view_email_schedule\",\"element\":\"select\",\"data\":{\"label\":\"Email schedule\",\"name\":\"email_schedule\",\"options\":\"none:Never\\ndaily:Every day\\nweekly:Every Monday\\nmonthly:The 1st of every month\",\"description\":\"Sends this view by email on a schedule (a CSV of the list, or the report).\"}},{\"node\":\"input_saved_view_email_to\",\"element\":\"input\",\"data\":{\"label\":\"Email to\",\"name\":\"email_to\",\"description\":\"Recipients, separated by commas.\"}},{\"node\":\"input_saved_view_last_sent_on\",\"element\":\"input\",\"data\":{\"label\":\"Last sent on\",\"name\":\"last_sent_on\",\"readonly\":1,\"description\":\"Day (YYYY-MM-DD) of the last scheduled email.\"}}]}]}]",
+  "resources": [],
+  "__ENTITY__": "Entity"
+}

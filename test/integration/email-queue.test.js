@@ -69,3 +69,40 @@ test("retryFailed and cleanOldEmails", async () => {
     assert.equal((await loopar.mail.getQueueStats()).sent, 2);
   });
 });
+
+test("sendLater answers once the email is queued and delivers it in the background", async () => {
+  await t.run(async () => {
+    await stubTransport();
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    loopar.mail.getTransporter = async () => ({
+      sendMail: async (opts) => { await gate; sent.push(opts); return { messageId: "later" }; },
+    });
+
+    const before = sent.length;
+    const { queueId, delivery } = await loopar.mail.sendLater({ to: "c@x.test", subject: "later", html: "<p>x</p>" });
+    assert.ok(queueId, "queued");
+    assert.equal(sent.length, before, "the caller did not wait for the mail server");
+
+    release();
+    assert.equal((await delivery).success, true);
+    assert.equal(await status(queueId), "Sent");
+    assert.equal(sent.at(-1).subject, "later");
+  });
+});
+
+test("a failed background delivery stays in the queue with its error and tells the caller", async () => {
+  await t.run(async () => {
+    await stubTransport();
+    loopar.mail.getTransporter = async () => ({ sendMail: async () => { throw new Error("smtp down"); } });
+
+    let told = null;
+    const { queueId, delivery } = await loopar.mail.sendLater({
+      to: "d@x.test", subject: "fails", html: "x", maxAttempts: 1, onFailed: (error) => { told = error; },
+    });
+    assert.equal((await delivery).success, false);
+    assert.equal(told, "smtp down");
+    assert.equal(await status(queueId), "Failed");
+    assert.match(await loopar.db.getValue("Email Queue", "error_log", queueId), /smtp down/);
+  });
+});

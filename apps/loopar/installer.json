@@ -1,7 +1,7 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.5.28"
+    "version": "7.5.43"
   },
   "documents": {
     "Entity:Module": {
@@ -20,10 +20,11 @@
     "App:loopar": {
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.5.28",
+      "version": "7.5.43",
       "autor": "Administrator",
-      "icon": "Infinity",
+      "icon": "SiInfinityfree",
       "is_template": 0,
+      "requires": "",
       "logo": "[{\"name\":\"logo.svg\",\"size\":17901,\"type\":\"image\",\"src\":\"/assets/public/logo.svg\"}]",
       "logo_dark": "[{\"name\":\"logo.svg\",\"size\":17901,\"type\":\"image\",\"src\":\"/assets/public/logo.svg\"}]",
       "logo_mini": "[]",
@@ -70,7 +71,8 @@
       "name": "developer",
       "description": "Developer",
       "app_name": "loopar",
-      "icon": "LucideCode",
+      "parent_module": "",
+      "icon": "CodeXml",
       "in_sidebar": 1
     },
     "Builder:Form Builder": {
@@ -86,7 +88,8 @@
       "name": "auth",
       "description": "Auth",
       "app_name": "loopar",
-      "icon": "LucideCode",
+      "parent_module": "",
+      "icon": "UserLock",
       "in_sidebar": 1
     },
     "Form Builder:Profile": {
@@ -216,6 +219,31 @@
     "Entity:Menu": {
       "__root__": "/apps/loopar/modules/developer/entities/menu"
     },
+    "Module:Integrations": {
+      "name": "Integrations",
+      "description": "Integrations",
+      "app_name": "loopar",
+      "parent_module": "",
+      "icon": "Component",
+      "in_sidebar": 1
+    },
+    "Entity:GPT": {
+      "name": "GPT",
+      "module": "Integrations",
+      "default_list_view": "List",
+      "is_single": 1,
+      "is_static": 0,
+      "is_virtual": 0,
+      "read_only": 0,
+      "include_in_installer": 0,
+      "is_child": 0,
+      "is_builder": 0,
+      "enable_history": 0,
+      "enable_comments": 0,
+      "require_login_to_comment": 0,
+      "doc_structure": "[{\"node\":\"7iq9afq3w\",\"element\":\"row\",\"data\":{\"name\":\"name_and_status_container\",\"layout\":\"[50,50]\"}},{\"node\":\"x0ag1upbs\",\"element\":\"input\",\"data\":{\"label\":\"Name\",\"name\":\"name\",\"type\":\"text\",\"required\":1,\"unique\":1,\"in_list_view\":1,\"searchable\":1,\"id\":\"input47_el54262823476\",\"write_policy\":\"create_only\"}},{\"node\":\"6sokjjljd\",\"element\":\"row\",\"data\":{\"name\":\"row1_el1235782781905\",\"id\":\"row1_el1235782781905\",\"layout\":\"[50,50]\"},\"elements\":[{\"node\":\"b10oi8rtu\",\"element\":\"col\",\"data\":{\"name\":\"col1_el103951524304\",\"id\":\"col1_el103951524304\"},\"elements\":[{\"node\":\"l69i164to\",\"element\":\"input\",\"data\":{\"label\":\"Model\",\"name\":\"model\",\"required\":1,\"id\":\"input7_el339620323513\"}},{\"node\":\"input8_el271692020431\",\"element\":\"input\",\"data\":{\"label\":\"Temperature\",\"name\":\"temperature\",\"id\":\"input67_el907633427538\",\"format\":\"Decimal\"}},{\"node\":\"input74_el380453343697\",\"element\":\"input\",\"data\":{\"label\":\"Frequency Penalty\",\"name\":\"frequency_penalty\",\"id\":\"input77_el416936397874\",\"format\":\"Decimal\"}}]},{\"node\":\"hw4494qg9\",\"element\":\"col\",\"data\":{\"name\":\"col2_el337400563646\",\"id\":\"col2_el337400563646\"},\"elements\":[{\"node\":\"4kswjynzs\",\"element\":\"password\",\"data\":{\"label\":\"API Key\",\"name\":\"api_key\",\"required\":1,\"id\":\"password2_el570684723857\"}},{\"node\":\"input68_el346471084955\",\"element\":\"input\",\"data\":{\"label\":\"Top P\",\"name\":\"top_p\",\"id\":\"input73_el49991725458\",\"format\":\"Decimal\"}},{\"node\":\"input78_el706064142824\",\"element\":\"input\",\"data\":{\"label\":\"Presence Penalty\",\"name\":\"presence_penalty\",\"id\":\"input81_el526129249971\",\"format\":\"Decimal\"}}]}]}]",
+      "resources": []
+    },
     "Entity:Connected Document": {
       "__root__": "/apps/loopar/modules/core/entities/connected-document"
     },
@@ -244,13 +272,6 @@
     },
     "Entity:File Manager": {
       "__root__": "/apps/loopar/modules/core/entities/file-manager"
-    },
-    "Module:Integrations": {
-      "name": "Integrations",
-      "description": "Integrations",
-      "app_name": "loopar",
-      "icon": "ComponentIcon",
-      "in_sidebar": 1
     },
     "Entity:AI Attribute": {
       "__root__": "/apps/loopar/modules/integrations/entities/ai-attribute"
@@ -321,8 +342,8 @@
     "Entity:Side Menu Item": {
       "__root__": "/apps/loopar/modules/developer/entities/side-menu-item"
     },
-    "Entity:Project": {
-      "__root__": "/apps/loopar/modules/web/entities/project"
+    "Entity:Portfolio Project": {
+      "__root__": "/apps/loopar/modules/web/entities/portfolio-project"
     },
     "Entity:Service": {
       "__root__": "/apps/loopar/modules/web/entities/service"
@@ -335,27 +356,6 @@
     },
     "Entity:Service Category": {
       "__root__": "/apps/loopar/modules/web/entities/service-category"
-    },
-    "Module:stripe": {
-      "name": "stripe",
-      "description": "Stripe",
-      "app_name": "loopar",
-      "parent_module": "Integrations",
-      "icon": "CreditCard",
-      "in_sidebar": 0
-    },
-    "Entity:Stripe Account": {
-      "__root__": "/apps/loopar/modules/stripe/entities/stripe-account"
-    },
-    "Module:crm": {
-      "name": "crm",
-      "description": "CRM",
-      "app_name": "loopar",
-      "icon": "Contact",
-      "in_sidebar": 1
-    },
-    "Entity:Customer": {
-      "__root__": "/apps/loopar/modules/crm/entities/customer"
     },
     "Entity:Oauth Settings": {
       "__root__": "/apps/loopar/modules/auth/entities/oauth-settings"
@@ -378,6 +378,9 @@
     "Entity:AI": {
       "__root__": "/apps/loopar/modules/integrations/entities/ai"
     },
+    "Entity:Naming Series": {
+      "__root__": "/apps/loopar/modules/core/entities/naming-series"
+    },
     "Entity:Letterhead": {
       "__root__": "/apps/loopar/modules/core/entities/letterhead"
     },
@@ -386,14 +389,16 @@
       "tagline": "Residential & Commercial Cleaning — Riverton",
       "is_default": 1
     },
+    "Letterhead:Oakline Floors": {
+      "name": "Oakline Floors",
+      "tagline": "Hardwood Installation & Refinishing — Riverton",
+      "is_default": 0
+    },
     "Entity:Post": {
       "__root__": "/apps/loopar/modules/web/entities/post"
     },
     "Entity:Git Account": {
       "__root__": "/apps/loopar/modules/developer/entities/git-account"
-    },
-    "Entity:Naming Series": {
-      "__root__": "/apps/loopar/modules/core/entities/naming-series"
     },
     "Entity:Workflow State": {
       "__root__": "/apps/loopar/modules/core/entities/workflow-state"
@@ -403,6 +408,152 @@
     },
     "Entity:Workflow": {
       "__root__": "/apps/loopar/modules/core/entities/workflow"
+    },
+    "Workflow:Project": {
+      "name": "Project",
+      "document": "Project",
+      "state_field": "status",
+      "app": "loopar",
+      "active": 1,
+      "states": [
+        {
+          "parent_document": "Workflow",
+          "name": "jc4Z8St7V3i1g46",
+          "state": "Planned",
+          "color": "blue",
+          "is_initial": 1,
+          "is_final": 0,
+          "show_on_board": 1,
+          "public_label": "",
+          "__position__": 0
+        },
+        {
+          "parent_document": "Workflow",
+          "name": "O7tf0P8R9rxHj24",
+          "state": "In Progress",
+          "color": "amber",
+          "is_initial": 0,
+          "is_final": 0,
+          "show_on_board": 1,
+          "public_label": "",
+          "__position__": 1
+        },
+        {
+          "parent_document": "Workflow",
+          "name": "kyOdW37RC18c7x4",
+          "state": "On Hold",
+          "color": "gray",
+          "is_initial": 0,
+          "is_final": 0,
+          "show_on_board": 1,
+          "public_label": "",
+          "__position__": 2
+        },
+        {
+          "parent_document": "Workflow",
+          "name": "bN6FSe902P5E5V3",
+          "state": "Completed",
+          "color": "green",
+          "is_initial": 0,
+          "is_final": 1,
+          "show_on_board": 1,
+          "public_label": "",
+          "__position__": 3
+        },
+        {
+          "parent_document": "Workflow",
+          "name": "sjFhl5IU19Hcdep",
+          "state": "Cancelled",
+          "color": "red",
+          "is_initial": 0,
+          "is_final": 1,
+          "show_on_board": 1,
+          "public_label": "",
+          "__position__": 4
+        }
+      ],
+      "transitions": [
+        {
+          "parent_document": "Workflow",
+          "name": "H03v1kdxcp7j7ih",
+          "action": "Start",
+          "from_state": "Planned,On Hold",
+          "to_state": "In Progress",
+          "allowed_roles": "",
+          "required_fields": "",
+          "method": "",
+          "confirm": "",
+          "notify": "None",
+          "style": "primary",
+          "allow_submitter": 0,
+          "system_only": 0,
+          "__position__": 0
+        },
+        {
+          "parent_document": "Workflow",
+          "name": "Q2aKT3pM4j7li56",
+          "action": "Put on hold",
+          "from_state": "In Progress",
+          "to_state": "On Hold",
+          "allowed_roles": "",
+          "required_fields": "",
+          "method": "",
+          "confirm": "",
+          "notify": "None",
+          "style": "default",
+          "allow_submitter": 0,
+          "system_only": 0,
+          "__position__": 1
+        },
+        {
+          "parent_document": "Workflow",
+          "name": "RGDCHIhFQ382Rg4",
+          "action": "Complete",
+          "from_state": "In Progress",
+          "to_state": "Completed",
+          "allowed_roles": "",
+          "required_fields": "",
+          "method": "",
+          "confirm": "Mark the project as completed?",
+          "notify": "None",
+          "style": "primary",
+          "allow_submitter": 0,
+          "system_only": 0,
+          "__position__": 2
+        },
+        {
+          "parent_document": "Workflow",
+          "name": "t754g1bZKjcPqAM",
+          "action": "Cancel",
+          "from_state": "Planned,In Progress,On Hold",
+          "to_state": "Cancelled",
+          "allowed_roles": "",
+          "required_fields": "",
+          "method": "",
+          "confirm": "Cancel this project?",
+          "notify": "None",
+          "style": "destructive",
+          "allow_submitter": 0,
+          "system_only": 0,
+          "__position__": 3
+        },
+        {
+          "parent_document": "Workflow",
+          "name": "NYG0LW13OQ8lHs7",
+          "action": "Reopen",
+          "from_state": "Completed,Cancelled",
+          "to_state": "In Progress",
+          "allowed_roles": "",
+          "required_fields": "",
+          "method": "",
+          "confirm": "",
+          "notify": "None",
+          "style": "default",
+          "allow_submitter": 0,
+          "system_only": 0,
+          "__position__": 4
+        }
+      ]
     },
     "Entity:Scheduled Job": {
       "__root__": "/apps/loopar/modules/core/entities/scheduled-job"
@@ -454,6 +605,16 @@
     "Entity:Debug Token": {
       "__root__": "/apps/loopar/modules/debug/entities/debug-token"
     },
+    "Entity:Backup Settings": {
+      "__root__": "/apps/loopar/modules/backup/entities/backup-settings"
+    },
+    "Module:crm": {
+      "name": "crm",
+      "description": "CRM",
+      "app_name": "loopar",
+      "icon": "Contact",
+      "in_sidebar": 1
+    },
     "Entity:Customer Contact": {
       "__root__": "/apps/loopar/modules/crm/entities/customer-contact"
     },
@@ -463,8 +624,8 @@
     "Entity:Customer External ID": {
       "__root__": "/apps/loopar/modules/crm/entities/customer-external-id"
     },
-    "Entity:Backup Settings": {
-      "__root__": "/apps/loopar/modules/backup/entities/backup-settings"
+    "Entity:Customer": {
+      "__root__": "/apps/loopar/modules/crm/entities/customer"
     },
     "Entity:Company": {
       "__root__": "/apps/loopar/modules/settings/entities/company"
@@ -475,8 +636,47 @@
     "Entity:Entity Directory": {
       "__root__": "/apps/loopar/modules/developer/entities/entity-directory"
     },
+    "Module:stripe": {
+      "name": "stripe",
+      "description": "Stripe",
+      "app_name": "loopar",
+      "parent_module": "Integrations",
+      "icon": "CreditCard",
+      "in_sidebar": 0
+    },
+    "Entity:Stripe Account": {
+      "__root__": "/apps/loopar/modules/stripe/entities/stripe-account"
+    },
+    "Module:projects": {
+      "name": "projects",
+      "description": "Projects",
+      "app_name": "loopar",
+      "icon": "FolderKanban",
+      "in_sidebar": 1
+    },
+    "Entity:Project": {
+      "__root__": "/apps/loopar/modules/projects/entities/project"
+    },
+    "Entity:Project Update": {
+      "__root__": "/apps/loopar/modules/projects/entities/project-update"
+    },
     "Entity:List View Setting": {
       "__root__": "/apps/loopar/modules/core/entities/list-view-setting"
+    },
+    "Module:calendar": {
+      "name": "calendar",
+      "description": "calendar",
+      "app_name": "loopar",
+      "in_sidebar": 1
+    },
+    "Entity:Calendar": {
+      "__root__": "/apps/loopar/modules/calendar/entities/calendar"
+    },
+    "Entity:Event": {
+      "__root__": "/apps/loopar/modules/calendar/entities/event"
+    },
+    "Entity:Saved View": {
+      "__root__": "/apps/loopar/modules/core/entities/saved-view"
     }
   },
   "postInstaller": {
@@ -488,6 +688,7 @@
     "Entity:Menu Action": "link",
     "Entity:Document History": "link",
     "Entity:Menu": "link",
+    "Entity:GPT": "link",
     "Entity:Connected Document": "link",
     "Entity:User": "link",
     "Entity:Document Single Values": "link",
@@ -511,13 +712,11 @@
     "Entity:Review": "link",
     "Entity:Side Menu": "link",
     "Entity:Side Menu Item": "link",
-    "Entity:Project": "link",
+    "Entity:Portfolio Project": "link",
     "Entity:Service": "link",
     "Entity:Cloudinary": "link",
     "Entity:Project Category": "link",
     "Entity:Service Category": "link",
-    "Entity:Stripe Account": "link",
-    "Entity:Customer": "link",
     "Entity:Oauth Settings": "link",
     "Entity:Comment Manage": "link",
     "Entity:Comment": "link",
@@ -525,13 +724,16 @@
     "Entity:Altcha": "link",
     "Entity:Form Submission": "link",
     "Entity:AI": "link",
+    "Entity:Naming Series": "link",
     "Entity:Letterhead": "link",
     "Entity:Post": "link",
     "Entity:Git Account": "link",
-    "Entity:Naming Series": "link",
     "Entity:Workflow State": "link",
     "Entity:Workflow Transition": "link",
     "Entity:Workflow": "link",
+    "Entity:Resources": "link",
+    "Entity:Module": "link",
+    "Workflow:Project": "link",
     "Entity:Scheduled Job": "link",
     "Entity:Signature Request": "link",
     "Entity:User Directory": "link",
@@ -541,16 +743,21 @@
     "Entity:Legal Notice": "link",
     "Entity:Announcement": "link",
     "Entity:Debug Token": "link",
+    "Entity:Backup Settings": "link",
     "Entity:Customer Contact": "link",
     "Entity:Customer Contact Link": "link",
     "Entity:Customer External ID": "link",
-    "Entity:Backup Settings": "link",
+    "Entity:Customer": "link",
     "Entity:Company": "link",
     "Entity:Email Account": "link",
     "Entity:Entity Directory": "link",
+    "Entity:Stripe Account": "link",
+    "Entity:Project": "link",
+    "Entity:Project Update": "link",
     "Entity:List View Setting": "link",
-    "Entity:Resources": "link",
-    "Entity:Module": "link",
-    "Entity:Page View": "link"
+    "Entity:Calendar": "link",
+    "Entity:Event": "link",
+    "Entity:Page View": "link",
+    "Entity:Saved View": "link"
   }
 }

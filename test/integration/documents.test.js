@@ -144,7 +144,8 @@ test("deleteDocument() soft-deletes: hidden from reads unless includeDeleted", a
 test("getList() sorts by a real column and falls back to id for anything else", async () => {
   await t.run(async () => {
     const desc = await loopar.getList("Letterhead", { sort: { field: "name", dir: "desc" }, rowsOnly: true });
-    assert.deepEqual(desc.rows.map(r => r.name), ["Zeta", "Gamma", "Eta", "Epsilon", "Delta", "Beta", "Alpha"]);
+    // Zeta was soft-deleted by the previous test.
+    assert.deepEqual(desc.rows.map(r => r.name), ["Gamma", "Eta", "Epsilon", "Delta", "Beta", "Alpha"]);
     assert.equal(desc.pagination.sortBy, "name");
     assert.equal(desc.pagination.sortOrder, "desc");
 

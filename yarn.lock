@@ -1097,6 +1097,39 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@full-ui/headless-calendar@npm:7.1.5":
+  version: 7.1.5
+  resolution: "@full-ui/headless-calendar@npm:7.1.5"
+  peerDependencies:
+    temporal-polyfill: ^1.0.7
+  checksum: 10c0/ecfc9346107a3ee91bf6b95800d360d7050fda0ad953ab60a2bbc7d9bbb6e8e055c29dadd504232c1fb4bb2e98aad440914f02fb94567f692f5bc38cfefd267e
+  languageName: node
+  linkType: hard
+
+"@fullcalendar/core@npm:7.1.5":
+  version: 7.1.5
+  resolution: "@fullcalendar/core@npm:7.1.5"
+  peerDependencies:
+    "@full-ui/headless-calendar": 7.1.5
+    temporal-polyfill: ^1.0.7
+  checksum: 10c0/43dbebcc740f45fe78e839afe94ee0e680a83bc32a2fdbce46add0c78ba1e4871417b22f2ee4d5536125a9b5cd84c6ed650ae7b9b190e80066f024dcc409a9b8
+  languageName: node
+  linkType: hard
+
+"@fullcalendar/react@npm:7.1.5":
+  version: 7.1.5
+  resolution: "@fullcalendar/react@npm:7.1.5"
+  dependencies:
+    "@full-ui/headless-calendar": "npm:7.1.5"
+    "@fullcalendar/core": "npm:7.1.5"
+  peerDependencies:
+    react: ^17 || ^18 || ^19
+    react-dom: ^17 || ^18 || ^19
+    temporal-polyfill: ^1.0.7
+  checksum: 10c0/d3d2c5729cac8929e778e174e8d62a4e5ec128cae96e7d1a85ccaff2a39cc7f77969218085763a60142f388f04c72e5cd7b109d018d4161359badea4c11009de
+  languageName: node
+  linkType: hard
+
 "@hookform/resolvers@npm:6.0.0":
   version: 6.0.0
   resolution: "@hookform/resolvers@npm:6.0.0"
@@ -11458,6 +11491,7 @@ __metadata:
     "@dnd-kit/core": "npm:6.3.1"
     "@dnd-kit/sortable": "npm:10.0.0"
     "@dnd-kit/utilities": "npm:3.2.2"
+    "@fullcalendar/react": "npm:7.1.5"
     "@hookform/resolvers": "npm:6.0.0"
     "@icons-pack/react-simple-icons": "npm:13.15.1"
     "@tsparticles/engine": "npm:4.4.0"
@@ -11482,6 +11516,7 @@ __metadata:
     sanitize-filename: "npm:1.6.4"
     simple-icons: "npm:16.35.0"
     sonner: "npm:2.0.8"
+    temporal-polyfill: "npm:1.0.8"
     zod: "npm:4.6.7"
   languageName: unknown
   linkType: soft
@@ -12992,6 +13027,30 @@ __metadata:
   languageName: node
   linkType: hard
 
+"temporal-polyfill@npm:1.0.8":
+  version: 1.0.8
+  resolution: "temporal-polyfill@npm:1.0.8"
+  dependencies:
+    temporal-spec: "npm:1.0.1"
+    temporal-utils: "npm:1.0.4"
+  checksum: 10c0/91f225c02a39f824ce71b3710e9cbf8e28e9fb40428c42b5ee067263737a34005fa61b87822bce207e6ad4257b0ee40fb29c2cdbf540aba7fda5809f276f7f61
+  languageName: node
+  linkType: hard
+
+"temporal-spec@npm:1.0.1":
+  version: 1.0.1
+  resolution: "temporal-spec@npm:1.0.1"
+  checksum: 10c0/99f6bfe4a8e59cd0664d0e97706798a1e10d42b1b682da9b60778a4cb9a23362da01ea3d83a674ef426ed743bbab835e2e3d1acea5d2d4a9eabe33863237b014
+  languageName: node
+  linkType: hard
+
+"temporal-utils@npm:1.0.4":
+  version: 1.0.4
+  resolution: "temporal-utils@npm:1.0.4"
+  checksum: 10c0/cd5105d49f01794c5adfde697178364a70b56c28be60119922bbb1a96dd4d8de43537fa31883aff85e0c18b39cd2e1d2facfc794750e03621c6983f95b39da1b
+  languageName: node
+  linkType: hard
+
 "tildify@npm:2.0.0":
   version: 2.0.0
   resolution: "tildify@npm:2.0.0"
@@ -13670,7 +13729,7 @@ __metadata:
   resolution: "vite-env@workspace:packages/vite-env"
   dependencies:
     "@vitejs/plugin-react": "npm:6.1.2"
-    vite: "npm:8.3.7"
+    vite: "npm:8.3.8"
     vite-plugin-compression2: "npm:2.5.3"
     vite-plugin-svgr: "npm:5.2.0"
   languageName: unknown
@@ -13699,9 +13758,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vite@npm:8.3.7":
-  version: 8.3.7
-  resolution: "vite@npm:8.3.7"
+"vite@npm:8.3.8":
+  version: 8.3.8
+  resolution: "vite@npm:8.3.8"
   dependencies:
     fsevents: "npm:~2.3.3"
     lightningcss: "npm:^1.33.0"
@@ -13752,7 +13811,7 @@ __metadata:
       optional: true
   bin:
     vite: bin/vite.js
-  checksum: 10c0/5433e9c0120edd79479e02d943bcde19ecd74be4c6e8e220bdb120693229425858620d07665baa4adafbcc3d1096a70c86ef179653fa310d777aaed8f6fe74cf
+  checksum: 10c0/21bf5b04159214fbc9f42e297afd26398a3630704959f85290e8b8eb9cac49be20a6a37a5765bfdb997b606c21ccba99f991671f81c5da5a590ae5cedad3e127
   languageName: node
   linkType: hard
 

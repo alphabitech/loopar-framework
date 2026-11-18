@@ -1,0 +1,26 @@
+/*
+ * FullCalendar (classic theme) drawn with the site's own colors: its palette
+ * variables point at the theme's tokens, so light, dark and custom themes
+ * all apply. `[data-color-scheme]` is where the library sets its own values.
+ */
+.lp-calendar,
+.lp-calendar [data-color-scheme] {
+  --fc-classic-background: hsl(var(--card));
+  --fc-classic-foreground: hsl(var(--foreground));
+  --fc-classic-muted-foreground: hsl(var(--muted-foreground));
+  --fc-classic-faint-foreground: hsl(var(--muted-foreground) / 0.6);
+  --fc-classic-border: hsl(var(--border));
+  --fc-classic-strong-border: hsl(var(--border));
+  --fc-classic-faint: hsl(var(--muted) / 0.35);
+  --fc-classic-muted: hsl(var(--muted) / 0.7);
+  --fc-classic-strong: hsl(var(--muted));
+  --fc-classic-primary: hsl(var(--primary));
+  --fc-classic-primary-foreground: hsl(var(--primary-foreground));
+  --fc-classic-today: hsl(var(--primary) / 0.08);
+  --fc-classic-highlight: hsl(var(--primary) / 0.16);
+  --fc-classic-now: hsl(var(--destructive));
+}
+
+.lp-calendar {
+  font-size: 0.8125rem;
+}

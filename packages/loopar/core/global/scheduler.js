@@ -14,7 +14,7 @@ import { loopar, getTenantInstance } from '../loopar.js';
  *
  *   export default [
  *     { name: 'document-expiry', label: 'Document expiry alerts',
- *       schedule: { every: 'daily', at: '06:00' },          // hourly | daily | weekly (+ on: 'mon')
+ *       schedule: { every: 'daily', at: '06:00' },          // minutes (+ interval: 5) | hourly | daily | weekly (+ on: 'mon')
  *       run: async () => 'summary shown in the job log' },
  *   ];
  *
@@ -43,12 +43,21 @@ const parseDbTime = (v) => {
 
 /** `{ every, at, on }` → readable text, e.g. "weekly on mon at 05:00". */
 export function describeSchedule(s = {}) {
+  if (s.every === 'minutes') return `every ${Math.min(59, Math.max(1, Number(s.interval) || 5))} minutes`;
   return [s.every || 'daily', s.on && `on ${s.on}`, s.every !== 'hourly' && `at ${s.at || '00:00'}`].filter(Boolean).join(' ');
 }
 
 /** First run strictly after `from` for a schedule. */
 export function nextRun(schedule = {}, from = new Date()) {
   const every = schedule.every || 'daily';
+  if (every === 'minutes') {
+    // On the clock: every 5 minutes runs at :00, :05, :10…
+    const step = Math.min(59, Math.max(1, Number(schedule.interval) || 5));
+    const d = new Date(from);
+    d.setSeconds(0, 0);
+    d.setMinutes(d.getMinutes() - (d.getMinutes() % step) + step);
+    return d;
+  }
   if (every === 'hourly') {
     const d = new Date(from);
     d.setMinutes(Number(schedule.minute ?? 0), 0, 0);

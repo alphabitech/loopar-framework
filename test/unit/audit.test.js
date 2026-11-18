@@ -16,5 +16,5 @@ test("DOC_STATUS_LABEL is the inverse of DOC_STATUS", () => {
 
 test("audit columns are the framework-owned set", () => {
   assert.deepEqual([...AUDIT_COLUMN_NAMES].sort(),
-    ["__created_at__", "__created_by__", "__deleted_at__", "__document_status__", "__updated_at__"]);
+    ["__created_at__", "__created_by__", "__deleted_at__", "__document_status__", "__updated_at__", "__version__"]);
 });

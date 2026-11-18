@@ -114,6 +114,7 @@ export default class Installer extends CoreInstaller {
       await this.#migrateAppTypeToHasWebsite();
       await this.#restoreNameIdentity();
       await this.#dropModuleGroup();
+      await this.#restoreProjectIndexes();
       await this.#migrateCustomers();
       await this.#migrateCompany();
       await this.#migrateSystemLanguage();
@@ -345,6 +346,31 @@ export default class Installer extends CoreInstaller {
       } catch (e) {
         console.error(`[Installer] UNIQUE(name) for "${table}" failed:`, e.message);
       }
+    }
+  }
+
+  /**
+   * One-time repair (7.5.30): tenants updated with 7.5.29 created the new
+   * `Project` table while the renamed `Portfolio Project` still held the
+   * index names `project_*` (unique per database in SQLite/Postgres), so
+   * Project was left without UNIQUE(name) and its owner index. The rename
+   * now frees those names first (entity-rename.js); this puts the two
+   * indexes back. Idempotent; delete once every tenant is past 7.5.30.
+   */
+  async #restoreProjectIndexes() {
+    const schema = () => loopar.db.qx().schema;
+    const present = (e) => /already exists|duplicate/i.test(e?.message || "");
+    try {
+      if (!(await schema().hasTable("Project"))) return;
+      for (const add of [(t) => t.unique(["name"]), (t) => t.index(["__created_by__"])]) {
+        try {
+          await schema().alterTable("Project", add);
+        } catch (e) {
+          if (!present(e)) console.error("[Installer] Project index not restored:", e.message);
+        }
+      }
+    } catch (e) {
+      console.error("[Installer] Project indexes repair failed:", e.message);
     }
   }
 

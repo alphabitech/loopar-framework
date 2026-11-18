@@ -75,7 +75,8 @@ const Layout = (({ ...props }) => {
     : 'grid-cols-1 w-full';
 
   // Room for the fixed header: the navigation plus the announcement bar, if any.
-  const className = `grid min-h-dvh w-full grid-rows-[1fr_auto] pt-[calc(var(--spacing-web-header-height)+var(--web-announcement-height))] ${containerClass}`;
+  // On paper the site chrome is hidden (data-print-hide), so its reserved space goes too.
+  const className = `grid min-h-dvh w-full grid-rows-[1fr_auto] pt-[calc(var(--spacing-web-header-height)+var(--web-announcement-height))] print:min-h-0 print:pt-0 ${containerClass}`;
 
   return (
     <div
@@ -83,7 +84,9 @@ const Layout = (({ ...props }) => {
       style={{ "--web-announcement-height": announcement ? ANNOUNCEMENT_HEIGHT : "0px" }}
     >
       <SEO/>
-      <TopNav menuActions={webApp.menu_actions} announcement={announcement} onCloseAnnouncement={() => setAnnouncement(null)} />
+      <div className="contents" data-print-hide>
+        <TopNav menuActions={webApp.menu_actions} announcement={announcement} onCloseAnnouncement={() => setAnnouncement(null)} />
+      </div>
       <main className="flex-grow flex">
         <section
           className={className}
@@ -92,11 +95,11 @@ const Layout = (({ ...props }) => {
           <div
             className={` relative row-start-1 grid ${childMenu.length > 0 ? 'grid-cols-subgrid lg:col-start-2' : 'col-span-12'}`}
           >
-            <div className="grid grid-cols-1 min-h-[calc(100vh-var(--spacing-web-header-height))]">
+            <div className="grid grid-cols-1 min-h-[calc(100vh-var(--spacing-web-header-height))] print:min-h-0">
               {props.children}
             </div>
           </div>
-          <footer className="row-start-2 col-start-1 col-span-full py-6 border-t w-full bg-gradient-to-t to-transparent from-secondary">
+          <footer data-print-hide className="row-start-2 col-start-1 col-span-full py-6 border-t w-full bg-gradient-to-t to-transparent from-secondary">
             <div className="flex flex-col w-full gap-0">
               {webApp.has_footer && (
                 <div className="w-full">

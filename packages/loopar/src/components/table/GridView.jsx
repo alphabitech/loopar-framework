@@ -14,6 +14,7 @@ import { titleFieldsOf } from "./list-columns.js";
 import { resolveListColumns } from "@global/list-settings";
 import { useViewOptions } from "@loopar/document";
 import { TableSearch } from "./TableSearch";
+import { ListFilters } from "./ListFilters.jsx";
 import { EmptyTable } from "./EmptyTable";
 import { DropdownListGridActions } from "./DropdownListGridActions";
 import { RowMenu } from "./RowMenu.jsx";
@@ -202,6 +203,7 @@ export function GridView(props) {
               <TableSearch onChange={search} />
             </div>
           )}
+          {hasSearchForm !== false && <ListFilters />}
         </div>
       )}
       {sections.length ? sections.map((section) => (

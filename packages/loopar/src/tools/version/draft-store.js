@@ -6,7 +6,7 @@
  *   { v, site, user, entity, name, path, base, reason, savedAt, build, values }
  *     values  only the DIRTY fields, so a restore merges over fresh server
  *             data instead of overwriting fields someone else changed.
- *     base    the record's __updated_at__ when editing began: if the server
+ *     base    the record's __version__ when editing began: if the server
  *             copy moved since, the restore warns about a possible conflict.
  *     reason  'edit' (debounced autosave) | 'update' | 'chunk' (flushed right
  *             before an app-triggered reload).

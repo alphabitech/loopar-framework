@@ -6,6 +6,7 @@ import {
   isAuditableEntity,
   coerceDocStatus,
   CREATED_BY_COLUMN,
+  VERSION_COLUMN,
   AUDIT_COLUMN_SET,
 } from "loopar";
 import EventEmitter from "events";
@@ -250,6 +251,8 @@ export class KnexORM extends Connector {
         if (data.__created_at__ == null) data.__created_at__ = now;
         if (data.__updated_at__ == null) data.__updated_at__ = now;
         data.__document_status__ = coerceDocStatus(data.__document_status__);
+        // A new row starts at the column default (0), whatever the payload says.
+        delete data[VERSION_COLUMN];
         await this.#stampCreatedBy(document, data);
       }
     }
@@ -327,10 +330,43 @@ export class KnexORM extends Connector {
       ? { ...name }
       : (name ? { name } : {});
 
+    const update = { [field]: value };
+    // A direct write is a change too: a document loaded before it is stale.
+    if (field !== VERSION_COLUMN && await this.#isVersioned(document)) update[VERSION_COLUMN] = this.#nextVersion();
+
     const cb = this.buildWhereCb(condition);
-    let qb = this.qx()(document).update({ [field]: value });
+    let qb = this.qx()(document).update(update);
     if (cb) qb = qb.where(cb);
     await qb;
+  }
+
+  /** The table counts its writes in `__version__` (auditable and already migrated). */
+  async #isVersioned(document) {
+    if (typeof document !== "string" || !this.#isAuditable(document)) return false;
+    try {
+      return (await this.getTableColumns(document)).has(VERSION_COLUMN);
+    } catch {
+      return false;
+    }
+  }
+
+  #nextVersion() {
+    return this.qx().raw("?? + 1", [VERSION_COLUMN]);
+  }
+
+  /** Stored version of a record; null when the table has none or the row is gone. */
+  async rowVersion(document, name) {
+    if (name === undefined || name === null || !(await this.#isVersioned(document))) return null;
+    const row = await this.qx()(document).where({ name }).first(VERSION_COLUMN);
+    return row ? Number(row[VERSION_COLUMN] ?? 0) : null;
+  }
+
+  #staleWrite(document, name) {
+    loopar.throw({
+      code: 409,
+      title: "Record changed",
+      message: `${document} ${name} was changed after it was opened. Reload it to see the latest version, then apply your changes again.`,
+    });
   }
 
   /**
@@ -350,9 +386,16 @@ export class KnexORM extends Connector {
     data[CREATED_BY_COLUMN] = user;
   }
 
-  async updateRow(document, name, data = {}) {
+  /**
+   * `options.expectedVersion`: the `__version__` the caller read. The row is
+   * written only if it still has it (409 otherwise); every write adds one.
+   */
+  async updateRow(document, name, data = {}, options = {}) {
+    // Older callers pass `is_single` here: only an options object counts.
+    const { expectedVersion = null } = (options && typeof options === "object") ? options : {};
     data = this.getParseData(data);
     delete data.id;
+    delete data[VERSION_COLUMN];
     // Immutable after insert — never accept it on update.
     delete data[CREATED_BY_COLUMN];
     data = await this.filterToTableColumns(document, data);
@@ -380,11 +423,20 @@ export class KnexORM extends Connector {
       before = await this.qx()(document).where({ name }).first();
     }
 
+    const versioned = await this.#isVersioned(document);
+    const guarded = versioned && expectedVersion !== null && expectedVersion !== undefined;
+    if (guarded && before && Number(before[VERSION_COLUMN] ?? 0) !== Number(expectedVersion)) {
+      this.#staleWrite(document, name);
+    }
+
     await this.#emitBefore("beforeUpdate", { document, doc: data, before });
 
-    await this.qx()(document)
-      .where({ name })
-      .update(data);
+    if (versioned) data[VERSION_COLUMN] = this.#nextVersion();
+    let qb = this.qx()(document).where({ name });
+    // Compare and write in one statement: of two saves over the same version only one lands.
+    if (guarded) qb = qb.where(VERSION_COLUMN, Number(expectedVersion));
+    const written = await qb.update(data);
+    if (guarded && before && written === 0) this.#staleWrite(document, name);
 
     this.#emitAfter("afterUpdate", { document, doc: { ...data, name }, before });
   }
@@ -403,6 +455,7 @@ export class KnexORM extends Connector {
       await this.qx()(document).where({ name }).update({
         __deleted_at__: now,
         __updated_at__: now,
+        ...(await this.#isVersioned(document) ? { [VERSION_COLUMN]: this.#nextVersion() } : {}),
       });
     }
 

@@ -1,14 +1,19 @@
 import { Toolbar } from "./toolbar";
 import loopar from "loopar";
 import { Button } from "@cn/components/ui/button";
-import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, KanbanIcon, PrinterIcon, ArrowLeftIcon, PencilIcon, FileTextIcon, TextCursorInputIcon } from "lucide-react";
+import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, KanbanIcon, CalendarIcon, ChartColumnIcon, CheckIcon, PrinterIcon, ArrowLeftIcon, PencilIcon, FileTextIcon, TextCursorInputIcon } from "lucide-react";
 import {Link} from "@link";
 import { useDocument, useViewOptions } from "@loopar/document";
 import { canOn } from "@context/auth-context";
 import { useContext } from "react";
 import { useFormState } from "react-hook-form";
 import { BaseFormContext } from "@form-context";
-import { nextListView } from "../list/views";
+import { listViews, nextListView } from "../list/views";
+import { SavedViewsMenu } from "../list/saved-views";
+import { ScheduleAction, eventTarget } from "../form/record-events";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@cn/components/ui/dropdown-menu";
 import { __ } from "@global/i18n";
 import { RecordTranslationsButton, useRecordTranslations } from "../../components/translation/record-translations";
 
@@ -195,9 +200,49 @@ const VIEW_BUTTON = {
   List: { icon: <MenuIcon />, label: () => __("List view") },
   Grid: { icon: <GridIcon />, label: () => __("Grid view") },
   Kanban: { icon: <KanbanIcon />, label: () => __("Board view") },
+  Calendar: { icon: <CalendarIcon />, label: () => __("Calendar view") },
+  Report: { icon: <ChartColumnIcon />, label: () => __("Report view") },
 };
 
-export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...props}) {
+/**
+ * View switch of a list: the button shows the current view and opens a menu
+ * to pick another (two views would just toggle).
+ */
+function ViewSwitch({ Document, viewType, viewTypeToggle, setViewType }) {
+  const views = listViews(Document);
+  if (views.length <= 2 || !setViewType) {
+    const next = VIEW_BUTTON[nextListView(Document, viewType)];
+    return (
+      <Button className="px-2" variant="secondary" onClick={viewTypeToggle} title={__("Toggle view")}>
+        {next.icon}
+        <span className="lp-menu-label pl-1">{next.label()}</span>
+      </Button>
+    );
+  }
+
+  const current = VIEW_BUTTON[viewType] || VIEW_BUTTON.List;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button className="px-2" variant="secondary" title={__("Change view")}>
+          {current.icon}
+          <span className="lp-menu-label pl-1">{current.label()}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {views.map((view) => (
+          <DropdownMenuItem key={view} onSelect={() => setViewType(view)} className="gap-2 [&_svg]:size-4">
+            {VIEW_BUTTON[view].icon}
+            <span className="flex-1">{VIEW_BUTTON[view].label()}</span>
+            {view === viewType && <CheckIcon className="text-muted-foreground" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function AppBar({Document, viewTypeToggle, setViewType, viewType, applyView, sidebarOpen, ...props}) {
   const { actions = {}, actionsInMenu, primaryAction, onlyGrid, onlyList, canUpdate } = useViewOptions();
   const { inModal } = useDocument();
   const { meta, Entity } = Document;
@@ -218,13 +263,15 @@ export function AppBar({Document, viewTypeToggle, viewType, sidebarOpen, ...prop
 
   const defaults = [
     ...(goTo ? [["__goto", <GoToAction key="__goto" to={goTo} name={Document.data?.name} />]] : []),
+    ...(!inModal && eventTarget(Document) ? [["__schedule", <ScheduleAction key="__schedule" Document={Document} />]] : []),
     ...(recordTranslations && canUpdate ? [["__translations", <RecordTranslationsButton key="__translations" />]] : []),
+    ...(isList && applyView && onlyGrid !== true && onlyList !== true ? [[
+      "__savedviews",
+      <SavedViewsMenu key="__savedviews" Document={Document} viewType={viewType} applyView={applyView} />,
+    ]] : []),
     ...(isList && onlyGrid !== true && onlyList !== true ? [[
       "__viewtype",
-      <Button key="__viewtype" className="px-2" variant="secondary" onClick={viewTypeToggle} title={__("Toggle view")}>
-        {VIEW_BUTTON[nextListView(Document, viewType)].icon}
-        <span className="lp-menu-label pl-1">{VIEW_BUTTON[nextListView(Document, viewType)].label()}</span>
-      </Button>,
+      <ViewSwitch key="__viewtype" Document={Document} viewType={viewType} viewTypeToggle={viewTypeToggle} setViewType={setViewType} />,
     ]] : []),
   ];
 

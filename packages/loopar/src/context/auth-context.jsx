@@ -11,6 +11,8 @@ let _deniedSet = new Set();
 // Mirrors PermissionManager.scope().
 let _scopes = {};
 let _userId = null;
+// Whether a provider already initialized the sets on this page.
+let _ready = false;
 
 const OWNER_FIELD = '__created_by__';
 
@@ -74,8 +76,16 @@ const AuthContext = createContext(null);
 export function AuthProvider({ permissions: initialPermissions, userId, children }) {
   const initialized = useRef(false);
   if (!initialized.current) {
-    _userId = userId ?? null;
-    initSets(initialPermissions);
+    // The permission sets are module state shared by the whole page. In the
+    // browser, a later provider mounted without permissions (a modal
+    // mini-workspace) reads the page's sets: initializing from nothing would
+    // deny everything (`award`/`canOn` false) on the base page until the next
+    // reload. The server always initializes: its module state outlives a request.
+    if (typeof window === "undefined" || initialPermissions !== undefined || !_ready) {
+      _userId = userId ?? null;
+      initSets(initialPermissions);
+      _ready = true;
+    }
     initialized.current = true;
   }
 

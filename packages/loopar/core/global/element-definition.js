@@ -321,6 +321,8 @@ export const elementsDefinition = {
     { element: "banner", icon: "GalleryHorizontalEnd", droppable:true, designerClasses: "h-full w-full p-3 py-6" },
     { element: 'review', icon: "Star", content: { title: "line", description: "text", message: "text" } },
     { element: "contact_form", icon: "Contact", content: { success_message: "text", button_text: "line", reset_button_text: "line" } },
+    // Public booking on a Calendar (apps/loopar/modules/calendar): free times of its business hours.
+    { element: "booking", icon: "CalendarCheck", droppable: false, content: { title: "line", description: "text", success_message: "text", button_text: "line" } },
     { element: 'particles', icon: 'Sparkles' },
     // Config input of `particles`, edited from its panel — not a page block.
     { element: 'particles_settings', icon: 'Settings2', show_in_design: false },

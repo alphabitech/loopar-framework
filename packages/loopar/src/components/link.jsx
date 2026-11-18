@@ -99,6 +99,8 @@ export function Link({
   to: rawTo = "",
   inModal,
   onSaved,
+  // inModal only: close the modal once the form inside it saves.
+  closeOnSave = true,
   variant = "link",
   size,
   children,
@@ -237,7 +239,15 @@ export function Link({
         >
           {children}
         </a>
-        {modalOpen && <EntryModal initialPath={url} onClose={() => setModalOpen(false)} onSaved={onSaved} />}
+        {modalOpen && (
+          <EntryModal
+            initialPath={url}
+            onClose={() => setModalOpen(false)}
+            // The link owns the modal: by default a saved form is done, so it
+            // closes (a create form left open would insert again on the next save).
+            onSaved={(...args) => { if (closeOnSave) setModalOpen(false); onSaved?.(...args); }}
+          />
+        )}
       </>
     );
   }

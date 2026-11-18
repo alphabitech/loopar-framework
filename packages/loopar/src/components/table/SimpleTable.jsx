@@ -16,6 +16,7 @@ import { EmptyTable } from "./EmptyTable";
 import { __ } from "@global/i18n";
 import { cn } from "@cn/lib/utils";
 import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "lucide-react";
+import { formatNumber, formatCurrency } from "@global/format";
 
 const MIN_COLUMN_WIDTH = 60;
 
@@ -113,6 +114,8 @@ function SortableHeadCell({ id, className, style, ...props }) {
  * server lists, `sortable` (`sortField`), `width` (px, stored under `widthKey`
  * or the name), `resizable` and `reorderable`. `onResize(key, width | null)`
  * and `onReorder(fromName, toName)` enable resizing and drag-reordering.
+ * `totals` (`{ field: sum }`, server lists) adds a row with the sum of those
+ * columns over every record the list's filters match, not just this page.
  */
 export function SimpleTable(props) {
   const {baseColumns, tableId, sort, toggleSort} = useTable();
@@ -175,6 +178,15 @@ export function SimpleTable(props) {
   
   const rowsCount = rows.length;
 
+  // Totals row: a cell per body column; "Total" sits in the first one with text.
+  const totals = props.totals && rowsCount > 0 && availableColumns.some((c) => props.totals[c.data?.name] != null) ? props.totals : null;
+  const totalLabelAt = totals ? availableColumns.findIndex((c) => !["selector", "actions"].includes(c.data?.name) && totals[c.data?.name] == null) : -1;
+  const totalText = (col) => {
+    const value = totals[col.data?.name];
+    if (value === null || value === undefined) return null;
+    return col.data?.format === "currency" ? formatCurrency(value) : formatNumber(value);
+  };
+
   const table = (
     <Table 
       aria-label={__("sticky table")} 
@@ -219,6 +231,15 @@ export function SimpleTable(props) {
         )}
       </TableBody>
       <TableFooter>
+        {totals && (
+          <TableRow title={__("Sum of every record these filters match")}>
+            {availableColumns.map((col, index) => (
+              <TableCell key={col.data?.name || index} className="py-2 align-middle font-semibold tabular-nums">
+                {index === totalLabelAt ? __("Total") : totalText(col)}
+              </TableCell>
+            ))}
+          </TableRow>
+        )}
         <TableRow>
           {props.footer}
         </TableRow>

@@ -39,6 +39,8 @@ export function TableSearch(props){
   }, [searchFields]);
 
   const saveData = useCallback((timer) => {
+    // A late change event can arrive after the form is gone (the view was switched).
+    if (!formRef.current) return;
     const values = formRef.current.getValues();
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);

@@ -36,7 +36,16 @@ export const AUDIT_COLUMN_NAMES = Object.freeze([
   "__deleted_at__",
   "__document_status__",
   "__created_by__",
+  "__version__",
 ]);
+
+/**
+ * Counts the writes of a row: every update adds one. A save applies only over
+ * the version it was read from (optimistic concurrency) — a form opened
+ * before someone else's change, or a document loaded before a slow step, is
+ * rejected (409) instead of overwriting what it never saw.
+ */
+export const VERSION_COLUMN = "__version__";
 
 /**
  * Expected SQL type family per audit column — the single source used by
@@ -50,6 +59,7 @@ export const AUDIT_COLUMN_FAMILY = Object.freeze({
   __deleted_at__: "datetime",
   __document_status__: "int",
   __created_by__: "string",
+  __version__: "int",
 });
 
 /**
@@ -103,6 +113,7 @@ export function addAuditColumns(table, knex) {
   table.timestamp("__deleted_at__").nullable();
   table.integer("__document_status__").notNullable().defaultTo(DOC_STATUS.ACTIVE);
   table.string(CREATED_BY_COLUMN, CREATED_BY_LENGTH).nullable().index();
+  table.integer(VERSION_COLUMN).notNullable().defaultTo(0);
 }
 
 export const FRAMEWORK_OWNED_COLUMN_NAMES = Object.freeze([

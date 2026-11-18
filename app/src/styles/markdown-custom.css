@@ -133,7 +133,7 @@
   background-color: hsl(var(--primary)/0.5) !important;
 }
 
-.lp-markdown table th, td {
+.lp-markdown table th, .lp-markdown table td {
   border: 1px solid hsl(var(--border)) !important;
 }
 

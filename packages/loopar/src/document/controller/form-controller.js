@@ -24,6 +24,22 @@ export class FormController extends DocumentController {
     return this.#form;
   }
 
+  /** `{ name, base, version }`: the version this record got from this form's last save. */
+  #saved = null;
+
+  /**
+   * `__version__` of the stored record this form holds: the server rejects a
+   * save made over an older one (someone changed the record meanwhile). It
+   * comes with the loaded data, then from each save's response; a response
+   * without one stops sending it until the record is loaded again.
+   */
+  get recordVersion() {
+    const loaded = this.Document?.data?.__version__ ?? null;
+    const name = this.__DOCUMENT_NAME__ ?? this.Document?.name ?? null;
+    const saved = this.#saved;
+    return saved && saved.name === name && saved.base === loaded ? saved.version : loaded;
+  }
+
   /**
    * Form lifecycle. Returns the unsubscribe function. See README.md § Form lifecycle.
    *   validate(values, ctrl) — after the built-in field validation; return an error
@@ -116,7 +132,15 @@ export class FormController extends DocumentController {
       if (value !== undefined && value !== null) body.append(key, value);
     }
 
-    return loopar.call(targetDocument, action, {
+    // The record's own save says which version it was edited from.
+    const version = _isSave && action === "update" ? this.recordVersion : null;
+    if (version !== null && version !== undefined) body.append("__version__", version);
+    const versionOf = {
+      name: this.__DOCUMENT_NAME__ ?? this.Document?.name ?? null,
+      base: this.Document?.data?.__version__ ?? null,
+    };
+
+    const request = loopar.call(targetDocument, action, {
       body,
       query: { ...this.queryParams, ...query },
       freeze: true,
@@ -139,6 +163,13 @@ export class FormController extends DocumentController {
         }
       },
     });
+
+    if (_isSave && action === "update") {
+      Promise.resolve(request).then((response) => {
+        if (response?.success) this.#saved = { ...versionOf, version: response.__version__ ?? null };
+      }, () => {});
+    }
+    return request;
   }
 
   get queryParams() {

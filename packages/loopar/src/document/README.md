@@ -134,6 +134,49 @@ useFormEvents({
 `useList()` → table API (`rows`, `selectedRows`, `search`, `setPage`, `deleteRow`, `viewType`,
 `setViewType`…) + `ctrl`. Layout: `<ListLayout columns gridTemplate />`.
 
+**Views.** One page (`{Entity}/list`), seen as List · Grid · Board · Calendar · Report
+(`list/views.js`). List and Grid draw the page's own rows; the others read data of another
+shape from their own action, with the list's filters:
+
+| View | Data action | Notes |
+|---|---|---|
+| Board | `{Entity}/board?board=<state>&page=N` | needs an active workflow |
+| Calendar | `{Entity}/calendar?cal_from=&cal_to=` · `?calendar=unscheduled&page=N` | needs a date field |
+| Report | `{Entity}/report?report=…&report_values=…` | `global/list-report.js` |
+
+`board`, `calendar` and `report` are authorized by the `list` grant and narrowed to the same
+records (`core/auth/permission-aliases.js`). The view type is remembered per user, except
+Report, which lives in the URL so it can be shared:
+`/desk/Invoice/list?report=customer,due_date.month&report_values=sum.total&report_chart=bar`.
+
+**Filters.** The search form writes bare filters (`?status=Open`: text contains, a choice
+matches). The filter panel (`@@table/ListFilters`) writes filters with an operator —
+`?total.gte=1000` `?due_date.between=2026-11-01..2026-11-30` `?status.in=Open,Paid`
+`?customer.empty=1` (`global/list-filters.js`). Every view applies both.
+
+**Totals and export.** A list with numeric columns carries `totals` (`{ field: sum }` over
+every record the filters match), drawn as the table's last row. `{Entity}/export` (its own
+`export` grant) returns the list as CSV — the selected records or every matching one, the
+user's columns, the list's order.
+
+**Import.** `{Entity}/import` (its own `import` grant, plus `create` / `update` for what the
+rows do) takes a CSV's rows already mapped to fields (`@@table/ImportDialog`): validate
+without writing, then insert, or upsert by `name`. Every row is saved through its document
+and fails on its own (`core/document/list-import.js`, `global/list-import.js`).
+
+**Bulk actions.** On the selected records: `{Entity}/bulkUpdate` sets one field (the
+`update` grant), `{Entity}/bulkTransition` runs a workflow action (the `transition` grant) —
+`core/document/list-bulk.js`, `@@table/BulkEditDialog`.
+
+**Saved views.** A name for what the list's URL holds (filters, sort, report) plus the view
+type: private, or shared with everyone who can open the list (`Saved View` entity,
+`core/document/saved-views.js`, `list/saved-views.jsx`). Its owner can have a view emailed
+on a schedule (daily, weekly, monthly; job `saved-view-emails`): a table inline and the
+whole of it as CSV.
+
+**Print.** The Report view prints as a sheet (`document/print/print.css`): paper, or the
+browser's "Save as PDF".
+
 ### Extending the controller
 
 `config.overrides` assigns methods on the controller instance once (the functional

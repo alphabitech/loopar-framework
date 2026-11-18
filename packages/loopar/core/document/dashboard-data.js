@@ -6,11 +6,13 @@
  * an "own" scope narrows it to the viewer's records.
  *
  * Grouping is done here, not in SQL: date bucketing differs between SQLite,
- * MySQL and Postgres, and dashboards read bounded data (MAX_ROWS).
+ * MySQL and Postgres, and dashboards read bounded data (MAX_ROWS). The time
+ * buckets are the ones list reports use (global/date-buckets.js).
  */
 import { loopar } from '../loopar.js';
 import { fileManage } from '../file-manage.js';
 import { scopedQuery, aggregate } from './desk-page.js';
+import { isoDay, dayOf, bucketOf, nextBucket } from '../global/date-buckets.js';
 
 export const CHART_TYPES = ["bar", "line", "area", "donut"];
 const GRAINS = ["day", "week", "month", "year"];
@@ -18,41 +20,10 @@ const MAX_ROWS = 100000;
 const MAX_BUCKETS = 400;
 
 const pad = (n) => String(n).padStart(2, "0");
-const isoDay = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 /** Today in the server's local time zone (the UTC date runs ahead in the evening in the Americas). */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 
-/** 'YYYY-MM-DD' of a stored date/datetime (string or Date), or null. */
-function dayOf(value) {
-  if (value == null || value === "") return null;
-  if (value instanceof Date) return isNaN(value) ? null : isoDay(value);
-  const s = String(value);
-  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
-}
-
 const utc = (day) => new Date(`${day}T00:00:00Z`);
-
-function bucketOf(day, grain) {
-  if (grain === "year") return day.slice(0, 4);
-  if (grain === "month") return day.slice(0, 7);
-  if (grain === "week") {
-    const d = utc(day);
-    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));   // Monday
-    return isoDay(d);
-  }
-  return day;
-}
-
-function nextBucket(bucket, grain) {
-  if (grain === "year") return String(Number(bucket) + 1);
-  if (grain === "month") {
-    const [y, m] = bucket.split("-").map(Number);
-    return m === 12 ? `${y + 1}-01` : `${y}-${pad(m + 1)}`;
-  }
-  const d = utc(bucket);
-  d.setUTCDate(d.getUTCDate() + (grain === "week" ? 7 : 1));
-  return isoDay(d);
-}
 
 /** Every bucket between two, so a series has no holes; the latest MAX_BUCKETS. */
 function bucketRange(from, to, grain) {

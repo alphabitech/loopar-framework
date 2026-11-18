@@ -2,6 +2,7 @@
 
 import { getRequest } from '../server/router/request-context.js';
 import { parseSort } from '../global/list-settings.js';
+import { REPORT_PARAMS } from '../global/list-report.js';
 
 /**
  * List state (filters + page) lives in the URL of the request, never in the
@@ -9,14 +10,19 @@ import { parseSort } from '../global/list-settings.js';
  * state, so a list can be shared, bookmarked or reloaded as-is.
  *
  * Every query parameter that is not a control parameter is a filter candidate
- * (`BaseDocument.buildCondition` keeps only real fields of the entity). Values
+ * (`BaseDocument.buildCondition` keeps only real fields of the entity, bare or
+ * with an operator: `total.gte=1000`, see global/list-filters.js). Values
  * are read from the raw query string so "00123" stays a string.
+ *
+ * Control parameters are the ones of the list page itself: page, sort and the
+ * report it shows (global/list-report.js). A data action with parameters of
+ * its own (board, calendar…) leaves them out with `exclude`.
  *
  * Like the owner scope (auth/record-scope.js), the state applies only to the
  * entity the request targets: any other list read inside the same request
  * (a history table, a card of a desk page…) starts clean on page 1.
  */
-export const LIST_CONTROL_PARAMS = new Set(['page', 'sort', 'preloaded', 'board', 'workspace']);
+export const LIST_CONTROL_PARAMS = new Set(['page', 'sort', 'preloaded', 'workspace', ...REPORT_PARAMS]);
 
 function targetQuery(entityName) {
   const req = getRequest();

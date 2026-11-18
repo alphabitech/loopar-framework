@@ -10,7 +10,8 @@
  *              overwritten by the pristine form.
  *   editing  → debounced write of the DIRTY fields only.
  *   saved    → FormController.send resets the form (keepValues) → not dirty →
- *              the draft is removed (plus an explicit afterSave removal).
+ *              the draft is removed (plus an explicit afterSave removal, which
+ *              also holds off the unmount flush until the next render).
  *   unload / app-triggered reload / unmount → synchronous flush.
  *
  * Only for authenticated users on a saveable document (Entity + meta.action),
@@ -67,10 +68,21 @@ export function useFormDraft({ form, docRef, STRUCTURE, watchedValues }) {
   }, [STRUCTURE]);
 
   const readyRef = useRef(false);
-  const baseRef = useRef(form.formState.defaultValues?.__updated_at__ ?? null);
+  // The record's __version__ when editing began (it travels with the form data).
+  const baseRef = useRef(form.formState.defaultValues?.__version__ ?? null);
+
+  // True from a successful save until the next render. `form.formState` is the
+  // snapshot of the last render: when the save also unmounts the form in the
+  // same batch (a modal that closes on save), it still lists the saved fields
+  // as dirty and the unmount flush would write the draft right back.
+  const savedRef = useRef(false);
 
   const persist = (reason = "edit") => {
     if (!id || !readyRef.current) return;
+    if (savedRef.current) {
+      draftStore.remove(key);
+      return;
+    }
     const values = {};
     for (const name of Object.keys(form.formState.dirtyFields || {})) {
       if (fields.skip.has(name)) continue;
@@ -181,6 +193,8 @@ export function useFormDraft({ form, docRef, STRUCTURE, watchedValues }) {
 
   // Debounced autosave on every change (and when the dirty state flips, e.g. after a save).
   useEffect(() => {
+    // A render happened: the dirty state is fresh again.
+    savedRef.current = false;
     if (!key || !readyRef.current) return;
     const timer = setTimeout(() => persistRef.current("edit"), AUTOSAVE_DELAY);
     return () => clearTimeout(timer);
@@ -192,7 +206,10 @@ export function useFormDraft({ form, docRef, STRUCTURE, watchedValues }) {
     const offReload = versionWatch.beforeReload((reason) => persistRef.current(reason || "update"));
     const onHide = () => persistRef.current("edit");
     window.addEventListener("pagehide", onHide);
-    const offSaved = docRef?.onFormEvent?.("afterSave", () => draftStore.remove(key));
+    const offSaved = docRef?.onFormEvent?.("afterSave", () => {
+      savedRef.current = true;
+      draftStore.remove(key);
+    });
     return () => {
       offReload();
       offSaved?.();

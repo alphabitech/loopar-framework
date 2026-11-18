@@ -9,6 +9,7 @@ import {
   AUDIT_COLUMN_FAMILY,
   CREATED_BY_COLUMN,
   CREATED_BY_LENGTH,
+  VERSION_COLUMN,
   CHILD_POSITION_COLUMN,
   isAuditableEntity,
   addAuditColumns,
@@ -701,6 +702,10 @@ export default class Core {
       const c = table.string(CREATED_BY_COLUMN, CREATED_BY_LENGTH).nullable();
       if (alter) c.alter();
       else c.index();
+    });
+    ensure(VERSION_COLUMN, (alter) => {
+      const c = table.integer(VERSION_COLUMN).notNullable().defaultTo(0);
+      if (alter) c.alter();
     });
   }
 

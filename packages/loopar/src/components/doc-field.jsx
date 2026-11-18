@@ -2,6 +2,7 @@ import loopar from "loopar";
 import { cn } from "@cn/lib/utils";
 import { usePrintRecord, usePrintDesign, printDesignFieldOptions } from "@loopar/print/record";
 import { PrintValue } from "@loopar/print/structure";
+import { printKind, isEmptyValue } from "@loopar/print/format-value";
 
 /**
  * Print element: one field of the record being printed (label + formatted
@@ -31,6 +32,8 @@ export default function DocField(props) {
 
   const node = record.fields.get(data.field);
   if (!node) return null;
+  // Nothing to print: no label left hanging (a yes/no always has a value).
+  if (printKind(node.element, node.data) !== "bool" && isEmptyValue(record.data[data.field])) return null;
 
   const value = <PrintValue element={node.element} data={node.data} value={record.data[data.field]} />;
 

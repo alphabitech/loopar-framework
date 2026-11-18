@@ -14,7 +14,9 @@ import { DropdownListGridActions } from "./DropdownListGridActions";
 import { Checkbox } from "@cn/components/ui/checkbox";
 import Emitter from '@services/emitter/emitter';
 import { useWorkspace } from "@workspace/workspace-provider";
-import { LIST_SETTING_ENTITY, normalizeListSettings, formatSort } from "@global/list-settings";
+import { LIST_SETTING_ENTITY, normalizeListSettings, formatSort, resolveListColumns } from "@global/list-settings";
+import { REPORT_PARAMS } from "@global/list-report";
+import { downloadText } from "./list-url";
 
 const TableContext = createContext();
 
@@ -267,6 +269,27 @@ export const TableProvider = ({
   }
 
   /**
+   * Downloads the list as CSV (`{Entity}/export`): the selected records, or
+   * every record the list's filters match; the columns the user sees, in
+   * their order, sorted as the list is.
+   */
+  const exportCsv = async () => {
+    const params = new URLSearchParams(String(currentUrl || "").split("?")[1] || "");
+    ["page", "preloaded", "workspace", ...REPORT_PARAMS].forEach((key) => params.delete(key));
+    const fields = resolveListColumns(baseColumns, settingsRef.current).map((col) => col.data.name);
+
+    const result = await loopar.call(Document.Entity.name, "export", {
+      query: Object.fromEntries(params),
+      body: { fields, ...(selectedRows.length ? { names: selectedRows } : {}) },
+    });
+    if (!result?.csv) return;
+    downloadText(result.filename || "export.csv", result.csv);
+    if (result.truncated) {
+      loopar.notify(`The export holds the first ${result.rows} records. Add filters to export the rest.`, "warn");
+    }
+  };
+
+  /**
    * Row checkbox column. Its header holds the select-all menu and may span the
    * next columns (`colSpan`, for columns without a title). `header: false`
    * leaves the header empty: the view shows the menu elsewhere (its toolbar).
@@ -323,6 +346,7 @@ export const TableProvider = ({
     toggleSort: isServerList ? toggleSort : null,
     listSettings,
     saveListSettings: isServerList ? saveListSettings : null,
+    exportCsv: isServerList ? exportCsv : null,
     baseColumns: () => [
       ...baseColumns,
       {

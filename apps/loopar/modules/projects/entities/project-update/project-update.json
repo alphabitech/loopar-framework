@@ -1,0 +1,19 @@
+{
+  "name": "Project Update",
+  "module": "projects",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 1,
+  "enable_comments": 0,
+  "require_login_to_comment": 1,
+  "search_fields": "name,project,note",
+  "title_fields": "name",
+  "naming_series": "PUP-.#####",
+  "resources": [],
+  "doc_structure": "[{\"node\":\"pup_1\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Name\",\"type\":\"VARCHAR\",\"required\":1,\"unique\":1,\"hidden\":1,\"searchable\":1,\"write_policy\":\"create_only\"}},{\"node\":\"pup_7\",\"element\":\"row\",\"data\":{\"layout\":\"[50,50]\"},\"elements\":[{\"node\":\"pup_4\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"pup_2\",\"element\":\"connection\",\"data\":{\"name\":\"project\",\"label\":\"Project\",\"options\":\"Project\",\"required\":1,\"in_list_view\":1,\"searchable\":1}},{\"node\":\"pup_3\",\"element\":\"select\",\"data\":{\"name\":\"stage\",\"label\":\"Stage\",\"options\":\"Before\\nIn Progress\\nAfter\\nIssue\\nOther\",\"default_value\":\"In Progress\",\"in_list_view\":1}}]},{\"node\":\"pup_6\",\"element\":\"col\",\"data\":{},\"elements\":[{\"node\":\"pup_5\",\"element\":\"date\",\"data\":{\"name\":\"update_date\",\"label\":\"Date\",\"in_list_view\":1,\"description\":\"Today when left empty.\"}}]}]},{\"node\":\"pup_8\",\"element\":\"textarea\",\"data\":{\"name\":\"note\",\"label\":\"Note\",\"in_list_view\":1}},{\"node\":\"pup_9\",\"element\":\"image_input\",\"data\":{\"name\":\"photos\",\"label\":\"Photos\",\"accept\":\"image/*\",\"multiple\":1,\"description\":\"Photos of the job site for this update.\"}}]"
+}

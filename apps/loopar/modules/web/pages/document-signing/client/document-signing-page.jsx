@@ -8,11 +8,17 @@ import { Textarea } from '@cn/components/ui/textarea';
 import { cn } from '@cn/lib/utils';
 import { CheckCircle2, FileSignature, Loader2, Printer, ShieldCheck, XCircle } from 'lucide-react';
 import { __ } from "loopar";
+import { PrintSheet } from '@loopar/print';
 
 /** Web page: always opens at the top, never restores the scroll position. */
 export const config = { restoreScroll: false };
 
-const CONSENT = 'I agree to sign this document electronically. My typed name is my signature and has the same effect as a handwritten one, and I agree to receive this document and related records electronically.';
+/** Wording by purpose (the consent statement itself comes from the server, which stores it). */
+const WORDS = {
+  Signature: { pending: 'Awaiting your signature', done: 'Signed', block: 'Electronically signed', form: 'Sign this document', action: 'Sign document', decline: 'Decline to sign' },
+  Approval: { pending: 'Awaiting your approval', done: 'Approved', block: 'Electronically approved', form: 'Approve this document', action: 'Approve', decline: 'Decline' },
+};
+const wordsOf = (request) => WORDS[request?.purpose] || WORDS.Signature;
 
 const call = (action, body) => new Promise((resolve, reject) => {
   loopar.call('Signature Request', action, { body, freeze: false, success: resolve, error: reject });
@@ -22,8 +28,8 @@ const tokenFromUrl = () => new URLSearchParams(window.location.search).get('toke
 
 function Status({ request }) {
   const map = {
-    Signed: ['bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', 'Signed'],
-    Pending: ['bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300', 'Awaiting your signature'],
+    Signed: ['bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', wordsOf(request).done],
+    Pending: ['bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300', wordsOf(request).pending],
     Declined: ['bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300', 'Declined'],
     Expired: ['bg-muted text-muted-foreground', 'Link expired'],
     Revoked: ['bg-muted text-muted-foreground', 'Withdrawn by the sender'],
@@ -37,7 +43,7 @@ const when = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle
 function SignatureBlock({ request }) {
   return (
     <div className="mt-8 rounded-lg border-2 border-green-600/40 p-5">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">{__("Electronically signed")}</p>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{__(wordsOf(request).block)}</p>
       <p className="mt-2 font-serif text-2xl italic">{request.signed_name}</p>
       <p className="text-sm">{[request.signed_title, request.signer_email].filter(Boolean).join(' · ')}</p>
       <p className="mt-2 text-xs text-muted-foreground">
@@ -67,7 +73,7 @@ function SignForm({ request, token, onDone }) {
   if (declining) {
     return (
       <div className="space-y-3 rounded-xl border p-5 print:hidden">
-        <p className="font-semibold">{__("Decline to sign")}</p>
+        <p className="font-semibold">{__(wordsOf(request).decline)}</p>
         <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={__("Tell the sender why (optional)")} rows={4} />
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex gap-2">
@@ -82,7 +88,7 @@ function SignForm({ request, token, onDone }) {
 
   return (
     <div className="space-y-4 rounded-xl border p-5 print:hidden">
-      <p className="flex items-center gap-2 font-semibold"><FileSignature className="size-5 text-primary" /> {__("Sign this document")}</p>
+      <p className="flex items-center gap-2 font-semibold"><FileSignature className="size-5 text-primary" /> {__(wordsOf(request).form)}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1.5">
           <span className="text-sm font-medium">{__("Full name")}</span>
@@ -96,12 +102,12 @@ function SignForm({ request, token, onDone }) {
       {name.trim() && <p className="font-serif text-2xl italic">{name}</p>}
       <label className="flex items-start gap-3 text-sm">
         <input type="checkbox" className="mt-1 size-4 accent-[hsl(var(--primary))]" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
-        <span>{CONSENT}</span>
+        <span>{request.consent}</span>
       </label>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex flex-wrap items-center gap-3">
         <Button disabled={busy || !agree || !name.trim()} onClick={() => run('sign', { signed_name: name, signed_title: title, agree })}>
-          {busy && <Loader2 className="mr-2 size-4 animate-spin" />}{__("Sign document")}
+          {busy && <Loader2 className="mr-2 size-4 animate-spin" />}{__(wordsOf(request).action)}
         </Button>
         <button type="button" className="text-sm text-muted-foreground underline" onClick={() => setDeclining(true)}>{__("Decline")}</button>
       </div>
@@ -138,9 +144,11 @@ export default function DocumentSigningPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
-      <style>{'@media print { header, footer, nav { display: none !important; } }'}</style>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div className="lp-signing mx-auto max-w-3xl px-4 py-10">
+      {/* On paper: no site chrome (the sheet's own header and footer stay), and dark ink whatever the site's theme. */}
+      <style>{'@media print { header:not(.lp-print-sheet header), footer:not(.lp-print-sheet footer), nav, .inset-0.z-50.border-r { display: none !important; } .lp-signing > *:not(.lp-print-sheet), .lp-signing > *:not(.lp-print-sheet) * { color: #1a1a1a !important; background: transparent !important; border-color: #d9d9d9 !important; } }'}</style>
+      {/* A sheet carries its own letterhead and title: on paper this heading would repeat them. */}
+      <div className={cn("mb-6 flex flex-wrap items-center justify-between gap-3", request.snapshot && "print:hidden")}>
         <div>
           <p className="text-sm text-muted-foreground">{request.company}</p>
           <h1 className="text-2xl font-bold">{request.title}</h1>
@@ -155,14 +163,19 @@ export default function DocumentSigningPage() {
 
       {request.status === 'Signed' && (
         <p className="mb-6 flex items-center gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-900 dark:bg-green-900/30 dark:text-green-200 print:hidden">
-          <CheckCircle2 className="size-5" /> {__("Signed. A confirmation was emailed to")} {request.signer_email}{__(". Keep this link to view or print your copy.")}
+          <CheckCircle2 className="size-5" /> {__(wordsOf(request).done)}{__(". A confirmation was emailed to")} {request.signer_email}{__(". Keep this link to view or print your copy.")}
         </p>
       )}
 
-      <article
-        className="prose prose-sm max-w-none rounded-xl border bg-card p-6 dark:prose-invert sm:p-10 [&_.anchor]:hidden [&_table]:w-full"
-        dangerouslySetInnerHTML={{ __html: request.html }}
-      />
+      {request.snapshot ? (
+        // A record on its Print Format: the sheet the desk prints.
+        <PrintSheet snapshot={request.snapshot} className="mx-auto shadow-sm" />
+      ) : (
+        <article
+          className="prose prose-sm max-w-none rounded-xl border bg-card p-6 dark:prose-invert sm:p-10 [&_.anchor]:hidden [&_table]:w-full"
+          dangerouslySetInnerHTML={{ __html: request.html }}
+        />
+      )}
 
       {request.status === 'Signed' && <SignatureBlock request={request} />}
 
@@ -171,7 +184,7 @@ export default function DocumentSigningPage() {
         {['Declined', 'Expired', 'Revoked'].includes(request.status) && (
           <p className="rounded-lg bg-muted p-4 text-sm">
             {request.status === 'Declined' ? 'You declined this document. ' : ''}
-            {__("This document can no longer be signed with this link. Contact")} {request.company} {__("if you need a new one.")}
+            {__("This document is no longer open with this link. Contact")} {request.company} {__("if you need a new one.")}
           </p>
         )}
       </div>

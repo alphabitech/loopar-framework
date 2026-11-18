@@ -1,0 +1,18 @@
+{
+  "name": "Calendar",
+  "module": "calendar",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 1,
+  "enable_comments": 0,
+  "require_login_to_comment": 1,
+  "search_fields": "name,description",
+  "title_fields": "name",
+  "resources": [],
+  "doc_structure": "[{\"node\": \"cal_1\", \"element\": \"input\", \"data\": {\"name\": \"name\", \"label\": \"Name\", \"type\": \"VARCHAR\", \"required\": 1, \"unique\": 1, \"in_list_view\": 1, \"searchable\": 1, \"write_policy\": \"create_only\"}}, {\"node\": \"cal_6\", \"element\": \"row\", \"data\": {\"layout\": \"[50,50]\"}, \"elements\": [{\"node\": \"cal_3\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"cal_2\", \"element\": \"select\", \"data\": {\"name\": \"color\", \"label\": \"Color\", \"options\": \"blue\\namber\\ngreen\\nred\\nviolet\\ngray\", \"default_value\": \"blue\", \"in_list_view\": 1, \"description\": \"Color of this calendar's events.\"}}]}, {\"node\": \"cal_5\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"cal_4\", \"element\": \"switch\", \"data\": {\"name\": \"disabled\", \"label\": \"Disabled\", \"description\": \"Hides the calendar and its events from the calendar views.\"}}]}]}, {\"node\": \"cal_7\", \"element\": \"textarea\", \"data\": {\"name\": \"description\", \"label\": \"Description\"}}, {\"node\": \"cal_30\", \"element\": \"switch\", \"data\": {\"name\": \"booking_enabled\", \"label\": \"Public booking\", \"description\": \"Lets visitors book a time on this calendar from the website (the \\\"booking\\\" element of the page builder).\"}}, {\"node\": \"cal_31\", \"element\": \"row\", \"data\": {\"layout\": \"[34,33,33]\"}, \"elements\": [{\"node\": \"cal_32\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"cal_33\", \"element\": \"select\", \"data\": {\"name\": \"booking_days\", \"label\": \"Open days\", \"options\": \"Monday\\nTuesday\\nWednesday\\nThursday\\nFriday\\nSaturday\\nSunday\", \"multiple\": 1, \"description\": \"Monday to Friday when left empty.\"}}, {\"node\": \"cal_34\", \"element\": \"input\", \"data\": {\"name\": \"booking_durations\", \"label\": \"Durations (minutes)\", \"description\": \"What the visitor can choose, separated by commas: 30, 60.\"}}]}, {\"node\": \"cal_35\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"cal_36\", \"element\": \"input\", \"data\": {\"name\": \"booking_from\", \"label\": \"Opens at\", \"description\": \"24-hour time, e.g. 09:00.\"}}, {\"node\": \"cal_37\", \"element\": \"input\", \"data\": {\"name\": \"booking_to\", \"label\": \"Closes at\", \"description\": \"24-hour time, e.g. 17:00.\"}}]}, {\"node\": \"cal_38\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"cal_39\", \"element\": \"input\", \"data\": {\"name\": \"booking_notice_hours\", \"label\": \"Minimum notice (hours)\", \"format\": \"int\", \"description\": \"How soon a visitor may book. 2 when left empty.\"}}, {\"node\": \"cal_40\", \"element\": \"input\", \"data\": {\"name\": \"booking_days_ahead\", \"label\": \"Days ahead\", \"format\": \"int\", \"description\": \"How far in advance. 30 when left empty.\"}}, {\"node\": \"cal_41\", \"element\": \"input\", \"data\": {\"name\": \"booking_email\", \"label\": \"Notify\", \"format\": \"email\", \"description\": \"Gets an email for every new booking.\"}}]}]}, {\"node\": \"cal_20\", \"element\": \"slot\", \"data\": {\"name\": \"feed\", \"label\": \"Subscribe\"}}, {\"node\": \"cal_21\", \"element\": \"input\", \"data\": {\"name\": \"feed_token\", \"label\": \"Feed token\", \"hidden\": 1, \"read_only\": 1}}]"
+}
