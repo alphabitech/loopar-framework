@@ -37,9 +37,10 @@ function permissionScope(document, action) {
   const key = `${doc}:${act}`;
 
   if (_publicSet.has(key)) return 'all';
-  if (_permSet === null) return 'all';          // Administrator
-
+  // Denied wins over the Administrator too: the server denies app-source
+  // writes to everyone in production (core/auth/source-lock.js).
   if (_deniedSet.has(key)) return null;
+  if (_permSet === null) return 'all';          // Administrator
 
   let result = null;
   for (const k of ['*:*', `${doc}:*`, `*:${act}`, key]) {

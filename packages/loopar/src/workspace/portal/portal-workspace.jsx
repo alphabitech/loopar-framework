@@ -8,7 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@cn/components/ui/dropdown-menu";
-import { LogOutIcon, UserRoundCogIcon } from "lucide-react";
+import { GlobeIcon, LayoutDashboardIcon, LogOutIcon, UserRoundCogIcon } from "lucide-react";
 import { ThemeToggle } from "@workspace/theme-toggle";
 import { Logo } from "../web/src/logo";
 import { __ } from "@global/i18n";
@@ -54,6 +54,14 @@ function UserMenu() {
           <Link to="/portal/Profile/update" className="justify-start" variant="ghost" size="sm">
             <UserRoundCogIcon className="mr-2 h-4 w-4" /> {__("Profile")}
           </Link>
+          <a href="/" className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`}>
+            <GlobeIcon className="mr-2 h-4 w-4" /> {__("Website")}
+          </a>
+          {me.user_type !== "Web" && (
+            <a href="/desk" className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`}>
+              <LayoutDashboardIcon className="mr-2 h-4 w-4" /> {__("Desk")}
+            </a>
+          )}
           <button
             onClick={handleLogout}
             className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`}

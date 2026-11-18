@@ -8,7 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@cn/components/ui/dropdown-menu";
-import { LogOutIcon, UserRoundCogIcon } from "lucide-react";
+import { LayoutDashboardIcon, LogOutIcon, PanelsTopLeftIcon, UserRoundCogIcon } from "lucide-react";
 import { MainNav, MenuItems } from "./main-nav";
 import { Logo } from "./logo";
 import { ThemeToggle } from "@workspace/theme-toggle";
@@ -76,6 +76,15 @@ function UserMenu({ onOpenLogin, onOpenProfile }) {
           {me.email ? <div className="truncate text-xs text-muted-foreground">{me.email}</div> : null}
         </div>
         <div className="grid grid-cols-1 p-1">
+          {/* Other workspaces: full page loads, each has its own chrome. */}
+          <a href="/portal" className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`}>
+            <PanelsTopLeftIcon className="mr-2 h-4 w-4" /> {__("Portal")}
+          </a>
+          {!isWeb && (
+            <a href="/desk" className={`${buttonVariants({ size: "sm", variant: "ghost" })} justify-start`}>
+              <LayoutDashboardIcon className="mr-2 h-4 w-4" /> {__("Desk")}
+            </a>
+          )}
           {!isWeb && (
             <button
               onClick={onOpenProfile}

@@ -75,6 +75,19 @@ export function debugEnabled() {
 }
 
 /**
+ * Source lock (see core/auth/source-lock.js): in production the documents that
+ * are app source (entities, builders, App, Module, App Manager git actions)
+ * can't be changed from the desk, not even by the Administrator. On by default
+ * in production, off in development; `"sourceLock": false` in config/core.json
+ * (or LOOPAR_SOURCE_LOCK=0) turns it off on a production server. Restart to apply.
+ */
+export function sourceLockEnabled() {
+  const v = pick(load().sourceLock, process.env.LOOPAR_SOURCE_LOCK);
+  if (v === undefined || v === null || v === '') return coreEnv() === 'production';
+  return v === true || v === 'true' || v === 1 || v === '1';
+}
+
+/**
  * Bind address. Loopback by default: Caddy reaches the core on localhost, so
  * nothing else needs the port. Set `"host": "0.0.0.0"` in config/core.json
  * to expose it (a proxy on another machine, a container network).

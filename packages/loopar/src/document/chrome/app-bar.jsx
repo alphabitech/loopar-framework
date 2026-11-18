@@ -253,7 +253,8 @@ export function AppBar({Document, viewTypeToggle, setViewType, viewType, applyVi
 
   const back = !inModal && props.hasBreadcrumb !== false ? backTarget(Document, contextName) : null;
 
-  const goTo = canUpdate ? goToTarget(Document) : null;
+  // Also on read-only views: a builder locked in production still leads to what it builds.
+  const goTo = (canUpdate || Document.meta?.action === "view") ? goToTarget(Document) : null;
 
   const edit = editTarget(Document);
 

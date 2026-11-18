@@ -1,5 +1,6 @@
 import { loopar, PermissionManager, CREATED_BY_COLUMN } from "loopar";
 import { SCOPE, isReadOnlyWrite } from "./PermissionManager.js";
+import { isSourceLockedAction, sourceLockedMessage } from "./source-lock.js";
 import { portalIdentity, customerCondition, isCustomerRecord, customerFieldOf, CUSTOMER_FIELD } from "./customer-scope.js";
 import { validateCsrfToken } from './csrf.js';
 import { permissionActionOf } from './permission-aliases.js';
@@ -207,6 +208,11 @@ export default class AuthController {
     }
   }
 
+  /** `update` with no data: opening the record's form, not saving it. */
+  #isOpeningToEdit() {
+    return String(this.action).toLowerCase() === 'update' && !this.hasData() && typeof this.actionView === 'function';
+  }
+
   /** A plain GET of `update` (opening the record, not saving it). */
   #canDowngradeToView() {
     return String(this.action).toLowerCase() === 'update'
@@ -215,11 +221,20 @@ export default class AuthController {
   }
 
   async isAuthorized(user) {
+    // App source in production (entities, builders, App, Module): no one
+    // changes it from the desk, the Administrator included. Opening a record
+    // to edit shows it read-only; any other write is refused.
+    if (isSourceLockedAction(this.document, this.action)) {
+      if (!this.#isOpeningToEdit()) {
+        loopar.throw({ code: 403, message: sourceLockedMessage(this.document) });
+      }
+      this.action = 'view';
+    }
+
     // Read-only entities: records come from the app's flows. Opening one to
     // edit shows it read-only; creating or saving one by hand is refused.
     if (isReadOnlyWrite(this.document, this.action)) {
-      const opening = String(this.action).toLowerCase() === 'update' && !this.hasData() && typeof this.actionView === 'function';
-      if (!opening) {
+      if (!this.#isOpeningToEdit()) {
         loopar.throw({ code: 403, message: `${this.document} records are written by the app, not by hand.` });
       }
       this.action = 'view';

@@ -17,6 +17,7 @@ import { acceptsFile } from '../global/file-accept.js';
 import { purgePrivateFiles } from '../global/private-files.js';
 import { guardedChanges, comparable, GUARDED_POLICIES, WRITE_POLICY } from '../global/field-policy.js';
 import { policyMapOf, lockStructure } from '../auth/field-access.js';
+import { isSourceLocked } from '../auth/source-lock.js';
 
 const isTrue = (v) => [1, '1', true, 'true'].includes(v);
 
@@ -1041,7 +1042,8 @@ export default class CoreDocument {
         enable_comments: loopar.utils.trueToBinary(__REF__.enable_comments),
         require_login_to_comment: loopar.utils.trueToBinary(__REF__.require_login_to_comment),
         // Same source the server enforces (AuthController): no New / Edit / Save.
-        read_only: loopar.utils.trueToBinary(__REF__.read_only),
+        // App source in production (source-lock.js) shows the same way.
+        read_only: (loopar.utils.trueToBinary(__REF__.read_only) || isSourceLocked(__ENTITY__.name)) ? 1 : 0,
       },
       ...(withData || 1==1 ? { data: { ...await this.rawValues(), ...this.versionStamp() } } : {}),
       ...(workflow ? { workflow: await describeWorkflow(this, workflow) } : {}),

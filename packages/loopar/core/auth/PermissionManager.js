@@ -3,6 +3,7 @@
 import { Op } from "db-env";
 import { loopar } from "loopar";
 import { ActionScanner } from "./ActionScanner.js";
+import { isSourceLockedAction, sourceLockedKeys } from "./source-lock.js";
 
 /**
  * Process-wide singleton, but the CORE model runs one process for every tenant,
@@ -146,6 +147,8 @@ class PermissionManagerClass {
   scope(document, action, username, { includePublic = true } = {}) {
     username = username ?? loopar.auth.user() ?? 'Guest';
     if (isReadOnlyWrite(document, action)) return null;
+    // App source in production: refused for everyone (see source-lock.js).
+    if (isSourceLockedAction(document, action)) return null;
     if (username === 'Administrator') return SCOPE.ALL;
 
     const key = this.#buildKey(document, action);
@@ -346,7 +349,8 @@ class PermissionManagerClass {
     return {
       public:  [...this.#public()],
       private: isAdmin ? null : [...grants.keys()],
-      denied:  isAdmin ? [] : [...(this.#denied().get(username) ?? [])],
+      // Source-locked writes are denied for every user, the Administrator included.
+      denied:  [...(isAdmin ? [] : [...(this.#denied().get(username) ?? [])]), ...sourceLockedKeys()],
       scopes,
     };
   }
