@@ -226,7 +226,7 @@ export default class AuthController {
     // to edit shows it read-only; any other write is refused.
     if (isSourceLockedAction(this.document, this.action)) {
       if (!this.#isOpeningToEdit()) {
-        loopar.throw({ code: 403, message: sourceLockedMessage(this.document) });
+        loopar.throw({ code: 403, message: sourceLockedMessage(this.document, this.action) });
       }
       this.action = 'view';
     }

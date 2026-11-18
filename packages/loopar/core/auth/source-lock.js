@@ -1,6 +1,6 @@
 'use strict';
 
-import { loopar } from "loopar";
+import { loopar, tenant } from "loopar";
 import { sourceLockEnabled } from "../config/core-config.js";
 
 /**
@@ -38,8 +38,9 @@ const EXTRA_ALLOWED = {
 
 /**
  * Deploy actions: bring the apps' source from git into the shared apps folder.
- * Allowed only on the control plane (the server owner's tenant); from any other
- * tenant they would deploy code for everyone. Commit, push, discard and publish
+ * Allowed only on the server owner's tenants — the control plane and the
+ * template host (pull + Update refreshes the demos); from any other tenant
+ * they would deploy code for everyone. Commit, push, discard and publish
  * are development work and stay locked everywhere.
  */
 const CONTROL_PLANE_ALLOWED = {
@@ -58,15 +59,19 @@ const CLIENT_DENIED_EXTRA = {
 const normDoc = (d) => String(d ?? "").toLowerCase().replaceAll(" ", "");
 const normAct = (a) => String(a ?? "").toLowerCase();
 
-const onControlPlane = () => {
-  try { return !!loopar._isControlPlane?.(); } catch { return false; }
+/** Is the request's tenant one of the server owner's (control plane or template host)? */
+const onOwnerTenant = () => {
+  try {
+    const name = loopar.requestTenantId;
+    return !!name && (tenant.isControlPlane(name) || tenant.isTemplateHost(name));
+  } catch { return false; }
 };
 
 /** Is `act` allowed on the locked document `doc` (both normalized)? */
 function allowedWhileLocked(doc, act) {
   if (READ_ACTIONS.has(act)) return true;
   if (EXTRA_ALLOWED[doc]?.has(act)) return true;
-  return !!CONTROL_PLANE_ALLOWED[doc]?.has(act) && onControlPlane();
+  return !!CONTROL_PLANE_ALLOWED[doc]?.has(act) && onOwnerTenant();
 }
 
 /** Is `document` app source (regardless of the lock being on)? */
@@ -104,5 +109,10 @@ export function sourceLockedKeys() {
 }
 
 /** Message for a refused write. */
-export const sourceLockedMessage = (document) =>
-  `${document} is part of the apps' source and can't be changed in production. Change it in development and deploy.`;
+export const sourceLockedMessage = (document, action) => {
+  const doc = normDoc(document), act = normAct(action);
+  if (CONTROL_PLANE_ALLOWED[doc]?.has(act)) {
+    return `${document} → ${action}: in production it runs only on the server owner's tenant (control plane or template host).`;
+  }
+  return `${document} → ${action}: part of the apps' source, it can't be changed in production. Change it in development and deploy.`;
+};
