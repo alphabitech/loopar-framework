@@ -20,11 +20,13 @@ function camelCase(str) {
 }
 
 function decamelize(text, { separator = '-', preserveConsecutiveUppercase = false } = {}) {
-  text = _text(text).replaceAll(/\s/g, '');
-  if (!(typeof text === 'string' && typeof separator === 'string')) {
-    throw new TypeError(
-      'The `text` and `separator` arguments should be of type `string`',
-    );
+  if (typeof separator !== 'string') {
+    throw new TypeError('The `separator` argument should be of type `string`');
+  }
+  // Spaces separate words too: "Point of Sale" → point-of-sale (not pointof-sale).
+  text = _text(text).trim().replaceAll(/\s+/g, separator);
+  if (typeof text !== 'string') {
+    throw new TypeError('The `text` argument should be of type `string`');
   }
 
   if (text.length < 2) {

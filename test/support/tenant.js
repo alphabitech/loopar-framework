@@ -28,7 +28,7 @@ export const ADMIN = Object.freeze({
   password: "Test-Password-123!",   // meets the installer's password policy
 });
 
-export async function bootTestTenant({ name = `__loopar_test_${process.pid}__` } = {}) {
+export async function bootTestTenant({ name = `__loopar_test_${process.pid}__`, apps = [] } = {}) {
   const root = process.cwd();
   const site = path.join(root, "sites", name);
   if (!fs.existsSync(path.join(root, "apps", "loopar", "installer.js"))) {
@@ -55,6 +55,11 @@ export async function bootTestTenant({ name = `__loopar_test_${process.pid}__` }
       admin_password: ADMIN.password,
       confirm_password: ADMIN.password,
     }).install();
+    // Extra apps the test needs (e.g. "erp" for customers and projects).
+    for (const app of apps) {
+      const { default: AppInstaller } = await import(path.join(root, "apps", app, "installer.js"));
+      await new AppInstaller({ app_name: app }).install();
+    }
   });
 
   return {

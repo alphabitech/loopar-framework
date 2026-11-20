@@ -1,0 +1,19 @@
+{
+  "name": "Desk Pin",
+  "module": "core",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "search_fields": "",
+  "title_fields": "",
+  "doc_structure": "[{\"node\":\"row_desk_pin\",\"element\":\"row\",\"data\":{\"name\":\"row_desk_pin_name\"},\"elements\":[{\"node\":\"input_desk_pin_name\",\"element\":\"input\",\"data\":{\"label\":\"Name\",\"name\":\"name\",\"required\":1,\"unique\":1,\"type\":\"VARCHAR\",\"in_list_view\":0,\"searchable\":0,\"write_policy\":\"create_only\",\"set_only_time\":1}}]},{\"node\":\"row_desk_pin_main\",\"element\":\"row\",\"data\":{\"name\":\"row_desk_pin_main\"},\"elements\":[{\"node\":\"col_desk_pin_main\",\"element\":\"col\",\"data\":{\"name\":\"col_desk_pin_main\"},\"elements\":[{\"node\":\"connection_desk_pin_user\",\"element\":\"connection\",\"data\":{\"label\":\"User\",\"name\":\"owner_user\",\"options\":\"User\",\"required\":1,\"in_list_view\":1,\"list_order\":1,\"searchable\":1,\"write_policy\":\"create_only\"}},{\"node\":\"textarea_desk_pin_json\",\"element\":\"textarea\",\"data\":{\"label\":\"Pins\",\"name\":\"pins_json\",\"rows\":8,\"description\":\"Pages pinned to the user's shortcuts menu (link, label, icon), as JSON. Written by the menu itself.\"}}]}]}]",
+  "resources": [],
+  "__ENTITY__": "Entity"
+}

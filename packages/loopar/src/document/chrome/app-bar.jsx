@@ -5,6 +5,7 @@ import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, KanbanIcon, Cale
 import {Link} from "@link";
 import { useDocument, useViewOptions } from "@loopar/document";
 import { canOn } from "@context/auth-context";
+import { useWorkspace } from "@workspace/workspace-provider";
 import { useContext } from "react";
 import { useFormState } from "react-hook-form";
 import { BaseFormContext } from "@form-context";
@@ -133,6 +134,9 @@ function recordUrl(Document) {
 
 function PrintToggle({ Document }) {
   const { meta = {}, Entity = {}, name } = Document;
+  // The portal shows records only as their print format: nothing to toggle to.
+  const portal = useWorkspace().workspace === "portal";
+  if (portal) return null;
 
   if (meta.action === "print" && name) {
     return (
@@ -243,7 +247,7 @@ function ViewSwitch({ Document, viewType, viewTypeToggle, setViewType }) {
 }
 
 export function AppBar({Document, viewTypeToggle, setViewType, viewType, applyView, sidebarOpen, ...props}) {
-  const { actions = {}, actionsInMenu, primaryAction, onlyGrid, onlyList, canUpdate } = useViewOptions();
+  const { actions = {}, actionsInMenu, primaryAction, onlyGrid, onlyList, canUpdate, hasListSettings } = useViewOptions();
   const { inModal } = useDocument();
   const { meta, Entity } = Document;
 
@@ -266,7 +270,7 @@ export function AppBar({Document, viewTypeToggle, setViewType, viewType, applyVi
     ...(goTo ? [["__goto", <GoToAction key="__goto" to={goTo} name={Document.data?.name} />]] : []),
     ...(!inModal && eventTarget(Document) ? [["__schedule", <ScheduleAction key="__schedule" Document={Document} />]] : []),
     ...(recordTranslations && canUpdate ? [["__translations", <RecordTranslationsButton key="__translations" />]] : []),
-    ...(isList && applyView && onlyGrid !== true && onlyList !== true ? [[
+    ...(isList && applyView && hasListSettings !== false && onlyGrid !== true && onlyList !== true ? [[
       "__savedviews",
       <SavedViewsMenu key="__savedviews" Document={Document} viewType={viewType} applyView={applyView} />,
     ]] : []),

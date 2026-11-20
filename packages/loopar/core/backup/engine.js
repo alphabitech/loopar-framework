@@ -33,7 +33,7 @@ import { makeDestination } from './destinations/index.js';
 
 export const BACKUP_FORMAT = 'loopar-backup';
 export const BACKUP_VERSION = 1;
-export const BACKUP_KINDS = ['manual', 'scheduled', 'pre-update', 'pre-restore', 'uploaded'];
+export const BACKUP_KINDS = ['manual', 'scheduled', 'pre-update', 'pre-restore', 'pre-migrate', 'uploaded'];
 const NAME_RE = /^([\w.-]+?)__(\d{8}T\d{6}Z)__([a-z-]+)\.tar\.gz(\.enc)?$/;
 const EXCLUDED_DIRS = new Set(['database', 'sessions']);
 

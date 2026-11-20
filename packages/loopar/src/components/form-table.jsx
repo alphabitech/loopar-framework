@@ -11,8 +11,11 @@ import {useRef, useMemo, useCallback, useEffect, memo, useState, useContext } fr
 import { FormWrapper } from "@form-provider";
 import { TableProvider, useTable } from "./table/TableContext"
 
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { PlusIcon, Trash2Icon, PencilIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@cn/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@cn/components/ui/dialog";
+import MetaComponents from "@meta-component";
+import { cn } from "@cn/lib/utils";
 import BaseTable from "./table/BaseTable";
 
 import {
@@ -107,9 +110,116 @@ const MemoizedTableInput = memo(function MemoizedTableInput({ component, cellNam
   );
 });
 
+const isTrue = (v) => loopar.utils.trueValue(v);
+
+const isEmptyValue = (v) =>
+  v === undefined || v === null || (Array.isArray(v) ? v.length === 0 : String(v).trim() === "");
+
+/** Required writable fields of the child that the grid does not show: only the row form can fill them. */
+function requiredOutsideGrid(structure) {
+  const out = [];
+  const walk = (nodes = []) => nodes.forEach((el) => {
+    if (isTrue(el.data?.hidden)) return;
+    if (el.data?.name && fieldIsWritable(el) && isTrue(el.data.required) && !isTrue(el.data.in_list_view)) {
+      out.push(el.data.name);
+    }
+    walk(el.elements);
+  });
+  walk(structure);
+  return out;
+}
+
+/** Opens the row form; turns red while a required field outside the grid is empty. */
+function EditRowButton({ index, required, onEdit }) {
+  const { control } = useFormContext();
+  const row = useWatch({ control, name: `rows.${index}` });
+  const missing = required.filter((name) => isEmptyValue(row?.[name]));
+
+  return (
+    <Button
+      type="button"
+      variant={missing.length ? "outline" : "secondary"}
+      className={cn(missing.length && "border-destructive text-destructive hover:text-destructive")}
+      title={missing.length ? __("Missing: {0}", [missing.join(", ")]) : __("Edit row")}
+      onClick={(e) => {
+        e.preventDefault();
+        onEdit(index);
+      }}
+    >
+      <PencilIcon size={16} />
+    </Button>
+  );
+}
+
+/**
+ * The child entity's full form for one row (also the fields the grid hides).
+ * Works on a copy of the row: Apply validates it with the child's schema and
+ * hands the values back; Cancel leaves the row untouched.
+ */
+function RowEditDialog({ structure, index, count, getRow, onApply, onNavigate, onClose }) {
+  const formRef = useRef(null);
+
+  const commit = async () => {
+    const api = formRef.current;
+    if (!api || !(await api.submit())) return false;   // errors are shown in the form
+    // Raw values: the zod output drops keys outside the schema (nested tables, hidden fields).
+    onApply(index, api.getValues());
+    return true;
+  };
+
+  const apply = async () => { if (await commit()) onClose(); };
+  const go = async (delta) => { if (await commit()) onNavigate(index + delta); };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{__("Editing row #{0}", [index + 1])}</DialogTitle>
+          <DialogDescription>{__("Changes apply to the row; save the document to store them.")}</DialogDescription>
+        </DialogHeader>
+        <FormWrapper key={index} __DATA__={getRow(index)} STRUCTURE={structure} formRef={formRef}>
+          <div className="flex flex-col gap-2">
+            {structure.map((el, idx) =>
+              !el.element || !el.data || isTrue(el.data.hidden) ? null : (
+                <MetaComponents key={el.data?.name ?? idx} elements={[el]} />
+              )
+            )}
+          </div>
+        </FormWrapper>
+        <DialogFooter className="flex-row items-center gap-2 sm:justify-between">
+          <div className="flex gap-1">
+            <Button type="button" variant="secondary" size="icon" disabled={index <= 0} title={__("Previous row")} onClick={() => go(-1)}>
+              <ChevronLeftIcon size={16} />
+            </Button>
+            <Button type="button" variant="secondary" size="icon" disabled={index >= count - 1} title={__("Next row")} onClick={() => go(1)}>
+              <ChevronRightIcon size={16} />
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" onClick={onClose}>{__("Cancel")}</Button>
+            <Button type="button" variant="primary" onClick={apply}>{__("Apply")}</Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const FormTable = (props) => {
   const { selectedRows, bulkRemove, baseColumns, selectorCol, rows } = useTable();
-  const { register, move, remove, append } = props;
+  const { register, move, remove, append, form, structure } = props;
+  const [editing, setEditing] = useState(null);
+
+  const required = useMemo(() => requiredOutsideGrid(structure), [structure]);
+
+  const getRow = useCallback((index) => form.getValues(`rows.${index}`) || {}, [form]);
+
+  const applyRow = useCallback((index, values) => {
+    for (const [key, value] of Object.entries(values || {})) {
+      if (key === "id") continue;   // dnd-kit identity of the row
+      form.setValue(`rows.${index}.${key}`, value, { shouldDirty: true });
+    }
+  }, [form]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -191,26 +301,30 @@ const FormTable = (props) => {
           label: "...",
         },
         headProps: {
-          className: "w-10 p-2 text-center",
+          className: "w-24 p-2 text-center",
         },
         cellProps: {
-          className: "min-w-10 p-2 text-center",
+          className: "min-w-24 p-2 text-center",
         },
         render: (row, index) => (
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={(e) => {
-              e.preventDefault();
-              handleRemove(index);
-            }}
-          >
-            <Trash2Icon size={16} />
-          </Button>
+          <div className="flex justify-center gap-1">
+            <EditRowButton index={index} required={required} onEdit={setEditing} />
+            <Button
+              type="button"
+              variant="destructive"
+              title={__("Remove row")}
+              onClick={(e) => {
+                e.preventDefault();
+                handleRemove(index);
+              }}
+            >
+              <Trash2Icon size={16} />
+            </Button>
+          </div>
         ),
       }
     ];
-  }, [baseColumns, selectorCol, register, handleRemove]);
+  }, [baseColumns, selectorCol, register, handleRemove, required]);
 
   return (
     <div className="feed py-2">
@@ -255,6 +369,17 @@ const FormTable = (props) => {
           {__("Add row")}
         </Button>
       </div>
+      {editing !== null && editing < rows.length && (
+        <RowEditDialog
+          structure={structure}
+          index={editing}
+          count={rows.length}
+          getRow={getRow}
+          onApply={applyRow}
+          onNavigate={setEditing}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   )
 }
@@ -285,6 +410,8 @@ const FormTableControl = ({Document, docRef}) => {
         move={move} 
         remove={remove} 
         append={append}
+        form={form}
+        structure={rowStructure}
       />
     </TableProvider>
   );

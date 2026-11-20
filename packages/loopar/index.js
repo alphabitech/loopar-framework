@@ -23,6 +23,7 @@ import { invalidateWorkflows, workflowFor, applyTransition, backfillInitialState
 import BaseContactFormController from "./core/controller/base-contact-form-controller.js";
 import BaseController from "./core/controller/base-controller.js";
 import { readListSettings, writeListSettings } from "./core/document/list-settings.js";
+import { readDeskPins, writeDeskPins } from "./core/document/desk-pins.js";
 import { listSavedViews, writeSavedView, deleteSavedView, scheduleSavedView, sendScheduledViews } from "./core/document/saved-views.js";
 import { importRecords } from "./core/document/list-import.js";
 import SingleController from "./core/controller/single-controller.js";
@@ -35,6 +36,7 @@ import DeskPageController from "./core/controller/desk-page-controller.js";
 import { listDeskPages, deskHomes } from "./core/document/desk-page.js";
 import { chartData, getChart, dashboardItems, dashboardItemData, sidebarDashboards } from "./core/document/dashboard-data.js";
 import { listPrintFormats, getPrintFormat, getLetterhead, printSnapshot, snapshotHTML } from "./core/document/print-format.js";
+import { printKind, formatPrintValue } from "./core/global/print-value.js";
 import { getCompany, companyBrand, formatAddress, colorToHex } from "./core/global/company.js";
 import SystemController from "./apps/core/modules/system/controllers/system/system-controller.js";
 import CoreInstaller from "./apps/core/modules/system/forms/installer/installer.js";
@@ -62,14 +64,11 @@ export {
   portalIdentity,
   requirePortalIdentity,
   forgetPortalIdentity,
-  customerCondition,
-  customerFieldOf,
-  isCustomerRecord,
-  CUSTOMER_ENTITY,
-  CONTACT_ENTITY,
-  CONTACT_LINK_ENTITY,
-  CUSTOMER_FIELD,
-} from "./core/auth/customer-scope.js";
+  portalProvider,
+  portalCondition,
+  portalFieldOf,
+  isPortalRecord,
+} from "./core/auth/portal-scope.js";
 export { SCOPE, normalizeScope } from "./core/auth/PermissionManager.js";
 export { userLimit, deskUserCount, assertUserLimit, tenantUserUsage } from "./core/auth/tenant-limits.js";
 export { sanitizeInput, trustedInput, isTrustedInput, policyMapOf, currentActor, lockStructure } from "./core/auth/field-access.js";
@@ -186,6 +185,8 @@ export {
   BaseController,
   readListSettings,
   writeListSettings,
+  readDeskPins,
+  writeDeskPins,
   listSavedViews,
   writeSavedView,
   deleteSavedView,
@@ -212,6 +213,8 @@ export {
   getLetterhead,
   printSnapshot,
   snapshotHTML,
+  printKind,
+  formatPrintValue,
   getCompany,
   companyBrand,
   formatAddress,

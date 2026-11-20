@@ -21,6 +21,15 @@ import {
 /** Key of the per-request transaction states in the request's store. */
 const TX_STATES = Symbol("db.transactions");
 
+/**
+ * Transaction states of the async flow that opened them (withTransaction /
+ * detached). Work running concurrently inside the same request (a background
+ * email delivery, an un-awaited task) has its own: it never joins, nor ends,
+ * a transaction it did not open.
+ */
+const txScope = new AsyncLocalStorage();
+
+import { AsyncLocalStorage } from "node:async_hooks";
 import { orphanManager } from "./orphan-manager.js";
 import { wireQueryProbes } from "./query-probes.js";
 
@@ -147,7 +156,9 @@ export default class Core {
     this.transactionStack = [];
   }
 
-  get dbConfig() { return loopar.getDbConfig(); }
+  // A connection built with its own config (`new KnexORM(config)`, e.g. the
+  // target of a database migration) never reads the tenant's db.config.
+  get dbConfig() { return this.customConfig || loopar.getDbConfig(); }
   get database() { return this.dbConfig.database; }
   get dialect() { return this.dbConfig.dialect || ""; }
 
@@ -271,6 +282,11 @@ export default class Core {
    * one per database.
    */
   txState(create = false) {
+    const scoped = txScope.getStore();
+    if (scoped) {
+      if (!scoped.has(this) && create) scoped.set(this, { trx: null, after: [] });
+      return scoped.get(this) ?? null;
+    }
     const store = requestContext.getStore();
     if (!store) {
       if (!this.#unscopedTx && create) this.#unscopedTx = { trx: null, after: [] };
@@ -284,6 +300,8 @@ export default class Core {
   #unscopedTx = null;
 
   #clearTx() {
+    const scoped = txScope.getStore();
+    if (scoped) { scoped.delete(this); return; }
     const store = requestContext.getStore();
     if (store) store[TX_STATES]?.delete(this);
     else this.#unscopedTx = null;
@@ -323,15 +341,27 @@ export default class Core {
    */
   async withTransaction(fn) {
     if (this.transaction) return await fn();
-    await this.beginTransaction();
-    try {
-      const result = await fn();
-      await this.endTransaction();
-      return result;
-    } catch (e) {
-      await this.safeRollback();
-      throw e;
-    }
+    // The transaction belongs to this async flow only (see txScope).
+    return await txScope.run(new Map(), async () => {
+      await this.beginTransaction();
+      try {
+        const result = await fn();
+        await this.endTransaction();
+        return result;
+      } catch (e) {
+        await this.safeRollback();
+        throw e;
+      }
+    });
+  }
+
+  /**
+   * Runs `fn` outside any open transaction, with its own scope: for work
+   * started now and finished later (background deliveries), which must
+   * neither write into the caller's transaction nor share its own.
+   */
+  async detached(fn) {
+    return await txScope.run(new Map(), fn);
   }
 
   /**
@@ -770,6 +800,16 @@ export default class Core {
 
     const existingFamily = family(existingCol.type);
     if (!existingFamily) return false;
+
+    // int → long_int is the same family but a wider column: a 32-bit INTEGER
+    // can't hold what the field now declares (epoch milliseconds, say).
+    // SQLite's INTEGER is already 64-bit, so only server engines change.
+    if (
+      !this.isSQLiteLike &&
+      resolveColumnFormat(field) === "long_int" &&
+      existingFamily === "int" &&
+      !/bigint/i.test(existingCol.type || "")
+    ) return true;
 
     const FORMAT_FAMILY = {
       data: "string", email: "string", password: "string",

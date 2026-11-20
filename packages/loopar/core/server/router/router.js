@@ -1,5 +1,8 @@
 'use strict';
 import { loopar } from '../../loopar.js';
+
+/** Page Builder page `/portal` opens (apps/loopar web module). */
+const PORTAL_HOME = 'Portal Home';
 import { fileManage } from "../../file-manage.js";
 import multer from "multer";
 import { RouterUtils } from './router-utils.js';
@@ -144,7 +147,9 @@ export default class Router extends Middleware {
       if (req.method === "GET" && RouterUtils.workspaceServesWebPages(req.__WORKSPACE_NAME__) && !loopar.webApp?.name) {
         return this.noWebsite(req, res);
       }
-      RouterUtils.setDefaultParams(params, req.__WORKSPACE_NAME__);
+      RouterUtils.setDefaultParams(params, req.__WORKSPACE_NAME__, {
+        portalHome: loopar.getRef(PORTAL_HOME, false) ? PORTAL_HOME : null,
+      });
       setDocument();
     }
 
@@ -186,6 +191,11 @@ export default class Router extends Middleware {
       const C = await fileManage.importClass(
         loopar.makePath(ref.__ROOT__, `${params.document}Controller.js`)
       );
+      // A document whose files are missing (not installed, or a name that does
+      // not map to its folder) is not found, instead of failing deeper.
+      if (typeof C !== 'function') {
+        loopar.throw({ code: 404, message: `Document ${params.document} not found.` });
+      }
 
       const data = RouterUtils.prepareFileData(body, req.files);
 

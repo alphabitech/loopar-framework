@@ -1,0 +1,19 @@
+{
+  "name": "Notification",
+  "module": "core",
+  "default_list_view": "List",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 0,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "doc_structure": "[{\"node\": \"row_notification_name\", \"element\": \"row\", \"data\": {}, \"elements\": [{\"node\": \"notification_name\", \"element\": \"input\", \"data\": {\"name\": \"name\", \"label\": \"Name\", \"required\": 1, \"unique\": 1, \"type\": \"VARCHAR\", \"write_policy\": \"create_only\", \"hidden\": 1}}]}, {\"node\": \"row_notification_main\", \"element\": \"row\", \"data\": {\"layout\": \"[50, 50]\"}, \"elements\": [{\"node\": \"col_notification_a\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"notification_user\", \"element\": \"connection\", \"data\": {\"name\": \"user\", \"label\": \"User\", \"options\": \"User\", \"required\": 1, \"in_list_view\": 1, \"write_policy\": \"readonly\"}}, {\"node\": \"notification_subject\", \"element\": \"input\", \"data\": {\"name\": \"subject\", \"label\": \"Subject\", \"in_list_view\": 1, \"write_policy\": \"readonly\"}}, {\"node\": \"notification_message\", \"element\": \"textarea\", \"data\": {\"name\": \"message\", \"label\": \"Message\", \"write_policy\": \"readonly\"}}]}, {\"node\": \"col_notification_b\", \"element\": \"col\", \"data\": {}, \"elements\": [{\"node\": \"notification_document\", \"element\": \"input\", \"data\": {\"name\": \"document\", \"label\": \"Document\", \"write_policy\": \"readonly\"}}, {\"node\": \"notification_document_name\", \"element\": \"input\", \"data\": {\"name\": \"document_name\", \"label\": \"Record\", \"write_policy\": \"readonly\"}}, {\"node\": \"notification_from_user\", \"element\": \"connection\", \"data\": {\"name\": \"from_user\", \"label\": \"From\", \"options\": \"User\", \"write_policy\": \"readonly\"}}, {\"node\": \"notification_is_read\", \"element\": \"switch\", \"data\": {\"name\": \"is_read\", \"label\": \"Read\", \"in_list_view\": 1}}, {\"node\": \"notification_created_at\", \"element\": \"input\", \"data\": {\"name\": \"created_at\", \"label\": \"Created At\", \"write_policy\": \"readonly\"}}]}]}]",
+  "search_fields": "subject",
+  "title_fields": "subject",
+  "resources": [],
+  "__ENTITY__": "Entity"
+}

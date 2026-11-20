@@ -11,7 +11,11 @@ import {
   tenantRegistry,
 } from 'loopar';
 import * as tenantOps from "loopar/bin/tenant/tenant-ops.js";
-import { unplugTenant } from "loopar/core/backup/core-ops.js";
+import { unplugTenant, startMigrationJob, backupJob } from "loopar/core/backup/core-ops.js";
+import { readDbConfig, dialectOf } from "loopar/core/backup/database.js";
+import { MIGRATION_TARGETS, targetConfig } from "loopar/core/db-migration/migrate.js";
+import { connectionFromInstallData } from "loopar";
+import { testServerConnection } from "db-env";
 
 
 export default class TenantManager extends BaseDocument {
@@ -334,6 +338,53 @@ export default class TenantManager extends BaseDocument {
     return true;
   }
 
+  /** The engine the tenant's database runs on (sqlite, postgres, mysql…). */
+  dbEngine(name = this.name) {
+    try { return dialectOf(readDbConfig(process.cwd(), name)); } catch { return null; }
+  }
+
+  /** Target of a migration from the dialog fields (the install wizard's names). */
+  #migrationTarget(body) {
+    const dialect = String(body.db_dialect || '').trim().toLowerCase();
+    if (!MIGRATION_TARGETS.includes(dialect)) {
+      loopar.throw(`Choose the engine to move to: ${MIGRATION_TARGETS.join(', ')}.`);
+    }
+    const { connection } = connectionFromInstallData(body);
+    if (!connection.user) loopar.throw('The database user is required.');
+    return { dialect, connection, database: String(body.db_name || '').trim() };
+  }
+
+  async testDbConnection(body = {}) {
+    const { dialect, connection } = this.#migrationTarget(body);
+    return await testServerConnection({ dialect, connection });
+  }
+
+  /**
+   * Move this tenant's database to another engine, in the background. Not
+   * for the workspace serving this request: it would close itself mid-way.
+   * `test` copies, checks and drops the copy without touching the tenant.
+   */
+  async migrateDatabase(body = {}) {
+    if (this.#isSelf()) {
+      return loopar.throw({ code: 403, title: 'Forbidden', message: "You can't migrate the database of the workspace you're currently using." });
+    }
+    const target = this.#migrationTarget(body);
+    const reach = await testServerConnection(target);
+    if (!reach.ok) loopar.throw({ status: 503, title: 'Database connection', message: `Could not connect to the database server: ${reach.error}` });
+
+    const test = [true, 1, '1', 'true'].includes(body.test);
+    try {
+      // Name check up-front: a bad name fails here, not in the background job.
+      return startMigrationJob({ tenant: this.name, target: targetConfig(target), test });
+    } catch (e) {
+      loopar.throw({ status: e.status || 400, title: 'Database migration', message: e.message });
+    }
+  }
+
+  migrationJob() {
+    return backupJob(this.name);
+  }
+
   /** Every tenant on this server (desk figures: number cards, shortcut counters). */
   async virtualRecords() {
     return await this.#getTenantList();
@@ -346,6 +397,7 @@ export default class TenantManager extends BaseDocument {
       status: t.online ? "online" : "stopped",
       control_plane: t.controlPlane ? 1 : 0,
       template_host: t.templateHost ? 1 : 0,
+      db: this.dbEngine(t.name),
     }));
   }
 

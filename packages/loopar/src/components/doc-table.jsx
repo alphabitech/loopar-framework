@@ -25,6 +25,10 @@ export default function DocTable(props) {
 
   const node = record.fields.get(data.field);
   if (!node || node.element !== "form_table") return null;
+  // An empty table is left out, as in the stored snapshot (core/document/print-format.js).
+  const value = record.data[data.field];
+  const rows = typeof value === "string" ? loopar.utils.JSONparse(value, []) : value;
+  if (!Array.isArray(rows) || !rows.length) return null;
 
   const columns = String(data.columns || "").split(",").map((c) => c.trim()).filter(Boolean);
   const showLabel = !["0", 0, false, "false"].includes(data.show_label);

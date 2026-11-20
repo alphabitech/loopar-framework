@@ -22,6 +22,7 @@ import { RealtimeManager } from './realtime/RealtimeManager.js';
 import { HookManager } from "./HookManager.js";
 import { setupDocumentHistory } from "./document/document-history.js";
 import { setupComments } from "./document/comment.js";
+import { setupNotifications } from "./global/notifications.js";
 import { StorageManager } from "./global/storage/index.js";
 import argon2 from 'argon2';
 import crypto from 'node:crypto';
@@ -53,22 +54,26 @@ export class Loopar extends Document {
 
     setupDocumentHistory(this, KnexORM);
     setupComments(this);
+    setupNotifications(this);
   }
 
   hook(document, event, callback) {
     this.hookManager.register(document, event, callback);
   }
 
+  /** `room:action` (the action is after the LAST colon: rooms may hold one, e.g. `user:x`), or a bare action (room `__global__`). */
   emit(event, payload = null) {
-    const [room, action] = event.includes(":")
-      ? event.split(":")
-      : ["__global__", event];
-  
+    const at = event.lastIndexOf(":");
+    const [room, action] = at > 0 ? [event.slice(0, at), event.slice(at + 1)] : ["__global__", event];
+    this.emitTo(room, action, payload);
+  }
+
+  /** Sends `action` to everyone in `room` of this tenant, stamped with the acting user. */
+  emitTo(room, action, payload = null) {
     const data = {
       ...(payload && typeof payload === 'object' ? payload : { data: payload }),
       user: this.auth?.user() ?? null,
     };
-  
     RealtimeManager.emit(this.tenantId, room, action, data);
   }
 

@@ -173,7 +173,7 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
 
   const PILL = {
     own: "bg-amber-500 text-white border-amber-400 shadow opacity-100",
-    customer: "bg-sky-500 text-white border-sky-400 shadow opacity-100",
+    portal: "bg-sky-500 text-white border-sky-400 shadow opacity-100",
   };
   const ScopePill = ({ scope, visible, onClick }) => {
     const current = scopeOf(scope);
@@ -399,7 +399,7 @@ export function PermissionTable({ role, user, catalog, commonActions, manager = 
         <span className="flex items-center gap-1.5"><Checkbox inherited /> {__("inherited (App:x · *:x · role)")}</span>
         <span className="flex items-center gap-1.5"><Checkbox checked scope="own" /> {__("own records")}</span>
         <span className="flex items-center gap-1.5"><Checkbox inherited scope="own" /> {__("inherited · own")}</span>
-        <span className="flex items-center gap-1.5"><Checkbox checked scope="customer" /> {__("customer's records (portal)")}</span>
+        <span className="flex items-center gap-1.5"><Checkbox checked scope="portal" /> {__("portal records")}</span>
         <span className="flex items-center gap-1.5"><Checkbox denied /> {__("denied")}</span>
         <span className="ml-auto whitespace-nowrap">{__("click = toggle · pill = scope · hover = source")}</span>
       </div>

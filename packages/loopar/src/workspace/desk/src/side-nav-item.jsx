@@ -17,12 +17,16 @@ export const SideNavItem = (props) => {
     icon,
     DefaultIcon,
     path,
+    to,
     title,
     compact,
     submodules = [],
   } = props;
 
   const linkProps = path ? external : {};
+  // A module holding a single document opens it directly (WorkspaceController
+  // → `direct`); otherwise its page with the cards of its documents.
+  const target = to || `/desk/${path}`;
   const { activeModule } = useWorkspace();
   // Visibility is decided server-side (WorkspaceController.sidebarData →
   // PermissionManager.canAccessModule): a module is in menu_data only when
@@ -43,7 +47,7 @@ export const SideNavItem = (props) => {
   const link = compact ? (
     <Link
       award={false}
-      to={`/desk/${path}`}
+      to={target}
       className={`transition-duration-100 h-18 flex w-full flex-col justify-start space-y-0 rounded-full text-left align-middle transition-all h-auto ${props.className || ''}`}
       active={active}
       //activeClassName="bg-red-500 font-medium text-primary-foreground hover:bg-primary"
@@ -65,7 +69,7 @@ export const SideNavItem = (props) => {
       award={false}
       className={`flex w-full items-center justify-start rounded py-1 text-left align-middle ${props.className || ''}`}
       {...linkProps}
-      to={`/desk/${path}`}
+      to={target}
       active={active}
     >
       {/* shrink-0: a long title would squeeze the icon to 0px in the flex row */}

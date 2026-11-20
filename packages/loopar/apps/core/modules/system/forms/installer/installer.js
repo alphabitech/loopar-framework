@@ -47,7 +47,7 @@ export default class Installer extends BaseDocument {
    *     { name: 'Web User', grants: [{ document: '<Page Name>, action: 'view', scope: 'own' }] },
    *   ];
    *
-   * Grant: { document, action, scope = 'all' | 'own' | 'customer', deny = 0 }.
+   * Grant: { document, action, scope = 'all' | 'own' | 'portal', deny = 0 }.
    * `document` may be an entity, '*', 'App:<app>' (every document of the
    * app, including ones added later) or 'Module:<module>' (sidebar).
    */
@@ -66,12 +66,12 @@ export default class Installer extends BaseDocument {
   static defaultRoles = true;
 
   /**
-   * Documents the app shows to its customers (portal users). When declared,
-   * the convention adds "<App> Portal": view/list/search on each of them with
-   * scope 'customer', so a portal user only ever reaches the records of the
-   * customers they are a contact of (auth/customer-scope.js). Each document
-   * must carry a `customer` link (or override `customerField`/`customerCondition`
-   * in its controller). Writes are granted explicitly in `static roles`.
+   * Documents the app shows to portal users. When declared, the convention
+   * adds "<App> Portal": view/list/search on each of them with scope 'portal',
+   * so a portal user only ever reaches the records of the subjects it belongs
+   * to (auth/portal-scope.js). Each document must carry the portal provider's
+   * link column (or override `portalField`/`portalCondition` in its
+   * controller). Writes are granted explicitly in `static roles`.
    */
   static portalDocuments = [];
 
@@ -82,9 +82,9 @@ export default class Installer extends BaseDocument {
     const portalDocuments = this.constructor.portalDocuments || [];
     const portal = portalDocuments.length ? [{
       name: `${label} Portal`,
-      description: `Customers of the ${label} app: see only their own records through the portal.`,
+      description: `Portal users of the ${label} app: see only their own records.`,
       is_system_role: 1,
-      grants: portalDocuments.flatMap(document => ["view", "list", "search"].map(action => ({ document, action, scope: "customer" }))),
+      grants: portalDocuments.flatMap(document => ["view", "list", "search"].map(action => ({ document, action, scope: "portal" }))),
     }] : [];
     return [
       ...portal,
@@ -108,12 +108,46 @@ export default class Installer extends BaseDocument {
     ];
   }
 
-  /** Roles this app defines: convention defaults + `static roles` (declared wins by name). */
+  /**
+   * Roles this app defines: convention defaults + `static roles`. A declared
+   * role replaces the default with the same name, whatever its case ("ERP
+   * Manager" replaces the convention's "Erp Manager"): role names that differ
+   * only in case are one role.
+   */
   async appRoles(declared = this.constructor.roles) {
     const byName = new Map();
-    for (const r of await this.defaultRoles()) byName.set(r.name, r);
-    for (const r of (Array.isArray(declared) ? declared : [])) if (r?.name) byName.set(r.name, r);
+    const key = (name) => String(name).trim().toLowerCase();
+    for (const r of await this.defaultRoles()) byName.set(key(r.name), r);
+    for (const r of (Array.isArray(declared) ? declared : [])) if (r?.name) byName.set(key(r.name), r);
     return [...byName.values()];
+  }
+
+  /**
+   * Roles of this app that differ only in case from one it defines (left by
+   * an earlier install, before declared roles replaced defaults by any case)
+   * are retired: their users move to the defined role and their grants go,
+   * so no unseen role keeps permissions.
+   */
+  async #retireCaseDuplicates(roles) {
+    const defined = new Map(roles.filter((r) => r?.name).map((r) => [r.name.trim().toLowerCase(), r.name]));
+    const stored = await loopar.db.getList("Role", ["name"], { app: this.app_name }, { all: true, includeDeleted: true });
+    const names = new Set(stored.map((r) => r.name));
+    for (const { name } of stored) {
+      const keep = defined.get(String(name).trim().toLowerCase());
+      // Both spellings stored apart (a case-blind database never holds two).
+      if (!keep || keep === name || !names.has(keep)) continue;
+      console.log([`[installer] retiring role`, name, `→ ${keep} (${this.app_name})`]);
+      const holders = await loopar.db.getList("User Role", ["name", "user"], { role: name }, { all: true, includeDeleted: true });
+      for (const h of holders) {
+        const has = await loopar.db.getAll("User Role", ["name"], { user: h.user, role: keep });
+        if (has.length) await loopar.db.deleteRow("User Role", h.name, { force: true });
+        else await loopar.db.qx()("User Role").where({ name: h.name }).update({ role: keep });
+      }
+      for (const { name: grant } of await loopar.db.getList("Permission", ["name"], { relation: "Role", relation_name: name }, { all: true, includeDeleted: true })) {
+        await loopar.db.deleteRow("Permission", grant, { force: true });
+      }
+      await loopar.db.deleteRow("Role", name, { force: true });
+    }
   }
 
   /**
@@ -134,6 +168,7 @@ export default class Installer extends BaseDocument {
   async seedRoles(declared = this.constructor.roles) {
     const roles = await this.appRoles(declared);
     if (roles.length === 0) return;
+    await this.#retireCaseDuplicates(roles);
 
     // `db.count` also counts soft-deleted rows, so a role/grant the admin
     // deleted would look "present" and never come back — and its tombstone
@@ -183,7 +218,7 @@ export default class Installer extends BaseDocument {
   }
 
   getNameToFileName(name) {
-    return loopar.utils.decamelize(name.replaceAll(/\s/g, ''), { separator: '-' });
+    return loopar.utils.decamelize(name, { separator: '-' });
   }
 
   checkIfAppExists() {
@@ -366,6 +401,25 @@ export default class Installer extends BaseDocument {
     if (belongsToOtherTenant(header)) {
       loopar.throw({ status: 403, code: "APP_OF_OTHER_TENANT", title: "Install", message: `App "${this.app_name}" belongs to another workspace.` });
     }
+  }
+
+  /**
+   * Installs `appName` in this tenant when it is available on the server and
+   * not installed yet. For an app's own migrations: e.g. the framework moving
+   * entities it used to ship into a separate app, so tenants holding that data
+   * get the new owner before anything reads it. Returns true when it installed.
+   */
+  async ensureAppInstalled(appName) {
+    if (!appName || appName === this.app_name) return false;
+    if (await loopar.appStatus(appName) === "installed") return false;
+    if (!readAppHeader(appName)) {
+      console.warn(`[installer] ${this.app_name}: app "${appName}" is not available on this server, not installed`);
+      return false;
+    }
+    console.log(`[installer] ${this.app_name}: installing "${appName}"`);
+    const model = await loadInstaller(appName);
+    await model.install(false);
+    return true;
   }
 
   /** Installs the apps listed in the header's `requires` that aren't installed yet. */
@@ -569,11 +623,21 @@ export default class Installer extends BaseDocument {
         constructor, name, cleanEnt, { ifNotFound: null }
       );
 
+      // A record another app owned and no longer ships (e.g. a module moved
+      // from the framework into a separate app) is taken over, the same rule
+      // installEntity follows for entities. The preflight already refused
+      // records another installed app still ships.
+      const previousOwner = existing ? await this.#recordOwner(constructor, name).catch(() => null) : null;
+      const reclaimed = !!previousOwner && !loopar.utils.compare(previousOwner, this.app_name);
+
       if (!existing) {
         console.log([`Inserting ${constructor}:${name}`]);
         const doc = await loopar.newDocument(constructor, { ...cleanEnt, __document_status__: "Active" });
         doc.name = name;
         await doc.save({ validate: false });
+      } else if (reclaimed) {
+        console.log([`Reclaiming ${constructor}:${name} from ${previousOwner}`]);
+        await existing.save({ validate: false, forceChildren: true });
       } else if (reinstall || postInstall) {
         console.log([`Updating ${constructor}:${name}`]);
         await existing.save({ validate: false, forceChildren: postInstall });

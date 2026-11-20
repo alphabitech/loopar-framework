@@ -12,7 +12,7 @@ import { keepInstallersUntouched } from "../support/no-installer-writes.js";
 /** Import of records (Service) and saved views of a list. */
 let t;
 before(async () => {
-  t = await bootTestTenant();
+  t = await bootTestTenant({ apps: ["erp"] });
   await t.run(async () => {
     await keepInstallersUntouched();
     await (await loopar.newDocument("Service Category", { name: "floors", title: "Floors" })).save();
@@ -215,8 +215,8 @@ test("bulk edit: one field on every selected record, read as an import cell", as
 
 test("bulk transition: each record moves through its workflow, or fails on its own", async () => {
   await t.run(async () => {
-    const { createProject } = await import(`${process.cwd()}/apps/loopar/modules/projects/projects.js`);
-    const { createCustomer } = await import(`${process.cwd()}/apps/loopar/modules/crm/customers.js`);
+    const { createProject } = await import(`${process.cwd()}/apps/erp/modules/projects/projects.js`);
+    const { createCustomer } = await import(`${process.cwd()}/apps/erp/modules/crm/customers.js`);
     const customer = await createCustomer({ customer_name: "Jane Doe", email: "jane@example.test" });
     const a = await createProject({ title: "Kitchen", customer }, { document: "Customer", documentName: customer });
     const workflow = await loopar.db.qx()("Workflow").where({ name: "Project" }).first();

@@ -24,14 +24,14 @@ export const permKey = (document, action) => `${document}:${String(action ?? '')
 const lc = k => String(k ?? '').toLowerCase();
 
 /** Scopes a grant can have, in the order the scope pill cycles through them. */
-export const SCOPES = ['all', 'own', 'customer'];
-const SCOPE_RANK = { own: 1, customer: 2, all: 3 };
+export const SCOPES = ['all', 'own', 'portal'];
+const SCOPE_RANK = { own: 1, portal: 2, all: 3 };
 export const scopeOf = s => (SCOPES.includes(s) ? s : 'all');
-/** Widest of two scopes ('customer' over 'own'); null-safe. */
+/** Widest of two scopes ('portal' over 'own'); null-safe. */
 export const widestScope = (a, b) => (!a ? b : !b ? a : SCOPE_RANK[a] >= SCOPE_RANK[b] ? a : b);
-/** Next scope for the pill: all → own → customer → all. */
+/** Next scope for the pill: all → own → portal → all. */
 export const nextScope = s => SCOPES[(SCOPES.indexOf(scopeOf(s)) + 1) % SCOPES.length];
-export const SCOPE_LABEL = { all: 'all records', own: 'own records', customer: "customer's records" };
+export const SCOPE_LABEL = { all: 'all records', own: 'own records', portal: "portal records" };
 
 /**
  * Keys that would cover (document, action) for a document of `app`, most
@@ -50,11 +50,11 @@ export function coveringKeys(app, document, action) {
 
 /**
  * Resolve one cell against what the server returned for the subject.
- *   resolved = { direct: [keys], inherited: {key: [roles]}, denied: [keys], scopes: {key: 'own'|'customer'} }
+ *   resolved = { direct: [keys], inherited: {key: [roles]}, denied: [keys], scopes: {key: 'own'|'portal'} }
  * Returns { granted, kind: 'deny'|'direct'|'wildcard'|'role'|'none', via, scope, key }
  *   via   – the covering key (wildcard) or the role names (role) that provide it
- *   scope – 'all' | 'own' | 'customer': the widest of every provider of the cell
- *           ('customer' over 'own'), like PermissionManager.scope()
+ *   scope – 'all' | 'own' | 'portal': the widest of every provider of the cell
+ *           ('portal' over 'own'), like PermissionManager.scope()
  */
 export function resolveCell(resolved, app, document, action) {
   const key = permKey(document, action);

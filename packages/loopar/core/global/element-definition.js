@@ -398,6 +398,7 @@ export const elementsDefinition = {
     { element: "number_card", icon: "Hash", droppable: false },
     { element: "quick_list", icon: "ListOrdered", droppable: false },
     { element: "module_cards", icon: "LayoutGrid", droppable: false },
+    { element: "app_links", icon: "LayoutList", droppable: false },
     { element: "chart", icon: "ChartColumn", droppable: false },
     { element: "dashboard", icon: "LayoutDashboard", droppable: false },
     { element: "setup_checklist", icon: "ListChecks", droppable: false },

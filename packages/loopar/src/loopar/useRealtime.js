@@ -14,8 +14,10 @@ export function useRealtime(event, handler, { ignoreSelf = false } = {}) {
   useEffect(() => {
     if (!event || !enabled) return;
 
-    const [room, action] = event.includes(":")
-      ? event.split(":")
+    // The action is after the LAST colon: rooms may hold one (`user:x`, `doc:Quote/Q-1`).
+    const at = event.lastIndexOf(":");
+    const [room, action] = at > 0
+      ? [event.slice(0, at), event.slice(at + 1)]
       : ["__global__", event];
 
     let socket = null;

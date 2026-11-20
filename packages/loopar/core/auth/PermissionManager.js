@@ -24,16 +24,28 @@ import { isSourceLockedAction, sourceLockedKeys } from "./source-lock.js";
  *   own      → only records where the user is the owner (see AuthController /
  *              BaseController.ownerField). Ownership never grants by itself:
  *              the action grant is required first, `own` only narrows it.
- *   customer → only records of the customers the user is a contact of
- *              (portal users; see auth/customer-scope.js). Narrows like `own`.
+ *   portal   → only records of the subjects (e.g. customers) the portal user
+ *              belongs to (see auth/portal-scope.js). Narrows like `own`.
  * When the same key is granted twice (user + role, two roles) the widest wins;
- * between the two narrowing scopes, `customer` wins over `own`.
+ * between the two narrowing scopes, `portal` wins over `own`.
  */
-export const SCOPE = Object.freeze({ ALL: 'all', OWN: 'own', CUSTOMER: 'customer' });
-const SCOPE_RANK = { [SCOPE.OWN]: 1, [SCOPE.CUSTOMER]: 2, [SCOPE.ALL]: 3 };
+export const SCOPE = Object.freeze({ ALL: 'all', OWN: 'own', PORTAL: 'portal' });
+const SCOPE_RANK = { [SCOPE.OWN]: 1, [SCOPE.PORTAL]: 2, [SCOPE.ALL]: 3 };
 export const normalizeScope = s => {
   const v = String(s ?? '').toLowerCase();
-  return v === SCOPE.OWN || v === SCOPE.CUSTOMER ? v : SCOPE.ALL;
+  return v === SCOPE.OWN || v === SCOPE.PORTAL ? v : SCOPE.ALL;
+};
+/**
+ * Scope of a stored grant when loading permissions. Fails closed: a value
+ * that isn't a known scope (e.g. a renamed one whose data wasn't migrated
+ * yet) grants nothing, instead of widening to 'all'.
+ */
+const storedScope = s => {
+  const v = String(s ?? '').trim().toLowerCase();
+  if (!v) return SCOPE.ALL;
+  if (Object.values(SCOPE).includes(v)) return v;
+  console.warn(`[permissions] unknown scope "${s}" ignored (grant skipped)`);
+  return null;
 };
 const widest = (a, b) => (!a ? b : !b ? a : (SCOPE_RANK[a] >= SCOPE_RANK[b] ? a : b));
 
@@ -141,7 +153,7 @@ class PermissionManagerClass {
   }
 
   /**
-   * Effective scope for (document, action, user): 'all' | 'own' | 'customer' | null.
+   * Effective scope for (document, action, user): 'all' | 'own' | 'portal' | null.
    * null = not permitted. Administrator and public actions are always 'all'.
    */
   scope(document, action, username, { includePublic = true } = {}) {
@@ -264,7 +276,9 @@ class PermissionManagerClass {
     for (const r of [...rolePerms, ...userPerms]) {
       const key = this.#buildKey(r.document, r.action);
       if (deniedSet.has(key)) continue;
-      merged.set(key, widest(merged.get(key), normalizeScope(r.scope)));
+      const scope = storedScope(r.scope);
+      if (!scope) continue;
+      merged.set(key, widest(merged.get(key), scope));
     }
 
     this.#store().set(username, merged);
@@ -312,7 +326,7 @@ class PermissionManagerClass {
   /**
    * Snapshot for the client. `private` keeps its shape (array of permKeys)
    * so existing consumers keep working; `scopes` adds { permKey: scope } for
-   * keys granted with a narrowing scope ('own' | 'customer') — a key absent
+   * keys granted with a narrowing scope ('own' | 'portal') — a key absent
    * from `scopes` is 'all'.
    */
   /**

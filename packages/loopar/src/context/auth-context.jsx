@@ -6,8 +6,8 @@ import loopar, { useRealtime } from "loopar";
 let _permSet = null;
 let _publicSet = new Set();
 let _deniedSet = new Set();
-// permKey -> 'own' | 'customer' for grants narrowed to the user's own records
-// or to their customers' records (a granted key absent here is 'all').
+// permKey -> 'own' | 'portal' for grants narrowed to the user's own records
+// or to their portal subjects' records (a granted key absent here is 'all').
 // Mirrors PermissionManager.scope().
 let _scopes = {};
 let _userId = null;
@@ -28,8 +28,8 @@ const normAct = a => String(a ?? '').toLowerCase();
 
 /**
  * Effective scope of (document, action) for the current user:
- * 'all' | 'own' | 'customer' | null (not permitted). Widest scope wins, like
- * the server ('customer' over 'own').
+ * 'all' | 'own' | 'portal' | null (not permitted). Widest scope wins, like
+ * the server ('portal' over 'own').
  */
 function permissionScope(document, action) {
   const doc = normDoc(document);
@@ -45,9 +45,9 @@ function permissionScope(document, action) {
   let result = null;
   for (const k of ['*:*', `${doc}:*`, `*:${act}`, key]) {
     if (!_permSet.has(k)) continue;
-    const s = ['own', 'customer'].includes(_scopes[k]) ? _scopes[k] : 'all';
+    const s = ['own', 'portal'].includes(_scopes[k]) ? _scopes[k] : 'all';
     if (s === 'all') return 'all';
-    if (result !== 'customer') result = s;
+    if (result !== 'portal') result = s;
   }
   return result;
 }
@@ -66,8 +66,8 @@ function checkRecordPermission(document, action, record, { ownerField = OWNER_FI
   const scope = permissionScope(document, action);
   if (scope === null) return false;
   if (scope === 'all') return true;
-  // The server only hands a 'customer' grant the records of the user's customers.
-  if (scope === 'customer') return true;
+  // The server only hands a 'portal' grant the records of the user's subjects.
+  if (scope === 'portal') return true;
   const value = owner ?? record?.[ownerField];
   return value != null && value === _userId;
 }

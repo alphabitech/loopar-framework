@@ -16,10 +16,13 @@ import { __ } from "@global/i18n";
 const appOwns = (app, key) =>
   !!key && (app.home === key || (app.modules || []).some(m => m.link === key || (m.submodules || []).includes(key) || (m.routes || []).some(r => r.description === key)));
 
-const homePath = (app) => `/desk/${app.home}/view`;
+/** Home of the apps without a Desk Page of their own: their modules and documents as cards. */
+const APP_HOME = "App Home";
 
-/** The app's entry point: its home Desk Page, else its first module. */
-const appHome = (app) => app.home ? homePath(app) : `/desk/${app.modules?.[0]?.link || ""}`;
+/** The app's entry point: its home Desk Page, else the generic App Home. */
+const homePath = (app) => app.home
+  ? `/desk/${app.home}/view`
+  : `/desk/${APP_HOME}/view?app=${encodeURIComponent(app.name)}`;
 
 /**
  * Active app = the one owning the current route (module page or any entity in
@@ -32,8 +35,11 @@ function useActiveApp(apps) {
   const [stored, setStored] = usePersist("desk-active-app", null);
 
   const segment = decodeURIComponent(pathname.split("/")[2] || "");
-  const dashboard = segment === "Dashboard" ? new URLSearchParams(search).get("name") : null;
-  const fromRoute = (dashboard && apps.find(a => (a.dashboards || []).some(d => d.name === dashboard)))
+  const query = new URLSearchParams(search);
+  const dashboard = segment === "Dashboard" ? query.get("name") : null;
+  const appHome = segment === APP_HOME ? query.get("app") : null;
+  const fromRoute = (appHome && apps.find(a => a.name === appHome))
+    || (dashboard && apps.find(a => (a.dashboards || []).some(d => d.name === dashboard)))
     || apps.find(a => appOwns(a, activeModule)) || apps.find(a => appOwns(a, segment));
 
   useEffect(() => {
@@ -68,7 +74,7 @@ function AppRail({ apps, activeApp }) {
             key={app.name}
             award={false}
             bare
-            to={appHome(app)}
+            to={homePath(app)}
             title={__(app.description)}
             aria-current={active ? "page" : undefined}
             className={cn(
@@ -122,7 +128,7 @@ function AppMenuItems({ apps, activeApp, detailed }) {
       key={app.name}
       award={false}
       bare
-      to={appHome(app)}
+      to={homePath(app)}
       className={cn(
         "flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm",
         app.name === activeApp?.name ? "bg-secondary font-medium" : "hover:bg-secondary/60"
@@ -205,8 +211,11 @@ function AppSwitcher({ apps, activeApp }) {
 
 /** The app's home page, first entry of its module list. */
 function HomeItem({ app, compact }) {
-  const { pathname } = useLocation();
-  const active = decodeURIComponent(pathname.split("/")[2] || "") === app.home;
+  const { pathname, search } = useLocation();
+  const segment = decodeURIComponent(pathname.split("/")[2] || "");
+  const active = app.home
+    ? segment === app.home
+    : segment === APP_HOME && new URLSearchParams(search).get("app") === app.name;
 
   return (
     <li>
@@ -256,7 +265,7 @@ function DashboardItem({ dashboard, compact }) {
 function ModuleList({ app, compact }) {
   return (
     <ul className={cn("flex flex-col gap-1", compact ? "mt-3 px-1" : "px-1")}>
-      {app?.home && <HomeItem app={app} compact={compact} />}
+      {app && <HomeItem app={app} compact={compact} />}
       {(app?.modules || []).map((module, key) => (
         <SideNavItem
           key={module.link ?? module.description ?? key}
@@ -266,6 +275,7 @@ function ModuleList({ app, compact }) {
           icon={module.icon}
           DefaultIcon={ChevronLeftIcon}
           path={module.link}
+          to={module.direct}
           submodules={module.submodules}
           title={__(module.description)}
           compact={compact}

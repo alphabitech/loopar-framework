@@ -1,6 +1,7 @@
 'use strict'
 
 import { loopar, DOC_STATUS, coerceDocStatus } from "loopar";
+import { PermissionManager } from "../auth/PermissionManager.js";
 import CoreController from './core-controller.js';
 import { workspaceServesWebPages } from '../global/router-utils.js';
 import { printPayload } from '../document/print-format.js';
@@ -373,10 +374,23 @@ export default class BaseController extends CoreController {
    * (AuthController downgrades it when the user may view).
    */
   async actionView() {
+    // The portal shows a record as its print format (the customer-facing
+    // version) when the user may print it — never the full form.
+    if (this.name && this.#portalPrintable()) {
+      return this.redirect(`/portal/${encodeURIComponent(this.document)}/print?name=${encodeURIComponent(this.name)}`);
+    }
     const document = await loopar.getDocument(this.document, this.name);
     // Records only: pages, views, reports and singles render through `view` too.
     const readOnly = !loopar.entityIsSingle(document.__ENTITY__ || {});
     return await this.render(document, { linkTitles: await document.linkTitles(), readOnly });
+  }
+
+  /** A record of a plain entity, viewed in the portal by a user who may print it. */
+  #portalPrintable() {
+    if (this.req?.__WORKSPACE_NAME__ !== 'portal') return false;
+    const ref = loopar.getRef(this.document, false);
+    if (!ref || (ref.__ENTITY__ || 'Entity') !== 'Entity' || ref.is_single || ref.is_builder) return false;
+    return PermissionManager.scope(this.document, 'print', loopar.auth.user()) !== null;
   }
 
   /**
@@ -392,7 +406,7 @@ export default class BaseController extends CoreController {
     const document = await loopar.getDocument(this.document, this.name);
     return await this.render(document, {
       linkTitles: await document.linkTitles(),
-      print: await printPayload(this.document, { requested: this.query?.format }),
+      print: await printPayload(this.document, { requested: this.query?.format, designedOnly: this.req?.__WORKSPACE_NAME__ === 'portal' }),
     });
   }
 

@@ -8,7 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@cn/components/ui/dropdown-menu";
-import { GlobeIcon, LayoutDashboardIcon, LogOutIcon, UserRoundCogIcon } from "lucide-react";
+import { GlobeIcon, HouseIcon, LayoutDashboardIcon, LogOutIcon, UserRoundCogIcon } from "lucide-react";
 import { ThemeToggle } from "@workspace/theme-toggle";
 import { Logo } from "../web/src/logo";
 import { __ } from "@global/i18n";
@@ -77,9 +77,15 @@ function UserMenu() {
 function PortalNav({ menuData }) {
   const groups = menuData?.groups || [];
   const profile = menuData?.profile;
+  const home = menuData?.home;
 
   return (
     <nav className="flex flex-col gap-4">
+      {home && (
+        <Link to={home.link} className="justify-start" variant="ghost" size="sm">
+          <HouseIcon className="mr-2 h-4 w-4" /> {__(home.label)}
+        </Link>
+      )}
       {profile && (
         <Link to={profile.link} className="justify-start" variant="ghost" size="sm">
           <UserRoundCogIcon className="mr-2 h-4 w-4" /> {profile.label}

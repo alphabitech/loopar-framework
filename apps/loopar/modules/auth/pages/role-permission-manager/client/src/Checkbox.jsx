@@ -6,14 +6,14 @@ import { Minus, X, UserRound, Building2 } from "lucide-react";
  *   inherited  – granted through a wildcard (Doc:* / App:x / *:x) or, in
  *                user mode, through one of the user's roles
  *   scope      – 'all' | 'own' (records the user owns) — amber
- *                | 'customer' (records of the user's customers, portal) — sky
+ *                | 'portal' (records of the portal user's subjects) — sky
  *   denied     – explicit deny (user mode)
  *   na         – the action doesn't exist for this document
  *   title      – tooltip: where the grant comes from
  */
 const NARROW = {
   own: { Icon: UserRound, inherited: "border-amber-500/80 bg-amber-500/10", icon: "text-amber-500", solid: "bg-amber-500 ring-amber-500/30" },
-  customer: { Icon: Building2, inherited: "border-sky-500/80 bg-sky-500/10", icon: "text-sky-500", solid: "bg-sky-500 ring-sky-500/30" },
+  portal: { Icon: Building2, inherited: "border-sky-500/80 bg-sky-500/10", icon: "text-sky-500", solid: "bg-sky-500 ring-sky-500/30" },
 };
 
 export function Checkbox({ checked, partial, na, inherited, denied, scope, title, onClick }) {

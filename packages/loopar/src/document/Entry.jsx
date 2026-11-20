@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useWorkspace } from "@workspace/workspace-provider";
 import { useShallowStable } from "./base/use-shallow-stable";
 import { DocumentProvider, DefaultView } from "./base/provider";
 import { DocumentController } from "./controller/document-controller";
@@ -58,6 +59,14 @@ export const entries = {
   controller: { modules: [], layout: () => null },
 };
 
+/**
+ * The portal shows records to the people they are about (customers…), not
+ * to staff: no bulk selection, no history (internal activity and comments)
+ * and lists with the entity's own columns — no column picker or saved views
+ * (the server ignores list settings there too). A view's own options still win.
+ */
+const PORTAL_DEFAULTS = { hasSelectAll: false, hasHistory: false, hasListSettings: false };
+
 const unknownKind = (kind) => new Error(`Unknown document entry "${kind}" (${Object.keys(entries).join(" | ")})`);
 
 /** Resolved kinds: the entry with its real `layout` and `Provider`. Static per build, so one cache per process. */
@@ -83,7 +92,12 @@ export function Entry({ kind, children, mapDocument, ...props }) {
   if (!entry) throw new Error(`Document entry "${kind}" rendered before loadEntry("${kind}") resolved it`);
 
   const ctrl = useEntryController(entry, mapDocument, props);
-  const options = useShallowStable(mergeViewOptions(pickViewOptions(entry.defaults), pickViewOptions(props)));
+  const { workspace } = useWorkspace();
+  const options = useShallowStable(mergeViewOptions(
+    pickViewOptions(entry.defaults),
+    workspace === "portal" ? PORTAL_DEFAULTS : null,
+    pickViewOptions(props),
+  ));
 
   return (
     <DocumentProvider ctrl={ctrl} layout={entry.layout} options={options}>

@@ -262,38 +262,99 @@ const MetaDialog = (props) => {
 
 export default MetaDialog;
 
+const fieldInputClass = "w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm";
+const fieldDefault = (f) => f.value ?? f.default ?? (f.type === "checkbox" ? false : "");
+
+/** One input of a prompt form: text (default), textarea, number, date, email, select, checkbox. */
+function PromptField({ field, value, onChange, id }) {
+  const common = { id, value: value ?? "", placeholder: field.placeholder || "", className: fieldInputClass, onChange: (e) => onChange(e.target.value) };
+  let input;
+  if (field.type === "select") {
+    const options = (Array.isArray(field.options) ? field.options : String(field.options || "").split("\n"))
+      .filter((o) => o !== undefined && o !== null && o !== "")
+      .map((o) => (typeof o === "object" ? o : { value: String(o).split(":")[0], label: String(o).split(":").slice(1).join(":") || String(o) }));
+    input = (
+      <select {...common}>
+        {!field.required && <option value="" />}
+        {options.map((o) => <option key={o.value} value={o.value}>{__(o.label)}</option>)}
+      </select>
+    );
+  } else if (field.type === "textarea") {
+    input = <Textarea {...common} rows={field.rows || 4} />;
+  } else if (field.type === "checkbox") {
+    input = <input id={id} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} className="size-4" />;
+  } else {
+    input = <input {...common} type={field.type || "text"} step={field.type === "number" ? (field.step || "any") : undefined} />;
+  }
+  return (
+    <div className={cn("grid gap-1.5", field.full || field.type === "textarea" ? "col-span-2" : "col-span-2 sm:col-span-1")}>
+      <Label htmlFor={id}>{__(field.label || field.name)}{field.required ? " *" : ""}</Label>
+      {input}
+      {field.description && <span className="text-xs text-muted-foreground">{__(field.description)}</span>}
+    </div>
+  );
+}
+
+/**
+ * Prompt dialog. Two shapes:
+ *   - one value: { label, placeholder, initialValue } → ok(text)
+ *   - a small form: { fields: [{ name, label, type, options, value, required, placeholder, description, full }] }
+ *     → ok({ name: value, … }); `validate(values)` (return false / loopar.throw) keeps it open.
+ * Required fields are checked before `validate`.
+ */
 export function Prompt (props) {
   const id = useId();
-  const [value, setValue] = useState(props.initialValue || "");
-
-  const handleChange = (e) => {
-    setValue(e.target.value);
-  }
+  const fields = Array.isArray(props.fields) && props.fields.length ? props.fields : null;
+  const [value, setValue] = useState(() => (fields
+    ? Object.fromEntries(fields.map((f) => [f.name, fieldDefault(f)]))
+    : props.initialValue || ""));
 
   const getRows = () => {
     return {"sm": 5, "md": 10, "lg": 15, "full": 20}[props.size || "md"]
   }
 
+  const validate = (v) => {
+    if (fields) {
+      const missing = fields.filter((f) => f.required && (v[f.name] === "" || v[f.name] === null || v[f.name] === undefined));
+      if (missing.length) {
+        loopar.notify(`${__("Required")}: ${missing.map((f) => __(f.label || f.name)).join(", ")}`, "warning");
+        return false;
+      }
+    }
+    return props.validate ? props.validate(v) !== false : true;
+  };
+
   return (
     <MetaDialog
       {...props}
       value={value}
+      validate={validate}
       type="prompt"
       ok={() => props.ok(value)}
       size={props.size || "md"}
     >
-      <div className="grid w-full items-center gap-1.5">
-        <Label htmlFor="form-control">{props.label || ""}</Label>
-        <Textarea 
-          type="text"
-          id={`prompt-input-${id}`}
-          placeholder={props.placeholder || ""}
-          className="border border-input rounded-xm bg-transparent p-2 mt-2"
-          onChange={handleChange}
-          rows={getRows()}
-          value={value}
-        />
-      </div>
+      {fields ? (
+        <div className="grid w-full grid-cols-2 gap-3 text-left">
+          {props.label && <p className="col-span-2 text-sm text-muted-foreground">{__(props.label)}</p>}
+          {fields.map((f) => (
+            <PromptField key={f.name} id={`prompt-${id}-${f.name}`} field={f} value={value[f.name]}
+              onChange={(v) => setValue((prev) => ({ ...prev, [f.name]: v }))} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid w-full items-center gap-1.5">
+          <Label htmlFor="form-control">{props.label || ""}</Label>
+          <Textarea
+            type="text"
+            id={`prompt-input-${id}`}
+            placeholder={props.placeholder || ""}
+            className="border border-input rounded-xm bg-transparent p-2 mt-2"
+            onChange={(e) => setValue(e.target.value)}
+            rows={getRows()}
+            value={value}
+          />
+        </div>
+      )}
     </MetaDialog>
   )
 }

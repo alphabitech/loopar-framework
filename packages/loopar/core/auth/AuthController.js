@@ -1,7 +1,7 @@
 import { loopar, PermissionManager, CREATED_BY_COLUMN } from "loopar";
 import { SCOPE, isReadOnlyWrite } from "./PermissionManager.js";
 import { isSourceLockedAction, sourceLockedMessage } from "./source-lock.js";
-import { portalIdentity, customerCondition, isCustomerRecord, customerFieldOf, CUSTOMER_FIELD } from "./customer-scope.js";
+import { portalIdentity, portalCondition, isPortalRecord, portalFieldOf } from "./portal-scope.js";
 import { validateCsrfToken } from './csrf.js';
 import { permissionActionOf } from './permission-aliases.js';
 import { workspaceCapabilities, workspaceRequiresAuth, getWorkspaceName, workspaceServesWebPages } from "../global/router-utils.js";
@@ -101,14 +101,14 @@ export default class AuthController {
   // never gated here (Invoice.update reading Materials is not a Material
   // request). Lists are narrowed by `ownerFilters()` in BaseController.
 
-  /** Column that identifies the owner. Override per entity (e.g. 'customer'). */
+  /** Column that identifies the owner. Override per entity. */
   static ownerField = CREATED_BY_COLUMN;
 
   get ownerField() {
     return this.constructor.ownerField || CREATED_BY_COLUMN;
   }
 
-  /** Effective scope for this request: 'all' | 'own' | 'customer' | null. */
+  /** Effective scope for this request: 'all' | 'own' | 'portal' | null. */
   ownerScope(user = loopar.auth.user()) {
     return PermissionManager.scope(this.document, permissionActionOf(this.action), user);
   }
@@ -120,38 +120,38 @@ export default class AuthController {
 
   /**
    * Narrowing filter for the request's scope: `ownerCondition()` for 'own',
-   * `customerCondition()` for 'customer', null for 'all'.
+   * `portalCondition()` for 'portal', null for 'all'.
    */
   async ownerFilters(user = loopar.auth.user()) {
     const scope = this.ownerScope(user);
     if (scope === SCOPE.OWN) return await this.ownerCondition(user);
-    if (scope === SCOPE.CUSTOMER) return await this.customerCondition(user);
+    if (scope === SCOPE.PORTAL) return await this.portalCondition(user);
     return null;
   }
 
-  // ---- Customer scope (portal users) ---------------------------------------
-  // A grant with scope 'customer' reaches only the records of the customers
-  // the user is a contact of (auth/customer-scope.js). The record says whose
-  // it is through `customerField` (a link to Customer).
+  // ---- Portal scope ---------------------------------------------------------
+  // A grant with scope 'portal' reaches only the records of the subjects the
+  // portal user belongs to (auth/portal-scope.js; an installed app provides
+  // what a subject is). The record says whose it is through `portalField`.
 
-  /** Column that links a record to its Customer. Override per entity. */
-  static customerField = CUSTOMER_FIELD;
+  /** Column that links a record to its subject. Null: the provider's field. Override per entity. */
+  static portalField = null;
 
-  get customerField() {
-    return this.constructor.customerField || CUSTOMER_FIELD;
+  get portalField() {
+    return this.constructor.portalField || null;
   }
 
-  /** Filter to narrow a list to the user's customers. Override for compound rules. */
-  async customerCondition(user = loopar.auth.user()) {
-    return customerCondition(this.document, await portalIdentity(user), this.customerField);
+  /** Filter to narrow a list to the user's subjects. Override for compound rules. */
+  async portalCondition(user = loopar.auth.user()) {
+    return portalCondition(this.document, await portalIdentity(user), this.portalField);
   }
 
   /**
-   * Does record `name` belong to one of the user's customers? Override for
+   * Does record `name` belong to one of the user's subjects? Override for
    * compound rules. Null when the record doesn't exist.
    */
-  async isCustomerRecord(name, user = loopar.auth.user()) {
-    return await isCustomerRecord(this.document, name, await portalIdentity(user), this.customerField);
+  async isPortalRecord(name, user = loopar.auth.user()) {
+    return await isPortalRecord(this.document, name, await portalIdentity(user), this.portalField);
   }
 
   /**
@@ -189,22 +189,22 @@ export default class AuthController {
     }
   }
 
-  async #assertCustomer(user) {
+  async #assertPortal(user) {
     for (const name of this.#targetNames()) {
-      if (await this.isCustomerRecord(name, user.name) === false) {
+      if (await this.isPortalRecord(name, user.name) === false) {
         loopar.throw({ code: 403, message: 'You do not have permission over this record' });
       }
     }
 
-    // A write may not point a record at somebody else's customer.
-    const field = customerFieldOf(this.document, this.customerField);
+    // A write may not point a record at somebody else's subject.
+    const field = await portalFieldOf(this.document, this.portalField);
     const method = String(this.method || 'GET').toUpperCase();
     if (field === 'name' || method === 'GET' || method === 'HEAD') return;
     const sent = this.body?.[field] ?? this.data?.[field];
     if (sent == null || sent === '') return;
-    const { customers } = await portalIdentity(user.name);
-    if (!customers.includes(sent)) {
-      loopar.throw({ code: 403, message: 'You do not have permission over this customer' });
+    const { subjects } = await portalIdentity(user.name);
+    if (!subjects.includes(sent)) {
+      loopar.throw({ code: 403, message: 'You do not have permission over this account' });
     }
   }
 
@@ -282,8 +282,8 @@ export default class AuthController {
 
     if (scope === SCOPE.OWN) {
       await this.#assertOwnership(user);
-    } else if (scope === SCOPE.CUSTOMER) {
-      await this.#assertCustomer(user);
+    } else if (scope === SCOPE.PORTAL) {
+      await this.#assertPortal(user);
     }
 
     return true;

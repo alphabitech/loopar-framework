@@ -22,7 +22,7 @@ const SERVICES = [
 let t;
 const names = {};
 before(async () => {
-  t = await bootTestTenant();
+  t = await bootTestTenant({ apps: ["erp"] });
   await t.run(async () => {
     await keepInstallersUntouched();
     await (await loopar.newDocument("Service Category", { name: "floors", title: "Floors" })).save();
@@ -265,8 +265,8 @@ test("actionExport: a CSV of the list, formula text made inert", async () => {
 
 test("actionBoard / actionCalendar: the views' data, with their own parameters left out of the filters", async () => {
   await t.run(async () => {
-    const { createProject } = await import(`${process.cwd()}/apps/loopar/modules/projects/projects.js`);
-    const { createCustomer } = await import(`${process.cwd()}/apps/loopar/modules/crm/customers.js`);
+    const { createProject } = await import(`${process.cwd()}/apps/erp/modules/projects/projects.js`);
+    const { createCustomer } = await import(`${process.cwd()}/apps/erp/modules/crm/customers.js`);
     const customer = await createCustomer({ customer_name: "Jane Doe", email: "jane@example.test" });
     await createProject({ title: "Kitchen floor", customer, city: "Boston" });
   });

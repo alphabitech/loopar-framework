@@ -222,6 +222,14 @@
 .lp-table tr { break-inside: avoid; }
 
 /* ---- paper ---- */
+/* Thermal receipts: compact type and spacing; nothing side by side. */
+.lp-print-sheet[data-roll] { font-size: 11px; line-height: 1.3; }
+.lp-print-sheet[data-roll] .lp-title { font-size: 14px; }
+.lp-print-sheet[data-roll] table { font-size: 10px; }
+.lp-print-sheet[data-roll] th,
+.lp-print-sheet[data-roll] td { padding: 1px 2px !important; }
+.lp-print-sheet[data-roll] .lp-header { flex-direction: column; gap: 2px; align-items: flex-start; }
+
 @media print {
   [data-print-hide] { display: none !important; }
   .lp-page-break-design { border: 0; padding: 0; font-size: 0; }

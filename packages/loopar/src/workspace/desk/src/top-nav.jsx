@@ -4,6 +4,7 @@ import { AppsMenu } from "./apps-menu"
 import { UserInfo } from "./user-info"
 import { CommandPalette } from "./command-palette"
 import { DebugChip } from "./debug-chip"
+import { NotificationBell } from "./notification-bell"
 import { useWorkspace } from "@workspace/workspace-provider"
 
 /**
@@ -21,6 +22,7 @@ export function TopNav() {
           <CommandPalette />
           <nav className="flex items-center space-x-1">
             <DebugChip />
+            <NotificationBell />
             <AppsMenu />
             <ThemeToggle />
             <UserInfo />

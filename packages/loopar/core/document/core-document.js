@@ -278,7 +278,9 @@ export default class CoreDocument {
           get: async () => {
             const field = this.#fields[fieldName];
             const currentValue = field.value;
-            if((!currentValue || currentValue.length === 0) && !this.__IS_NEW__) {
+            // Not loaded yet: the stored rows. An empty list the code assigned
+            // is "no rows" (it must not read the stored rows back).
+            if((!currentValue || currentValue.length === 0) && !this.__IS_NEW__ && !field.__ASSIGNED__) {
               return await this.getChildRawValues(field.options);
             }
             return field.value;
@@ -286,10 +288,12 @@ export default class CoreDocument {
           set: (val) => {
             if (Array.isArray(val)) {
               this.#fields[fieldName].value = val;
+              this.#fields[fieldName].__ASSIGNED__ = true;
             } else {
               const v = loopar.utils.isJSON(val) ? JSON.parse(val) : [];
               if (Array.isArray(v)) {
                 this.#fields[fieldName].value = v;
+                this.#fields[fieldName].__ASSIGNED__ = true;
               }
             }
           },
@@ -370,7 +374,12 @@ export default class CoreDocument {
     // doc (id not pushed back to `this`) and a stale ref cache that didn't
     // SELECT `id` — without it deleteChildRecords would bind `undefined`.
     if (this.id != null) return this.id;
-    return await loopar.db.getValue(this.__ENTITY__.name, "id", this.__DOCUMENT_NAME__);
+    // No name yet (a new document): no row, so no id. Looking it up with an
+    // empty name answers the table's FIRST row, and a new form showed that
+    // record's child rows as its own.
+    const name = this.__DOCUMENT_NAME__;
+    if (name == null || name === "") return null;
+    return await loopar.db.getValue(this.__ENTITY__.name, "id", name) ?? null;
   }
 
   /** Child entities of this document (its form tables) that have a table. */
@@ -384,6 +393,8 @@ export default class CoreDocument {
 
   /** Query of the rows of `entity` that belong to this document (`parentId`). */
   #childRows(entity, parentId) {
+    // A missing parent matches nothing (never every row of the entity).
+    if (parentId == null) return loopar.db.qx()(entity).whereRaw("1 = 0");
     return loopar.db.qx()(entity).where({ parent_id: parentId, parent_document: this.__ENTITY__.name });
   }
 
@@ -1168,9 +1179,12 @@ export default class CoreDocument {
    * (no list columns, pages or owner scope: a child row belongs to its parent).
    */
   async getChildRawValues(field) {
+    const parentId = await this.__ID__();
+    // knex drops `undefined`/unbound keys from where(): never query without a parent.
+    if (parentId == null) return [];
     return await orderChildRows(loopar.db.qx()(field)
       .select("*")
-      .where({ parent_id: await this.__ID__(), parent_document: this.__ENTITY__.name }));
+      .where({ parent_id: parentId, parent_document: this.__ENTITY__.name }));
   }
 
   stringifyValues(toSave = false) {

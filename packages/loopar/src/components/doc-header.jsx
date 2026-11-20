@@ -1,8 +1,12 @@
 import { cn } from "@cn/lib/utils";
-import { usePrintRecord, usePrintDesign } from "@loopar/print/record";
+import { usePrintRecord, usePrintDesign, printDesignFieldOptions } from "@loopar/print/record";
 import { PrintHeader } from "@loopar/print/structure";
 
-/** Print element: document title block (title, record name, print date). */
+/**
+ * Print element: document title block (title, record name, print date).
+ * The title is the field named in "Title from field" when the record has a
+ * value there (e.g. a document whose kind changes its title), else "Title".
+ */
 export default function DocHeader(props) {
   const data = props.data || {};
   const record = usePrintRecord();
@@ -20,9 +24,10 @@ export default function DocHeader(props) {
     );
   }
 
+  const fromField = data.title_field ? record.data?.[data.title_field] : null;
   return (
     <div className={props.className}>
-      <PrintHeader title={data.label || undefined} />
+      <PrintHeader title={(fromField && String(fromField)) || data.label || undefined} />
     </div>
   );
 }
@@ -30,5 +35,11 @@ export default function DocHeader(props) {
 DocHeader.dontHaveMetaElements = ["name", "text"];
 
 DocHeader.metaFields = () => [
-  { group: "content", elements: { label: { element: INPUT, data: { label: "Title", placeholder: "Empty = entity name" } } } },
+  {
+    group: "content",
+    elements: {
+      label: { element: INPUT, data: { label: "Title", placeholder: "Empty = entity name" } },
+      title_field: { element: SELECT, data: { label: "Title from field", description: "When the record has a value in this field, it is the title.", options: printDesignFieldOptions({ tables: false }) } },
+    },
+  },
 ];

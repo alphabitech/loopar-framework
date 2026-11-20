@@ -18,8 +18,20 @@ import { kioskManifest } from "../global/kiosk-manifest.js";
 import { robotsTxt, sitemapXml } from "../global/seo.js";
 import { buildIdMiddleware, buildEndpoint, previousAssetsMiddleware } from "./build-info.js";
 import { debugCollector } from "../debug/collector.js";
-import { isRestoring, unplugTenant } from "../backup/core-ops.js";
+import { isRestoring, maintenanceReason, unplugTenant } from "../backup/core-ops.js";
 import { PermissionManager } from "../auth/PermissionManager.js";
+
+/** What a tenant closed for maintenance answers (see backup/core-ops.js). */
+const MAINTENANCE_NOTICES = {
+  restore: {
+    code: 'RESTORING', title: 'Restoring backup', heading: 'Restoring a backup…',
+    message: 'A backup is being restored on this site. Try again in a moment.',
+  },
+  migrate: {
+    code: 'MAINTENANCE', title: 'Maintenance', heading: 'Moving to a new database…',
+    message: 'This site is moving to a new database. Try again in a moment.',
+  },
+};
 
 const server = new express();
 
@@ -111,6 +123,7 @@ export class Server extends Router {
     if (isRestoring(byHost.name)) {
       const e = new Error('restoring');
       e.restoringTenant = byHost.name;
+      e.maintenanceReason = maintenanceReason(byHost.name);
       throw e;
     }
 
@@ -138,13 +151,13 @@ export class Server extends Router {
       `<span style="opacity:.6">Loopar</span></body></html>`;
   }
 
-  #restoringPage() {
+  #restoringPage(notice = MAINTENANCE_NOTICES.restore) {
     return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="5">` +
-      `<title>Restoring backup</title></head>` +
+      `<title>${notice.title}</title></head>` +
       `<body style="display:flex;justify-content:center;align-items:center;` +
       `height:100vh;margin:0;flex-direction:column;background:#0b0b0f;color:#95b3d6;` +
       `font-family:ui-sans-serif,system-ui">` +
-      `<h1 style="font-size:40px;margin:0">Restoring a backup…</h1>` +
+      `<h1 style="font-size:40px;margin:0">${notice.heading}</h1>` +
       `<p style="font-size:16px;opacity:.8">This site will be back in a moment. The page reloads by itself.</p>` +
       `<hr style="width:40%;opacity:.2;margin:20px 0"/>` +
       `<span style="opacity:.6">Loopar</span></body></html>`;
@@ -184,10 +197,11 @@ export class Server extends Router {
         if (err?.restoringTenant) {
           if (!res.headersSent) {
             res.status(503).set('Retry-After', '5');
+            const notice = MAINTENANCE_NOTICES[err.maintenanceReason] || MAINTENANCE_NOTICES.restore;
             if (req.method === 'POST' || /^\/api\//.test(req.path) || req.xhr) {
-              res.json({ status: 503, success: false, code: 'RESTORING', title: 'Restoring backup', message: 'A backup is being restored on this site. Try again in a moment.', retryable: true });
+              res.json({ status: 503, success: false, code: notice.code, title: notice.title, message: notice.message, retryable: true });
             } else {
-              res.set('Content-Type', 'text/html').send(this.#restoringPage());
+              res.set('Content-Type', 'text/html').send(this.#restoringPage(notice));
             }
           }
           return;
@@ -326,9 +340,17 @@ export class Server extends Router {
       isKnownTenant: (siteName) => !!tenantRegistry.get(siteName),
       // Debugger stream: the users who may open the Debugger page.
       canJoin: (siteName, channel, userId) => {
-        if (channel !== "debug" || !getTenantInstance(siteName)) return false;
+        if (!getTenantInstance(siteName)) return false;
         if (userId === "Administrator") return true;
-        return requestContext.run({ tenant: { name: siteName } }, () => PermissionManager.can("Debugger", "view", userId));
+        const can = (document, action) => requestContext.run({ tenant: { name: siteName } }, () => PermissionManager.can(document, action, userId));
+        if (channel === "debug") return can("Debugger", "view");
+        // doc:<Entity>/<name> — any view grant on the entity (the room only says "it changed";
+        // the form reloads through the record's own permission check).
+        if (channel.startsWith("doc:")) {
+          const entity = channel.slice(4).split("/")[0];
+          return !!entity && can(entity, "view");
+        }
+        return false;
       },
     });
 

@@ -176,7 +176,14 @@ class _RealtimeManager {
       return !!socket.data.userId && targetUserId === socket.data.userId;
     }
 
-    const authedPrefixes = ["list:", "doc:", "chat:", "site:"];
+    // A record's room (`doc:<Entity>/<name>`): only users who may view that entity.
+    if (channel.startsWith("doc:")) {
+      if (!socket.data.userId) return false;
+      if (!this._canJoin) return true;
+      try { return !!this._canJoin(socket.data.siteName, channel, socket.data.userId); } catch { return false; }
+    }
+
+    const authedPrefixes = ["list:", "chat:", "site:"];
     if (authedPrefixes.some((p) => channel.startsWith(p))) {
       return !!socket.data.userId;
     }

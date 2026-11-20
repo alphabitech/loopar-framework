@@ -22,6 +22,7 @@ const KIND = {
   manual: { label: "Manual", tone: "primary" },
   "pre-update": { label: "Before update", tone: "warning" },
   "pre-restore": { label: "Before restore", tone: "warning" },
+  "pre-migrate": { label: "Before migration", tone: "warning" },
   uploaded: { label: "Uploaded", tone: "muted" },
 };
 

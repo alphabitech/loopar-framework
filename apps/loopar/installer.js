@@ -1,8 +1,6 @@
 import { loopar, CoreInstaller, fileManage, connectionFromInstallData, normalizeLanguage, tenant } from "loopar";
 import { testServerConnection } from "db-env";
 import sha1 from "sha1";
-import { ensureCustomerContact, linkPortalUser } from "./modules/crm/portal-access.js";
-import { setExternalId } from "./modules/crm/customers.js";
 import crypto from "crypto";
 
 /**
@@ -114,8 +112,8 @@ export default class Installer extends CoreInstaller {
       await this.#migrateAppTypeToHasWebsite();
       await this.#restoreNameIdentity();
       await this.#dropModuleGroup();
-      await this.#restoreProjectIndexes();
-      await this.#migrateCustomers();
+      await this.#migratePortalScope();
+      await this.#installErpWhenNeeded();
       await this.#migrateCompany();
       await this.#migrateSystemLanguage();
       await this.#migrateStripeAccounts();
@@ -350,31 +348,6 @@ export default class Installer extends CoreInstaller {
   }
 
   /**
-   * One-time repair (7.5.30): tenants updated with 7.5.29 created the new
-   * `Project` table while the renamed `Portfolio Project` still held the
-   * index names `project_*` (unique per database in SQLite/Postgres), so
-   * Project was left without UNIQUE(name) and its owner index. The rename
-   * now frees those names first (entity-rename.js); this puts the two
-   * indexes back. Idempotent; delete once every tenant is past 7.5.30.
-   */
-  async #restoreProjectIndexes() {
-    const schema = () => loopar.db.qx().schema;
-    const present = (e) => /already exists|duplicate/i.test(e?.message || "");
-    try {
-      if (!(await schema().hasTable("Project"))) return;
-      for (const add of [(t) => t.unique(["name"]), (t) => t.index(["__created_by__"])]) {
-        try {
-          await schema().alterTable("Project", add);
-        } catch (e) {
-          if (!present(e)) console.error("[Installer] Project index not restored:", e.message);
-        }
-      }
-    } catch (e) {
-      console.error("[Installer] Project indexes repair failed:", e.message);
-    }
-  }
-
-  /**
    * One-time migration (7.3.0): Module Group was removed — the desk menu is
    * grouped by App now. Drops the entity (meta row, permissions, table), the
    * Module.module_group column, and the duplicated "web"/"integrations"
@@ -492,62 +465,35 @@ export default class Installer extends CoreInstaller {
   }
 
   /**
-   * One-time migration (7.4.x): Customer moved from the control app to the
-   * core crm module. Existing rows get a customer_name and a capitalized
-   * status, the old `portal_user` link becomes a Customer Contact whose
-   * `user` is that portal user, and `stripe_customer_id` becomes an external
-   * id (source "stripe"); then the orphan columns are dropped.
-   * Idempotent; delete once every tenant is past 7.4.1.
+   * One-time migration (7.6.0): the narrowing scope for portal users was
+   * renamed 'customer' → 'portal' (the framework no longer knows what a
+   * customer is; an installed app provides the portal identity).
    */
-  async #migrateCustomers() {
-    const q = () => loopar.db.qx();
-    const schema = () => q().schema;
+  async #migratePortalScope() {
     try {
-      if (!(await schema().hasTable("Customer"))) return;
-      const has = async (column) => await schema().hasColumn("Customer", column);
-
-      await q()("Customer").where(b => b.whereNull("customer_name").orWhere("customer_name", "")).update({ customer_name: q().raw("??", ["name"]) });
-      await q()("Customer").where({ status: "active" }).update({ status: "Active" });
-      await q()("Customer").where({ status: "inactive" }).update({ status: "Inactive" });
-
-      let failed = 0;
-      if (await has("portal_user")) {
-        let query = q()("Customer").select("name", "email", "customer_name", "portal_user").whereNotNull("portal_user");
-        if (await has("__deleted_at__")) query = query.whereNull("__deleted_at__");
-        const rows = await query;
-        for (const row of rows) {
-          if (!row.portal_user) continue;
-          try {
-            const user = await loopar.db.getRow("User", row.portal_user, ["name", "email"]);
-            if (!user) continue;
-            const contact = await ensureCustomerContact(row.name, { email: row.email || user.email, full_name: row.customer_name });
-            await linkPortalUser(contact, user.name);
-          } catch (e) {
-            failed++;
-            console.error(`[Installer] Customer ${row.name}: portal user not migrated:`, e.message);
-          }
-        }
-      }
-
-      if (await has("stripe_customer_id")) {
-        const rows = await q()("Customer").select("name", "stripe_customer_id").whereNotNull("stripe_customer_id").whereNot("stripe_customer_id", "");
-        for (const row of rows) {
-          try {
-            await setExternalId(row.name, "stripe", row.stripe_customer_id);
-          } catch (e) {
-            failed++;
-            console.error(`[Installer] Customer ${row.name}: Stripe id not migrated:`, e.message);
-          }
-        }
-      }
-
-      // Keep the old columns while anything is still to migrate (the next update retries).
-      if (failed) return;
-      for (const column of ["portal_user", "portal_invited_at", "stripe_customer_id", "tax_id"]) {
-        if (await has(column)) await schema().alterTable("Customer", t => t.dropColumn(column));
-      }
+      if (!(await loopar.db.qx().schema.hasTable("Permission"))) return;
+      const moved = await loopar.db.qx()("Permission").where({ scope: "customer" }).update({ scope: "portal" });
+      if (moved) console.log(`[Installer] ${moved} permission grants moved from scope 'customer' to 'portal'`);
     } catch (e) {
-      console.error("[Installer] Customer migration failed:", e.message);
+      console.error("[Installer] portal scope migration failed:", e.message);
+    }
+  }
+
+  /**
+   * One-time migration (7.6.0): CRM (Customer, contacts) and Projects left the
+   * framework for the `erp` app (AlfraERP). A tenant that already holds
+   * customers or projects gets `erp` installed right away, so its records
+   * keep an owner; the erp installer reclaims the entities and their tables
+   * as they are (no data is moved).
+   */
+  async #installErpWhenNeeded() {
+    const schema = () => loopar.db.qx().schema;
+    const hasRows = async (table) => (await schema().hasTable(table)) && !!(await loopar.db.qx()(table).first("id"));
+    try {
+      if (!(await hasRows("Customer")) && !(await hasRows("Project"))) return;
+      await this.ensureAppInstalled("erp");
+    } catch (e) {
+      console.error("[Installer] erp could not be installed:", e.message);
     }
   }
 

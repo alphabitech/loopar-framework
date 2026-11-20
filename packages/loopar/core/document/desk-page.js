@@ -100,8 +100,8 @@ export function scopedQuery(entity, filter, user) {
   if (!scope) return null;
 
   const where = parseDeskFilter(filter, ref);
-  // Desk figures are for staff: a portal ('customer') grant doesn't count here.
-  if (scope === SCOPE.CUSTOMER) return null;
+  // Desk figures are for staff: a 'portal' grant doesn't count here.
+  if (scope === SCOPE.PORTAL) return null;
   if (scope === SCOPE.OWN) where[CREATED_BY_COLUMN] = user ?? "__nobody__";
 
   let qb = loopar.db.qx()(ref.__NAME__);
@@ -120,7 +120,7 @@ async function virtualRows(entity, filter, user) {
   const ref = loopar.getRef(entity, false);
   if (!ref?.is_virtual) return null;
   const scope = PermissionManager.scope(ref.__NAME__, "list", user);
-  if (!scope || scope === SCOPE.CUSTOMER) return { denied: true };
+  if (!scope || scope === SCOPE.PORTAL) return { denied: true };
   try {
     const doc = await loopar.newDocument(ref.__NAME__);
     return { ref, doc, rows: matchRecords(await doc.virtualRecords(), parseDeskFilter(filter, ref)) };

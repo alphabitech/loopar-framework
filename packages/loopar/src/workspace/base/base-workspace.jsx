@@ -107,7 +107,7 @@ export function DialogContextProvider() {
     <>
       {Object.values(dialogs).filter(d => d.open).map((dialog, index) => {
         return dialog.type === "prompt" ? (
-          <Prompt {...dialog} open={dialog.open} size={dialog.size || "sm"}/>
+          <Prompt {...dialog} key={dialog.id} open={dialog.open} size={dialog.size || "sm"}/>
         ) : (
           <BaseDialog {...dialog} key={dialog.id} open={dialog.open} />
         );

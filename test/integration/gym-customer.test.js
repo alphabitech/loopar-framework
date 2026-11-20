@@ -76,7 +76,7 @@ test("portal access goes through the customer's contact and resolves the member"
 
     const identity = await portalIdentity(user);
     const customer = await loopar.db.getValue("Gym Member", "customer", ana);
-    assert.deepEqual([...identity.customers], [customer]);
+    assert.deepEqual([...identity.subjects], [customer]);
     assert.equal((await memberCard(ana)).member.portal_user, user);
 
     const again = await (await loopar.getDocument("Gym Member", ana)).createPortalUser();
@@ -128,7 +128,7 @@ test("the update migrates legacy member columns into Customer and drops them", a
     assert.match(cj.notes, /not-an-email/);
 
     const identity = await portalIdentity("luis@example.com");
-    assert.deepEqual([...identity.customers], [luis.customer], "old portal user linked through the contact");
+    assert.deepEqual([...identity.subjects], [luis.customer], "old portal user linked through the contact");
 
     // Idempotent: a second update changes nothing.
     const customers = (await loopar.db.getAll("Customer", ["name"])).length;

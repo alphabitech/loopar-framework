@@ -7,7 +7,7 @@ import { scrollMemory } from "@@tools/router/scroll-memory";
  * VIEW options — presentation, kept as React state (base/view-options.jsx):
  *   slots · actions · actionsInMenu · rowActions · handlers · columns · gridTemplate · sidebar · sidebarHeader ·
  *   primaryAction · canUpdate · readOnly · hasSidebar · hasHeader · hasBreadcrumb · hasHistory ·
- *   hasSearchForm · hasSelectAll · hasSelectRow · hiddenSearchFields · gridMinWidth · onlyList · onlyGrid
+ *   hasSearchForm · hasSelectAll · hasSelectRow · hasListSettings · hiddenSearchFields · gridMinWidth · onlyList · onlyGrid
  *
  * CONTROLLER options — applied once to the controller instance:
  *   controller · notRequireChanges · restoreScroll · overrides (raw methods)
@@ -16,7 +16,7 @@ export const VIEW_OPTION_KEYS = [
   "slots", "actions", "actionsInMenu", "rowActions", "handlers", "columns", "gridTemplate",
   "sidebar", "sidebarHeader", "primaryAction",
   "canUpdate", "readOnly", "hasSidebar", "hasHeader", "hasBreadcrumb", "hasHistory",
-  "hasSearchForm", "hasSelectAll", "hasSelectRow", "hiddenSearchFields", "gridMinWidth",
+  "hasSearchForm", "hasSelectAll", "hasSelectRow", "hasListSettings", "hiddenSearchFields", "gridMinWidth",
   "onlyList", "onlyGrid",
 ];
 

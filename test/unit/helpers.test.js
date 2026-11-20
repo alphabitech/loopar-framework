@@ -51,3 +51,11 @@ test("name helpers", () => {
   assert.equal(kebabToPascal("print-format-builder"), "PrintFormatBuilder");
   assert.equal(toEntityKey("Print%20Format-Builder"), "printformatbuilder");
 });
+
+test("decamelize(): spaces separate words, whatever the case of the next word", () => {
+  assert.equal(decamelize("Point of Sale"), "point-of-sale");
+  assert.equal(decamelize("REN POS"), "ren-pos");
+  assert.equal(decamelize("Gym POS"), "gym-pos");
+  assert.equal(decamelize("Point of SaleController.js"), "point-of-sale-controller.js");
+  assert.equal(decamelize("  Cash   Shift "), "cash-shift");
+});

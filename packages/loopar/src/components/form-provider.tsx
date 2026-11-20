@@ -122,6 +122,29 @@ const asString = (v: unknown): string => {
   return String(v);
 };
 
+/**
+ * File fields are stored serialized: the record brings them as a JSON string
+ * ('[{"name":...}]', sometimes double-encoded) or a bare URL/path. The UI maps
+ * them through fileManager, but zod sees the raw value — normalize it to the
+ * array shape the schema expects.
+ */
+const asFileList = (v: unknown): unknown => {
+  let parsed = v;
+  for (let i = 0; i < 3 && typeof parsed === "string"; i++) {
+    const str = parsed.trim();
+    if (!str) return [];
+    try {
+      parsed = JSON.parse(str);
+    } catch {
+      return [{ name: str, src: str }];
+    }
+  }
+  if (parsed === undefined || parsed === null || parsed === "") return [];
+  if (Array.isArray(parsed)) return parsed;
+  if (typeof parsed === "object") return [parsed];
+  return [{ name: String(parsed), src: String(parsed) }];
+};
+
 // Bounded pattern (no nested quantifiers → no ReDoS); format details are
 // re-checked by dataInterface/server anyway.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -160,9 +183,12 @@ const buildFormFields = (
       if (el.element === FORM_TABLE) {
         // FORM_TABLE is handled outside the zod schema.
       } else if (FILE_ELEMENTS.has(el.element)) {
-        acc[name] = z.array(
-          z.object({ rawFile: z.instanceof(File).optional() }).passthrough()
-        ).optional();
+        acc[name] = z.preprocess(
+          asFileList,
+          z.array(
+            z.object({ rawFile: z.instanceof(File).optional() }).passthrough()
+          ).optional(),
+        );
       } else {
         acc[name] = stringField(data);
       }

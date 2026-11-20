@@ -34,6 +34,8 @@ export default function DocField(props) {
   if (!node) return null;
   // Nothing to print: no label left hanging (a yes/no always has a value).
   if (printKind(node.element, node.data) !== "bool" && isEmptyValue(record.data[data.field])) return null;
+  // A number that may be left out when it is zero (a rounding, a discount).
+  if (["1", 1, true, "true"].includes(data.hide_zero) && Number(record.data[data.field]) === 0) return null;
 
   const value = <PrintValue element={node.element} data={node.data} value={record.data[data.field]} />;
 
@@ -54,6 +56,7 @@ DocField.metaFields = () => [
       field: { element: SELECT, data: { label: "Field", options: printDesignFieldOptions({ tables: false }) } },
       show_label: { element: SWITCH, data: { label: "Show label", default_value: 1 } },
       inline: { element: SWITCH, data: { label: "Label beside the value" } },
+      hide_zero: { element: SWITCH, data: { label: "Hide when zero" } },
     },
   },
 ];

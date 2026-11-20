@@ -11,7 +11,79 @@ import { activeAnnouncement } from "../global/announcements.js";
 import { seoMeta, organizationJsonLd } from "../global/seo.js";
 import { requestLanguage, clientI18nPayload, contentLanguages, siteLanguages, siteDefaultLanguage, translateRecord, loadRegional, availableLanguages } from "../server/i18n.js";
 import { localizePath, splitLanguagePrefix } from "../global/i18n.js";
+import { readDeskPins } from "../document/desk-pins.js";
 import fs from 'fs';
+
+/** Builders whose documents are not desk destinations (controllers, print formats). */
+const NON_DESK_BUILDERS = new Set(['Controller Builder', 'Print Format Builder']);
+const DESK_VIEW_TYPES = new Set(['Desk Page', 'Report', 'View']);
+/** Home every app without one of its own opens (`?app=<name>`): not a destination by itself. */
+const APP_HOME_PAGE = 'App Home';
+
+/**
+ * How a document opens in the desk: 'page' | 'single' | 'list', or null when
+ * it isn't a desk destination. Page Builder pages are the website's in apps
+ * that have one (`websiteApps`, lowercased names); in the others (Backups,
+ * App Manager…) they are desk pages.
+ */
+function deskKind(ref, websiteApps = new Set()) {
+  if (!ref?.__NAME__ || ref.__NAME__ === APP_HOME_PAGE || ref.is_child || NON_DESK_BUILDERS.has(ref.__ENTITY__) || ref.__TYPE__ === 'Controller') return null;
+  if (ref.__ENTITY__ === 'Page Builder') return websiteApps.has(String(ref.__APP__).toLowerCase()) ? null : 'page';
+  if (ref.__ENTITY__ === 'Desk Page Builder' || DESK_VIEW_TYPES.has(ref.__TYPE__)) return 'page';
+  return ref.is_single ? 'single' : 'list';
+}
+
+const KIND_ACTION = { page: 'view', single: 'update', list: 'list' };
+
+/**
+ * Where a document opens for the viewer (`can(entity, action)`): lists open
+ * their list, singles their form, desk pages and reports their view. null
+ * when it isn't a desk destination or the viewer can't open it.
+ */
+function deskDestination(ref, can, websiteApps) {
+  const kind = deskKind(ref, websiteApps);
+  if (!kind || !can(ref.__NAME__, KIND_ACTION[kind])) return null;
+  return { name: ref.__NAME__, kind, link: `/desk/${ref.__NAME__}/${KIND_ACTION[kind]}` };
+}
+
+/** { [module, lowercased]: destinations } of every document the user reaches. */
+function moduleDestinations(username, websiteApps) {
+  const can = (doc, action) => PermissionManager.can(doc, action, username);
+  const byModule = {};
+  for (const ref of Object.values(loopar.getRefs() || {})) {
+    const dest = deskDestination(ref, can, websiteApps);
+    if (dest) (byModule[String(ref.__MODULE__ ?? '').toLowerCase()] ??= []).push(dest);
+  }
+  const order = { list: 0, single: 1, page: 2 };
+  for (const list of Object.values(byModule)) {
+    list.sort((a, b) => order[a.kind] - order[b.kind] || a.name.localeCompare(b.name));
+  }
+  return byModule;
+}
+
+/**
+ * A sidebar module with what it opens: its documents (`docs`), one section
+ * per submodule, and `direct` — the only document it holds, opened straight
+ * from the sidebar instead of through the module page.
+ */
+/** Lowercased names of the installed apps that have a website (their pages are web pages). */
+async function websiteApps() {
+  try {
+    const apps = await loopar.db.getAll('App', ['name', 'has_website']);
+    return new Set(apps.filter(a => loopar.utils.trueValue(a.has_website)).map(a => String(a.name).toLowerCase()));
+  } catch {
+    return new Set();
+  }
+}
+
+function withDestinations(module, byModule) {
+  const docs = byModule[String(module.link).toLowerCase()] || [];
+  const sections = (module.submodules || [])
+    .map(name => ({ name, docs: byModule[String(name).toLowerCase()] || [] }))
+    .filter(s => s.docs.length);
+  const all = [...docs, ...sections.flatMap(s => s.docs)];
+  return { ...module, docs, sections, direct: all.length === 1 ? all[0].link : null };
+}
 
 export default class WorkspaceController extends AuthController {
   constructor(props) {
@@ -29,8 +101,11 @@ export default class WorkspaceController extends AuthController {
     }
 
     if (workspace === "desk") {
-      WORKSPACE.menu_data =  await WorkspaceController.sidebarData();
-      WORKSPACE.search_index = WorkspaceController.deskSearchIndex();
+      const sites = await websiteApps();
+      WORKSPACE.menu_data =  await WorkspaceController.sidebarData(undefined, sites);
+      WORKSPACE.search_index = WorkspaceController.deskSearchIndex(undefined, sites);
+      // Pages the user pinned to the shortcuts menu (null: never saved, the menu shows its defaults).
+      WORKSPACE.desk_pins = await readDeskPins();
       // Base + extra languages of the tenant's websites (translation editors).
       WORKSPACE.content_languages = contentLanguages();
       // Languages with a dictionary: the desk's per-element overrides offer them.
@@ -255,16 +330,19 @@ export default class WorkspaceController extends AuthController {
    * PermissionManager.canAccessModule), the home only if the user may open
    * it, and only apps with at least one such module. Administrator sees all.
    */
-  static async sidebarData(username = loopar.auth.user()) {
+  static async sidebarData(username = loopar.auth.user(), sites = null) {
     const all = loopar.deskMenu || [];
     // Dashboards are records (not part of the built menu): read per request.
     const dashboards = await sidebarDashboards(username);
-    if (username === 'Administrator') return all.map(app => ({ ...app, dashboards: dashboards[app.name] || [] }));
+    const byModule = moduleDestinations(username, sites ?? await websiteApps());
+    const isAdmin = username === 'Administrator';
 
     const apps = [];
     for (const app of all) {
-      const modules = (app.modules || []).filter(m => PermissionManager.canAccessModule(m.link, username));
-      const home = app.home && PermissionManager.can(app.home, 'view', username) ? app.home : null;
+      const modules = (app.modules || [])
+        .filter(m => isAdmin || PermissionManager.canAccessModule(m.link, username))
+        .map(m => withDestinations(m, byModule));
+      const home = app.home && (isAdmin || PermissionManager.can(app.home, 'view', username)) ? app.home : null;
       if (modules.length) apps.push({ ...app, home, modules, dashboards: dashboards[app.name] || [] });
     }
     return apps;
@@ -277,24 +355,16 @@ export default class WorkspaceController extends AuthController {
    * reports their view. Web pages, controllers, print formats and child
    * tables are not desk destinations.
    */
-  static deskSearchIndex(username = loopar.auth.user()) {
+  static deskSearchIndex(username = loopar.auth.user(), sites = new Set()) {
     const can = (doc, action) => PermissionManager.can(doc, action, username);
-    const skipBuilders = new Set(['Page Builder', 'Controller Builder', 'Print Format Builder']);
-    const viewTypes = new Set(['Desk Page', 'Report', 'View']);
 
     const items = [];
     for (const ref of Object.values(loopar.getRefs() || {})) {
-      const entity = ref.__NAME__;
-      if (!entity || ref.is_child || skipBuilders.has(ref.__ENTITY__) || ref.__TYPE__ === 'Controller') continue;
-
-      const base = { entity, app: ref.__APP__ };
-      if (ref.__ENTITY__ === 'Desk Page Builder' || viewTypes.has(ref.__TYPE__)) {
-        if (can(entity, 'view')) items.push({ ...base, kind: 'page', link: `/desk/${entity}/view` });
-      } else if (ref.is_single) {
-        if (can(entity, 'update')) items.push({ ...base, kind: 'single', link: `/desk/${entity}/update` });
-      } else {
-        if (can(entity, 'list')) items.push({ ...base, kind: 'list', link: `/desk/${entity}/list` });
-        if (can(entity, 'create')) items.push({ ...base, kind: 'new', link: `/desk/${entity}/create` });
+      const base = { entity: ref.__NAME__, app: ref.__APP__ };
+      const dest = deskDestination(ref, can, sites);
+      if (dest) items.push({ ...base, kind: dest.kind, link: dest.link });
+      if (deskKind(ref, sites) === 'list' && can(ref.__NAME__, 'create')) {
+        items.push({ ...base, kind: 'new', link: `/desk/${ref.__NAME__}/create` });
       }
     }
 
@@ -324,6 +394,8 @@ export default class WorkspaceController extends AuthController {
 
     return {
       groups,
+      // `/portal` opens the portal home page (apps/loopar web module) when installed.
+      home: loopar.getRef('Portal Home', false) ? { label: 'Home', link: '/portal' } : null,
       profile: { label: 'Profile', link: '/portal/Profile/update' },
     };
   }

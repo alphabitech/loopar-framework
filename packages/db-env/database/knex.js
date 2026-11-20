@@ -438,7 +438,17 @@ export class KnexORM extends Connector {
     const written = await qb.update(data);
     if (guarded && before && written === 0) this.#staleWrite(document, name);
 
-    this.#emitAfter("afterUpdate", { document, doc: { ...data, name }, before });
+    // The written version as a number (data holds the `+ 1` expression):
+    // listeners and realtime payloads need the value, not the knex Raw.
+    const doc = { ...data, name };
+    if (versioned) doc[VERSION_COLUMN] = await this.#writtenVersion(document, name, before);
+    this.#emitAfter("afterUpdate", { document, doc, before });
+  }
+
+  async #writtenVersion(document, name, before) {
+    if (before && before[VERSION_COLUMN] != null) return Number(before[VERSION_COLUMN]) + 1;
+    const row = await this.qx()(document).where({ name }).first(VERSION_COLUMN);
+    return row ? Number(row[VERSION_COLUMN]) : null;
   }
 
   async deleteRow(document, name, opts = {}) {
@@ -696,3 +706,23 @@ export class KnexORM extends Connector {
 KnexORM.on("afterCreate", ({ document }) => loopar.emit(`${document}.changed`));
 KnexORM.on("afterUpdate", ({ document }) => loopar.emit(`${document}.changed`));
 KnexORM.on("afterDelete", ({ document }) => loopar.emit(`${document}.changed`));
+
+// And to the record's own room (`doc:<Entity>/<name>`): an open form follows
+// changes made elsewhere (another user, a workflow, a customer on a link).
+// Only the new version travels; the form reloads through its permissions.
+// Socket payloads carry plain values only: the written row may hold knex
+// expressions (the version is `__version__ + 1`, a Raw that references the
+// client — circular, socket.io's hasBinary recurses forever on it).
+const docRoom = (document, name) => `doc:${document}/${name}`;
+const plainName = (name) => (typeof name === "string" || typeof name === "number" ? String(name) : null);
+const plainVersion = (v) => (typeof v === "number" || (typeof v === "string" && v !== "") ? Number(v) : null);
+KnexORM.on("afterUpdate", ({ document, doc }) => {
+  const name = plainName(doc?.name);
+  if (!name) return;
+  loopar.emitTo(docRoom(document, name), "updated", { document, name, version: plainVersion(doc[VERSION_COLUMN]) });
+});
+KnexORM.on("afterDelete", ({ document, doc }) => {
+  const name = plainName(doc?.name);
+  if (!name) return;
+  loopar.emitTo(docRoom(document, name), "deleted", { document, name });
+});

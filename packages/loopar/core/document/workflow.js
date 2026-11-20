@@ -1,6 +1,7 @@
 'use strict';
 
 import { loopar } from '../loopar.js';
+import { PermissionManager } from '../auth/PermissionManager.js';
 import { Op } from 'db-env';
 import { orderChildRows } from '../global/audit.js';
 
@@ -13,7 +14,8 @@ import { orderChildRows } from '../global/audit.js';
  *   - a save outside a transition keeps the stored state;
  *   - `applyTransition` checks the user, the required fields and the model's
  *     `beforeTransition`, runs the transition's method (only if the model
- *     lists it in `static workflowMethods`) and moves the state.
+ *     lists it in `static workflowMethods`) and moves the state; then the
+ *     model's `afterTransition` runs (its errors are logged, not thrown).
  */
 
 const isTrue = (v) => [1, '1', true, 'true'].includes(v);
@@ -150,6 +152,10 @@ const clientTransition = (t) => ({
 /** What the client needs to paint the state badge and the transition buttons. */
 export async function describeWorkflow(doc, wf) {
   const current = doc.__IS_NEW__ ? wf.initial : stateOf(doc, wf);
+  // Buttons only for who may run transitions on this entity at all (a portal
+  // user reading a quote must not see "Revise"); roles then pick which ones.
+  const entity = doc.__ENTITY__?.name;
+  const allowed = !entity || PermissionManager.scope(entity, 'transition', loopar.auth?.user?.()) !== null;
   const state = wf.states.find(s => s.state === current) || { state: current, color: 'gray' };
   return {
     field: wf.field,
@@ -157,9 +163,9 @@ export async function describeWorkflow(doc, wf) {
     color: state.color,
     is_final: !!state.is_final,
     states: wf.states.map(({ state, color, is_final, show_on_board }) => ({ state, color, is_final, show_on_board })),
-    transitions: doc.__IS_NEW__ ? [] : (await availableTransitions(doc, wf)).map(clientTransition),
+    transitions: doc.__IS_NEW__ || !allowed ? [] : (await availableTransitions(doc, wf)).map(clientTransition),
     // Lists (the Kanban board) get every transition the user may run.
-    ...(doc.__IS_NEW__ ? { board: (await userTransitions(wf)).map(clientTransition) } : {}),
+    ...(doc.__IS_NEW__ ? { board: allowed ? (await userTransitions(wf)).map(clientTransition) : [] } : {}),
   };
 }
 
@@ -209,6 +215,28 @@ async function notify(doc, wf, t, from) {
 }
 
 /**
+ * In-app notification for the record's owner when someone else (another
+ * user, a customer on a link, a job) moves it. Never blocks the transition.
+ */
+async function notifyOwner(doc, t, from) {
+  try {
+    const entity = doc.__ENTITY__.name;
+    const owner = await loopar.notifications?.ownerOf(entity, doc.name);
+    const actor = loopar.auth?.user?.() ?? null;
+    if (!owner || owner === actor) return;
+    await loopar.notifications.send({
+      users: owner,
+      subject: `${entity} ${doc.name}: ${t.to}`,
+      message: `${t.action} (${from} → ${t.to})${actor ? ` by ${actor}` : ''}`,
+      document: entity, documentName: doc.name,
+      from: actor,
+    });
+  } catch (error) {
+    console.error(`[workflow] owner notification failed for ${doc.__ENTITY__?.name} ${doc.name}:`, error.message);
+  }
+}
+
+/**
  * Runs transition `action` on `doc` for the current user. `values` may only
  * fill the transition's required fields. Returns `{ name, state, navigate }`.
  */
@@ -249,7 +277,17 @@ export async function applyTransition(doc, action, values = {}, { system = false
     doc[wf.field] = t.to;
     await doc.save();
 
+    // After the new state is saved (e.g. tell a related record); never undoes it.
+    if (typeof doc.afterTransition === 'function') {
+      try {
+        await doc.afterTransition(t, from);
+      } catch (error) {
+        console.error(`[workflow] afterTransition failed for ${doc.__ENTITY__?.name} ${doc.name}:`, error.message);
+      }
+    }
+
     await notify(doc, wf, t, from);
+    await notifyOwner(doc, t, from);
     return { name: doc.name, state: t.to, navigate: result?.navigate || null };
   } finally {
     doc.__TRANSITION__ = null;

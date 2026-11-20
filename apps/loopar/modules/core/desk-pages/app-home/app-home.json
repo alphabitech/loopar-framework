@@ -1,0 +1,7 @@
+{
+  "name": "App Home",
+  "module": "core",
+  "icon": "LayoutGrid",
+  "doc_structure": "[{\"node\":\"ah_links\",\"element\":\"app_links\",\"data\":{\"show_header\":1}}]",
+  "__ENTITY__": "Desk Page Builder"
+}

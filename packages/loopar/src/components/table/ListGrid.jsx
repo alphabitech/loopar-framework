@@ -1,3 +1,4 @@
+import { useWorkspace } from "@workspace/workspace-provider";
 import { parseOptionLines } from "@global/select-options";
 import { multipleValues } from "@global/element-definition";
 import loopar from "loopar";
@@ -21,10 +22,11 @@ import { __ } from "@global/i18n";
 import { formatDate, formatDateTime, formatCurrency } from "@global/format";
 
 export function ListGrid(props) {
-  const { columns, hasSelectAll } = useViewOptions();
+  const { columns, hasSelectAll, hasListSettings } = useViewOptions();
   // The select-all menu sits in the toolbar, next to the search (as in the grid view).
   const inToolbar = hasSelectAll !== false;
   const {baseColumns, Document, selectorCol, deleteRow, search, listSettings, saveListSettings} = useTable();
+  const portal = useWorkspace().workspace === "portal";
 
   const customMappedColumns = useMemo(() => {
     const Entity = Document.Entity;
@@ -69,7 +71,7 @@ export function ListGrid(props) {
       // View-defined columns: the view lays them out (and links its own rows).
       const customCols = columns(visible.filter((col) => col.data.name !== "name").map(decorate));
       return [
-        selectorCol({deleteOnServer: true, header: false}),
+        ...(inToolbar ? [selectorCol({deleteOnServer: true, header: false})] : []),
         ...customCols
       ];
     }
@@ -104,7 +106,7 @@ export function ListGrid(props) {
           const showName = nameVisible && String(title).toLowerCase() !== String(row.name).toLowerCase();
 
           return (
-            <Link to={recordLink(Entity, row.name)} renderOnRestrict={true} className={linkClass}>
+            <Link to={recordLink(Entity, row.name, row, { portal })} renderOnRestrict={true} className={linkClass}>
               <span className="truncate font-medium text-foreground">{title}</span>
               {showName && <span className="truncate text-xs text-muted-foreground">{row.name}</span>}
             </Link>
@@ -125,7 +127,7 @@ export function ListGrid(props) {
           const empty = content === null || content === undefined || content === "";
 
           return (
-            <Link to={recordLink(Entity, row.name)} renderOnRestrict={true} className={linkClass}>
+            <Link to={recordLink(Entity, row.name, row, { portal })} renderOnRestrict={true} className={linkClass}>
               <span className="truncate font-medium text-foreground">{empty ? row.name : content}</span>
             </Link>
           );
@@ -134,7 +136,8 @@ export function ListGrid(props) {
     }
 
     return [
-      selectorCol({deleteOnServer: true, colSpan: 1, header: false}),
+      // No selection without the select-all menu (its bulk actions): e.g. the portal.
+      ...(inToolbar ? [selectorCol({deleteOnServer: true, colSpan: 1, header: false})] : []),
       primary,
       ...rest.map(withCellProps),
       {
@@ -147,10 +150,10 @@ export function ListGrid(props) {
         render: (row) => <RowMenu row={row} Entity={Entity} onDelete={(r) => deleteRow(r, true)} />,
       }
     ];
-  }, [baseColumns, columns, Document, deleteRow, selectorCol, listSettings]);
+  }, [baseColumns, columns, Document, deleteRow, selectorCol, listSettings, inToolbar, portal]);
 
   // Runtime column changes, saved per user. Views with their own `columns` lay them out themselves.
-  const customizable = !columns && !!saveListSettings;
+  const customizable = !columns && !!saveListSettings && hasListSettings !== false;
 
   const resizeColumn = (key, width) => {
     const widths = { ...listSettings.widths };

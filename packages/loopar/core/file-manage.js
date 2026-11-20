@@ -170,7 +170,7 @@ export default class ${name}${_EXTENDS} {
   
 toKebabCase(str) {
   return inflection.dasherize(
-    inflection.underscore(str.replace(/\s+/g, ''))
+    inflection.underscore(str.trim().replace(/\s+/g, '_'))
   );
 }
 

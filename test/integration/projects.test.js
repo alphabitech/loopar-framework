@@ -2,18 +2,21 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { loopar, applyTransition } from "loopar";
 import { bootTestTenant } from "../support/tenant.js";
-import { createProject, projectOf, projectsAvailable } from "../../apps/loopar/modules/projects/projects.js";
-import { createCustomer } from "../../apps/loopar/modules/crm/customers.js";
+import { createProject, projectOf, projectsAvailable } from "../../apps/erp/modules/projects/projects.js";
+import { createCustomer } from "../../apps/erp/modules/crm/customers.js";
 
 let t;
-before(async () => { t = await bootTestTenant(); });
+before(async () => { t = await bootTestTenant({ apps: ["erp"] }); });
 after(async () => { await t?.teardown(); });
 
 const q = () => loopar.db.qx();
 const indexesOf = async (table) => (await q().raw("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL", [table])).map(r => r.name).sort();
+// An update of the site: the framework first, then the erp app (Project lives there).
 const updateLoopar = async () => {
-  const { default: Installer } = await import(`${process.cwd()}/apps/loopar/installer.js`);
-  await new Installer({ app_name: "loopar" }).install(true);
+  for (const app of ["loopar", "erp"]) {
+    const { default: Installer } = await import(`${process.cwd()}/apps/${app}/installer.js`);
+    await new Installer({ app_name: app }).install(true);
+  }
 };
 
 test("a fresh install ships the projects module and the renamed portfolio entity", async () => {
@@ -80,7 +83,7 @@ test("createProject: one project per source record; the state only moves through
       photos: JSON.stringify([{ name: "a.jpg", src: "/uploads/public/a.jpg" }, { name: "broken" }]),
     });
     await older.save();
-    const { default: ProjectController } = await import(`${process.cwd()}/apps/loopar/modules/projects/entities/project/project-controller.js`);
+    const { default: ProjectController } = await import(`${process.cwd()}/apps/erp/modules/projects/entities/project/project-controller.js`);
     const { updates } = await new ProjectController({ name }).actionUpdates();
     assert.deepEqual(updates.map(u => u.name), [update.name, older.name]);
     assert.equal(updates[0].note, "Demo done");

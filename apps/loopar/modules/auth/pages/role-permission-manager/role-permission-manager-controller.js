@@ -2,8 +2,8 @@
 
 import { PageController, loopar, BaseController, PermissionManager, ActionScanner, Op, SCOPE, normalizeScope } from 'loopar';
 
-const SCOPE_RANK = { [SCOPE.OWN]: 1, [SCOPE.CUSTOMER]: 2, [SCOPE.ALL]: 3 };
-/** Widest of two scopes, like PermissionManager ('customer' over 'own'). */
+const SCOPE_RANK = { [SCOPE.OWN]: 1, [SCOPE.PORTAL]: 2, [SCOPE.ALL]: 3 };
+/** Widest of two scopes, like PermissionManager ('portal' over 'own'). */
 const widestScope = (a, b) => (SCOPE_RANK[a] >= SCOPE_RANK[b] ? a : b);
 
 const getCommonActions = () => {
@@ -417,7 +417,7 @@ export default class RolePermissionManagerController extends PageController {
   }
 
   /**
-   * Set the scope ('all' | 'own' | 'customer') of one grant. Only direct grants of the
+   * Set the scope ('all' | 'own' | 'portal') of one grant. Only direct grants of the
    * given relation are touched (a User can't narrow what a Role gives).
    * The cell may be covered by a wildcard grant; in that case the wildcard
    * row is the one that changes (and the response says which).
@@ -587,7 +587,7 @@ export default class RolePermissionManagerController extends PageController {
    *   direct    – keys granted to the subject itself
    *   inherited – { key: [role, ...] } keys the user gets from roles (User mode only)
    *   denied    – keys the user explicitly denies (User mode only)
-   *   scopes    – { key: 'own' | 'customer' } for narrowed grants
+   *   scopes    – { key: 'own' | 'portal' } for narrowed grants
    *   assigned  – flat union (kept for existing consumers)
    */
   async actionGetResolvedPermissions() {

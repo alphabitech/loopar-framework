@@ -7,7 +7,7 @@ import { getRequest } from '../server/router/request-context.js';
  *
  * Returns the request controller's `ownerFilters()` only when the entity being
  * listed IS the document the request targets and the request's grant has a
- * narrowing scope ('own' or 'customer'). Any other read — a different entity loaded inside an action,
+ * narrowing scope ('own' or 'portal'). Any other read — a different entity loaded inside an action,
  * a job, an installer, a hook — gets null and is never narrowed. This is what
  * makes it safe to apply at model level (BaseDocument.getList): a controller
  * overriding `actionList` still goes through the filter, but Invoice.update

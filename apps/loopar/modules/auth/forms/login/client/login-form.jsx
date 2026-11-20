@@ -331,7 +331,10 @@ export default function LoginForm() {
     if (window.location.pathname !== '/auth/login') {
       navigate('/auth/login' + window.location.search, { replace: true });
     }
-    if (new URLSearchParams(window.location.search).get('mfa') === '1') setMfaStep(true);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mfa') === '1') setMfaStep(true);
+    // Came from a sign-in link (/auth/link) that can't be used any more.
+    if (params.get('link')) setNotice(__("This sign-in link has expired or is no longer valid. Sign in to continue."));
   }, []);
 
   const openMfaStep = useCallback(() => setMfaStep(true), []);

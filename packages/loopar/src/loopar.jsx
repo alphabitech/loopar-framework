@@ -11,6 +11,8 @@ import { __, currentLanguage } from "@global/i18n";
 import { ClientDatabase } from "./loopar/ClientDatabase.js";
 export { useRealtime } from "./loopar/useRealtime.js";
 
+let promptSeq = 0;
+
 class Loopar {
   scriptManager = scriptManager;
   currentPageName = "";
@@ -63,8 +65,13 @@ class Loopar {
     this.emit('dialog', dialog);
   }
 
+  /**
+   * Asks for a value, or several with `fields` (a small form) — see Prompt in
+   * components/dialog. Each call gets its own dialog, so a prompt opened from
+   * another prompt's OK is not closed with it.
+   */
   prompt(dialog) {
-    dialog.id = "test-dialog";
+    dialog.id ??= `prompt-${++promptSeq}`;
     dialog.open = true;
     dialog.type = "prompt";
     dialog.content = <></>

@@ -17,8 +17,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@cn/components/ui/dropdown-menu";
-import { Settings2Icon, EllipsisIcon, HardDrive, RefreshCw, Hammer, PackageIcon, RocketIcon, ChevronDown, RotateCcw, Trash2 } from 'lucide-react';
+import { Settings2Icon, EllipsisIcon, HardDrive, RefreshCw, Hammer, PackageIcon, RocketIcon, ChevronDown, RotateCcw, Trash2, DatabaseIcon } from 'lucide-react';
 
 import {cn} from "@cn/lib/utils";
 
@@ -35,8 +36,35 @@ export const TenantManagerListContext = createContext();
 
 const TenantManagerListProvider = ({children}) => {
   const [updateRows=[], setUpdateRows] = useState([]);
+  // tenant → its running migration job ({ type, step, … }), followed by polling.
+  const [migrations, setMigrations] = useState({});
+
+  const follow = (name, job) => setMigrations(prev => ({ ...prev, [name]: job }));
+
+  useEffect(() => {
+    const running = Object.entries(migrations).filter(([, job]) => job && !job.finishedAt);
+    if (!running.length) return;
+    const timer = setInterval(() => {
+      for (const [name] of running) {
+        loopar.call("Tenant Manager", "migrationStatus", {
+          query: { name },
+          freeze: false,
+          success: (res) => {
+            const job = res?.job;
+            if (!job?.finishedAt) return follow(name, job);
+            setMigrations(prev => { const next = { ...prev }; delete next[name]; return next; });
+            migrationFinished(name, job);
+            loopar.refresh();
+          },
+          error: () => {},
+        });
+      }
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [migrations]);
+
   return (
-    <TenantManagerListContext.Provider value={{updateRows, setUpdateRows}}>
+    <TenantManagerListContext.Provider value={{updateRows, setUpdateRows, migrations, follow}}>
       {children}
     </TenantManagerListContext.Provider>
   )
@@ -71,8 +99,23 @@ const openTenant = (row) => {
   });
 }
 
+const ENGINE_LABELS = { sqlite: "SQLite", postgres: "PostgreSQL", mysql: "MySQL", mariadb: "MariaDB", mssql: "SQL Server" };
+
+/** "records Customer 1000/3000" → readable progress of a migration job. */
+const migrationStepLabel = (job) => {
+  const step = String(job?.step || "starting");
+  if (step === "safety") return __("Backing up…");
+  if (step === "connecting") return __("Connecting…");
+  if (step === "verify") return __("Checking…");
+  if (step.startsWith("structure")) return `${__("Creating tables")} ${step.split(" ")[1] || ""}`;
+  if (step.startsWith("records")) return `${__("Copying records")} ${step.slice(8)}`;
+  return __("Starting…");
+};
+
 const NameRender = ({row}) => {
   const {inDialog} = useDialogContext();
+  const { migrations = {} } = useContext(TenantManagerListContext) || {};
+  const job = migrations[row.name];
   const {toggleRowSelect} = useTable();
   const { __META__ } = useWorkspace();
   const disabled = tenantStatus(row, __META__?.site);
@@ -117,6 +160,17 @@ const NameRender = ({row}) => {
           )}
         </span>
         <span className='text-gray-500'>{to}</span>
+        {(row.db || job) && (
+          <span className='flex items-center gap-1 text-xs text-muted-foreground'>
+            <DatabaseIcon className="h-3 w-3" />
+            {ENGINE_LABELS[row.db] || row.db}
+            {job && (
+              <span className='animate-pulse text-amber-500'>
+                · {job.type === "migration test" ? __("Testing migration") : __("Migrating")}: {migrationStepLabel(job)}
+              </span>
+            )}
+          </span>
+        )}
       </div>
     </a>
   )
@@ -184,9 +238,9 @@ const dangerAction = (action, name, setUpdateRows) => {
 
 const Buttons = ({row}) => {
   const {inDialog} = useDialogContext();
-  const {updateRows, setUpdateRows} = useContext(TenantManagerListContext);
+  const {updateRows, setUpdateRows, migrations = {}, follow} = useContext(TenantManagerListContext);
 
-  const loading = updateRows.includes(row.name);
+  const loading = updateRows.includes(row.name) || !!migrations[row.name];
   if(inDialog) {
     return null
   }
@@ -216,39 +270,211 @@ const Buttons = ({row}) => {
           <Settings2Icon className="text-blue-500" />
         </Button>
       </Link>
-      <DangerMenu row={row} loading={loading} setUpdateRows={setUpdateRows} />
+      <DangerMenu row={row} loading={loading} setUpdateRows={setUpdateRows} follow={follow} />
     </div>
   );
 }
 
 
-const DangerMenu = ({ row, loading, setUpdateRows }) => {
+const DangerMenu = ({ row, loading, setUpdateRows, follow }) => {
   const { __META__ } = useWorkspace();
+  const isSelf = row.name === __META__?.site;
   // Control-plane tenants and the current workspace: the server refuses to reset/delete them.
-  const locked = !!Number(row.control_plane) || row.name === __META__?.site;
+  const locked = !!Number(row.control_plane) || isSelf;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          disabled={loading || locked}
-          title={locked ? "Control-plane / current workspace — can't be reset or deleted" : "Reset or delete"}
+          disabled={loading}
+          title={__("Database, reset or delete")}
         >
           <EllipsisIcon />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem onClick={() => dangerAction("reset", row.name, setUpdateRows)}>
+      <DropdownMenuContent align="end" className="w-60">
+        {/* The workspace serving this page can't close itself mid-migration. */}
+        <DropdownMenuItem disabled={isSelf} onClick={() => migrateDatabase(row, follow)}>
+          <DatabaseIcon className="mr-2 h-4 w-4 text-blue-500" /> {__("Migrate database…")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={locked} onClick={() => dangerAction("reset", row.name, setUpdateRows)}>
           <RotateCcw className="mr-2 h-4 w-4 text-amber-500" /> {__("Reset (drop database)")}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => dangerAction("destroy", row.name, setUpdateRows)} className="text-red-500">
+        <DropdownMenuItem disabled={locked} onClick={() => dangerAction("destroy", row.name, setUpdateRows)} className="text-red-500">
           <Trash2 className="mr-2 h-4 w-4" /> {__("Delete tenant")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 };
+
+const fieldClass = "w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground";
+const DEFAULT_PORTS = { postgres: "5432", mysql: "3306", mariadb: "3306" };
+
+/**
+ * Target of a migration. The dialog's buttons read `state`, which this
+ * component keeps in sync (the dialog API has no form-value channel).
+ */
+function MigrateDatabaseForm({ row, state }) {
+  const [values, setValues] = useState({
+    db_dialect: "postgres", db_host: "localhost", db_port: "", db_user: "", db_password: "", db_name: "",
+  });
+  const [check, setCheck] = useState(null); // null | 'testing' | { ok, error }
+  Object.assign(state, values);
+
+  const set = (key) => (e) => { setCheck(null); setValues(v => ({ ...v, [key]: e.target.value })); };
+
+  const testConnection = (e) => {
+    e.preventDefault();
+    setCheck("testing");
+    loopar.call("Tenant Manager", "testDbConnection", {
+      query: { name: row.name },
+      body: values,
+      freeze: false,
+      success: (res) => setCheck({ ok: !!res?.ok, error: res?.error }),
+      error: (message) => setCheck({ ok: false, error: message?.message || String(message) }),
+    });
+  };
+
+  const field = (key, label, props = {}) => (
+    <label className="block space-y-1">
+      <span className="text-xs text-muted-foreground">{__(label)}</span>
+      <input className={fieldClass} value={values[key]} onChange={set(key)} {...props} />
+    </label>
+  );
+
+  return (
+    <div className="space-y-3 text-left">
+      <p className="text-sm">
+        {__("Moves")} <strong>{row.name}</strong> {__("from")} <strong>{ENGINE_LABELS[row.db] || row.db}</strong> {__("to a new, empty database. Its current database is kept as it is.")}
+      </p>
+      <label className="block space-y-1">
+        <span className="text-xs text-muted-foreground">{__("Engine")}</span>
+        <select className={fieldClass} value={values.db_dialect} onChange={set("db_dialect")}>
+          <option value="postgres">PostgreSQL</option>
+          <option value="mysql">MySQL</option>
+          <option value="mariadb">MariaDB</option>
+        </select>
+      </label>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="col-span-2">{field("db_host", "Host")}</div>
+        {field("db_port", "Port", { placeholder: DEFAULT_PORTS[values.db_dialect] })}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {field("db_user", "User", { autoComplete: "off" })}
+        {field("db_password", "Password", { type: "password", autoComplete: "new-password" })}
+      </div>
+      {field("db_name", "Database", { placeholder: __("Generated (db_…)") })}
+      <div className="flex items-center gap-3">
+        <Button variant="outline" size="sm" onClick={testConnection} disabled={check === "testing"}>
+          {check === "testing" ? __("Testing…") : __("Test connection")}
+        </Button>
+        {check && check !== "testing" && (
+          <span className={cn("text-xs", check.ok ? "text-green-600" : "text-red-500")}>
+            {check.ok ? __("The server can be reached.") : check.error}
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {__("Test migration copies everything into the target, checks it and drops the copy: the tenant keeps working. Migrate takes a backup first, closes the tenant for maintenance while its records are copied, then opens it on the new database.")}
+      </p>
+    </div>
+  );
+}
+
+function startMigration(row, state, test, follow) {
+  loopar.call("Tenant Manager", "migrateDatabase", {
+    query: { name: row.name },
+    body: { ...state, test: test ? 1 : 0 },
+    freeze: false,
+    success: (res) => {
+      follow(row.name, res?.job || { step: "starting", type: test ? "migration test" : "migration" });
+      loopar.notify({ message: test ? __("Migration test started.") : __("Migration started."), type: "info" });
+    },
+    error: (message) => loopar.throw(message),
+  });
+}
+
+function migrateDatabase(row, follow) {
+  const state = {};
+  loopar.dialog({
+    type: "confirm",
+    title: `${__("Migrate database of")} ${row.name}`,
+    content: <MigrateDatabaseForm row={row} state={state} />,
+    size: "md",
+    buttons: [
+      { name: "cancel", text: "Cancel", variant: "secondary", dismiss: true, onClick: () => {} },
+      { name: "test", text: "Test migration", variant: "outline", dismiss: true, onClick: () => startMigration(row, { ...state }, true, follow) },
+      {
+        name: "migrate", text: "Migrate", variant: "default", dismiss: true,
+        onClick: () => {
+          const values = { ...state };
+          loopar.confirm(
+            `${row.name} ${__("will be closed for maintenance while its records are copied, then open on the new database. Continue?")}`,
+            () => startMigration(row, values, false, follow),
+          );
+        },
+      },
+    ],
+  });
+}
+
+/** Result of a finished migration job: a toast, or the values the target rejected. */
+function migrationFinished(name, job) {
+  const test = job.type === "migration test";
+  if (job.ok) {
+    const r = job.result || {};
+    const summary = `${r.tables ?? "?"} ${__("tables")}, ${r.records ?? "?"} ${__("records")}`;
+    loopar.notify({
+      message: test
+        ? `${name}: ${__("migration test passed")} (${summary}). ${__("Nothing was changed.")}`
+        : `${name} ${__("now runs on")} ${ENGINE_LABELS[r.to] || r.to} (${summary}).`,
+      type: "success",
+    });
+    if (r.warnings?.length) {
+      loopar.dialog({ type: "info", title: `${name}: ${__("notes")}`, content: <IssueList lines={r.warnings} />, size: "lg" });
+    }
+    return;
+  }
+  if (job.issues?.length) {
+    loopar.dialog({
+      type: "alert",
+      title: `${name}: ${test ? __("migration test failed") : __("migration failed")}`,
+      content: <IssueList message={job.error} issues={job.issues} />,
+      size: "lg",
+    });
+    return;
+  }
+  loopar.notify({ message: `${name}: ${job.error || __("the migration failed")}`, type: "error" });
+}
+
+function IssueList({ message, issues = [], lines = [] }) {
+  return (
+    <div className="space-y-2 text-left text-sm">
+      {message && <p>{message}</p>}
+      {!!issues.length && (
+        <div className="max-h-80 overflow-auto rounded border border-border">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/50 text-left">
+              <tr><th className="p-1.5">{__("Table")}</th><th className="p-1.5">{__("Field")}</th><th className="p-1.5">{__("Record")}</th><th className="p-1.5">{__("Value")}</th><th className="p-1.5">{__("Problem")}</th></tr>
+            </thead>
+            <tbody>
+              {issues.map((i, n) => (
+                <tr key={n} className="border-t border-border">
+                  <td className="p-1.5">{i.table}</td><td className="p-1.5">{i.column}</td><td className="p-1.5">{String(i.row ?? "")}</td>
+                  <td className="p-1.5 font-mono">{i.value}</td><td className="p-1.5">{i.problem}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {lines.map((l, n) => <p key={n} className="text-xs text-muted-foreground">{l}</p>)}
+    </div>
+  );
+}
 
 // One deploy control. Primary click deploys the watcher's latest build (from
 // build/staging — fast). The dropdown offers the same, plus a full rebuild +

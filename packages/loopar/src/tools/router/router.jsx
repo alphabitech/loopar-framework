@@ -114,6 +114,12 @@ export default class Router extends HTTP {
   #resolveUrl(route) {
     if (typeof route !== 'string') return route;
 
+    // In the portal, desk routes are served by the portal (a Web user never
+    // enters the desk): shared document code navigating to /desk/… stays here.
+    if (this.workspace === 'portal' && /^\/desk(\/|$|\?)/.test(route)) {
+      route = route.replace(/^\/desk/, '/portal');
+    }
+
     if (!route.startsWith('/')) {
       if (typeof window === 'undefined') return route;
       const currentPath = window.location.pathname;

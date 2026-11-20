@@ -1,7 +1,7 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.5.43"
+    "version": "7.6.3"
   },
   "documents": {
     "Entity:Module": {
@@ -20,7 +20,7 @@
     "App:loopar": {
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.5.43",
+      "version": "7.6.3",
       "autor": "Administrator",
       "icon": "SiInfinityfree",
       "is_template": 0,
@@ -172,6 +172,9 @@
     "Page Builder:Document Signing": {
       "__root__": "/apps/loopar/modules/web/pages/document-signing"
     },
+    "Page Builder:Portal Home": {
+      "__root__": "/apps/loopar/modules/web/pages/portal-home"
+    },
     "Module:debug": {
       "name": "debug",
       "description": "Debug",
@@ -212,6 +215,9 @@
     },
     "Desk Page Builder:Desk Home": {
       "__root__": "/apps/loopar/modules/core/desk-pages/desk-home"
+    },
+    "Desk Page Builder:App Home": {
+      "__root__": "/apps/loopar/modules/core/desk-pages/app-home"
     },
     "Entity:Document History": {
       "__root__": "/apps/loopar/modules/core/entities/document-history"
@@ -409,152 +415,6 @@
     "Entity:Workflow": {
       "__root__": "/apps/loopar/modules/core/entities/workflow"
     },
-    "Workflow:Project": {
-      "name": "Project",
-      "document": "Project",
-      "state_field": "status",
-      "app": "loopar",
-      "active": 1,
-      "states": [
-        {
-          "parent_document": "Workflow",
-          "name": "jc4Z8St7V3i1g46",
-          "state": "Planned",
-          "color": "blue",
-          "is_initial": 1,
-          "is_final": 0,
-          "show_on_board": 1,
-          "public_label": "",
-          "__position__": 0
-        },
-        {
-          "parent_document": "Workflow",
-          "name": "O7tf0P8R9rxHj24",
-          "state": "In Progress",
-          "color": "amber",
-          "is_initial": 0,
-          "is_final": 0,
-          "show_on_board": 1,
-          "public_label": "",
-          "__position__": 1
-        },
-        {
-          "parent_document": "Workflow",
-          "name": "kyOdW37RC18c7x4",
-          "state": "On Hold",
-          "color": "gray",
-          "is_initial": 0,
-          "is_final": 0,
-          "show_on_board": 1,
-          "public_label": "",
-          "__position__": 2
-        },
-        {
-          "parent_document": "Workflow",
-          "name": "bN6FSe902P5E5V3",
-          "state": "Completed",
-          "color": "green",
-          "is_initial": 0,
-          "is_final": 1,
-          "show_on_board": 1,
-          "public_label": "",
-          "__position__": 3
-        },
-        {
-          "parent_document": "Workflow",
-          "name": "sjFhl5IU19Hcdep",
-          "state": "Cancelled",
-          "color": "red",
-          "is_initial": 0,
-          "is_final": 1,
-          "show_on_board": 1,
-          "public_label": "",
-          "__position__": 4
-        }
-      ],
-      "transitions": [
-        {
-          "parent_document": "Workflow",
-          "name": "H03v1kdxcp7j7ih",
-          "action": "Start",
-          "from_state": "Planned,On Hold",
-          "to_state": "In Progress",
-          "allowed_roles": "",
-          "required_fields": "",
-          "method": "",
-          "confirm": "",
-          "notify": "None",
-          "style": "primary",
-          "allow_submitter": 0,
-          "system_only": 0,
-          "__position__": 0
-        },
-        {
-          "parent_document": "Workflow",
-          "name": "Q2aKT3pM4j7li56",
-          "action": "Put on hold",
-          "from_state": "In Progress",
-          "to_state": "On Hold",
-          "allowed_roles": "",
-          "required_fields": "",
-          "method": "",
-          "confirm": "",
-          "notify": "None",
-          "style": "default",
-          "allow_submitter": 0,
-          "system_only": 0,
-          "__position__": 1
-        },
-        {
-          "parent_document": "Workflow",
-          "name": "RGDCHIhFQ382Rg4",
-          "action": "Complete",
-          "from_state": "In Progress",
-          "to_state": "Completed",
-          "allowed_roles": "",
-          "required_fields": "",
-          "method": "",
-          "confirm": "Mark the project as completed?",
-          "notify": "None",
-          "style": "primary",
-          "allow_submitter": 0,
-          "system_only": 0,
-          "__position__": 2
-        },
-        {
-          "parent_document": "Workflow",
-          "name": "t754g1bZKjcPqAM",
-          "action": "Cancel",
-          "from_state": "Planned,In Progress,On Hold",
-          "to_state": "Cancelled",
-          "allowed_roles": "",
-          "required_fields": "",
-          "method": "",
-          "confirm": "Cancel this project?",
-          "notify": "None",
-          "style": "destructive",
-          "allow_submitter": 0,
-          "system_only": 0,
-          "__position__": 3
-        },
-        {
-          "parent_document": "Workflow",
-          "name": "NYG0LW13OQ8lHs7",
-          "action": "Reopen",
-          "from_state": "Completed,Cancelled",
-          "to_state": "In Progress",
-          "allowed_roles": "",
-          "required_fields": "",
-          "method": "",
-          "confirm": "",
-          "notify": "None",
-          "style": "default",
-          "allow_submitter": 0,
-          "system_only": 0,
-          "__position__": 4
-        }
-      ]
-    },
     "Entity:Scheduled Job": {
       "__root__": "/apps/loopar/modules/core/entities/scheduled-job"
     },
@@ -608,25 +468,6 @@
     "Entity:Backup Settings": {
       "__root__": "/apps/loopar/modules/backup/entities/backup-settings"
     },
-    "Module:crm": {
-      "name": "crm",
-      "description": "CRM",
-      "app_name": "loopar",
-      "icon": "Contact",
-      "in_sidebar": 1
-    },
-    "Entity:Customer Contact": {
-      "__root__": "/apps/loopar/modules/crm/entities/customer-contact"
-    },
-    "Entity:Customer Contact Link": {
-      "__root__": "/apps/loopar/modules/crm/entities/customer-contact-link"
-    },
-    "Entity:Customer External ID": {
-      "__root__": "/apps/loopar/modules/crm/entities/customer-external-id"
-    },
-    "Entity:Customer": {
-      "__root__": "/apps/loopar/modules/crm/entities/customer"
-    },
     "Entity:Company": {
       "__root__": "/apps/loopar/modules/settings/entities/company"
     },
@@ -647,21 +488,14 @@
     "Entity:Stripe Account": {
       "__root__": "/apps/loopar/modules/stripe/entities/stripe-account"
     },
-    "Module:projects": {
-      "name": "projects",
-      "description": "Projects",
-      "app_name": "loopar",
-      "icon": "FolderKanban",
-      "in_sidebar": 1
-    },
-    "Entity:Project": {
-      "__root__": "/apps/loopar/modules/projects/entities/project"
-    },
-    "Entity:Project Update": {
-      "__root__": "/apps/loopar/modules/projects/entities/project-update"
-    },
     "Entity:List View Setting": {
       "__root__": "/apps/loopar/modules/core/entities/list-view-setting"
+    },
+    "Entity:Desk Pin": {
+      "__root__": "/apps/loopar/modules/core/entities/desk-pin"
+    },
+    "Entity:Notification": {
+      "__root__": "/apps/loopar/modules/core/entities/notification"
     },
     "Module:calendar": {
       "name": "calendar",
@@ -733,7 +567,6 @@
     "Entity:Workflow": "link",
     "Entity:Resources": "link",
     "Entity:Module": "link",
-    "Workflow:Project": "link",
     "Entity:Scheduled Job": "link",
     "Entity:Signature Request": "link",
     "Entity:User Directory": "link",
@@ -744,17 +577,13 @@
     "Entity:Announcement": "link",
     "Entity:Debug Token": "link",
     "Entity:Backup Settings": "link",
-    "Entity:Customer Contact": "link",
-    "Entity:Customer Contact Link": "link",
-    "Entity:Customer External ID": "link",
-    "Entity:Customer": "link",
     "Entity:Company": "link",
     "Entity:Email Account": "link",
     "Entity:Entity Directory": "link",
     "Entity:Stripe Account": "link",
-    "Entity:Project": "link",
-    "Entity:Project Update": "link",
     "Entity:List View Setting": "link",
+    "Entity:Desk Pin": "link",
+    "Entity:Notification": "link",
     "Entity:Calendar": "link",
     "Entity:Event": "link",
     "Entity:Page View": "link",

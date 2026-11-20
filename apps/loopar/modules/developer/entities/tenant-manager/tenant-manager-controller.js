@@ -65,6 +65,24 @@ export default class TenantManagerController extends BaseController {
     return { status: 200, success: true, url: await tenant.openUrl() };
   }
 
+  /** Can the server of a migration target be reached? (nothing is written) */
+  async actionTestDbConnection() {
+    const result = await (await this.getTenant()).testDbConnection(this.body || {});
+    return { status: 200, success: true, ...result };
+  }
+
+  /** Start moving the tenant's database to another engine (or a test run of it). */
+  async actionMigrateDatabase() {
+    const job = await (await this.getTenant()).migrateDatabase(this.body || {});
+    return { status: 200, success: true, job };
+  }
+
+  /** The tenant's current/last migration (or backup) job. */
+  async actionMigrationStatus() {
+    const tenant = await this.getTenant();
+    return { status: 200, success: true, job: tenant.migrationJob(), db: tenant.dbEngine() };
+  }
+
   async actionReset(){
     return await this.makeAction("reset");
   }

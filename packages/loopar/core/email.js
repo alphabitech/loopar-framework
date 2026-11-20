@@ -319,14 +319,16 @@ export class EmailService {
     const queued = await this.queue(email);
     if (!queued.success) throw new Error(queued.error || 'The email could not be queued');
 
-    const delivery = (async () => {
+    // Runs while the caller goes on: in a transaction scope of its own, so
+    // its writes never land in (nor end) a transaction the caller opens.
+    const delivery = loopar.db.detached(async () => {
       // Let the caller finish what it is writing first.
       await new Promise((resolve) => setImmediate(resolve));
       const item = await loopar.getDocument('Email Queue', queued.queueId);
       const result = await this.processQueueItem(item);
       if (!result.success) await onFailed?.(result.error);
       return result;
-    })().catch((error) => {
+    }).catch((error) => {
       console.warn(`[Email] background delivery of ${queued.queueId} failed:`, error.message);
       return { success: false, id: queued.queueId, error: error.message };
     });

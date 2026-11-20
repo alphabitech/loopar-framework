@@ -1,3 +1,4 @@
+import { useWorkspace } from "@workspace/workspace-provider";
 import { Fragment, useMemo } from "react";
 import { Pagination } from "@pagination";
 import loopar from "loopar";
@@ -39,7 +40,7 @@ function DetailValue({ col, value }) {
 }
 
 /** Default card used when the view doesn't provide its own `gridTemplate`. */
-function GridCard({ row, titleFields, nameVisible, detailCols, iconCol, selected, onSelect, Entity, onDelete }) {
+function GridCard({ row, titleFields, nameVisible, detailCols, iconCol, selected, onSelect, Entity, onDelete, portal = false }) {
   const title = titleFields.map((f) => row.__titles__?.[f] ?? row[f]).filter((v) => !isEmpty(v)).join(" ") || row.name;
   const showName = nameVisible && String(title).toLowerCase() !== String(row.name).toLowerCase();
   const icon = iconCol ? row[iconCol.data.name] : null;
@@ -61,19 +62,19 @@ function GridCard({ row, titleFields, nameVisible, detailCols, iconCol, selected
             ? <DynamicIcon className="h-5 w-5" icon={icon} />
             : <span className="text-base font-semibold">{loopar.utils.avatar(String(title))}</span>}
           {/* Selection checkbox sits on the avatar: visible on hover, when selected, or on touch devices. */}
-          <span
+          {onSelect && <span
             className={cn(
               "absolute -left-1.5 -top-1.5 rounded bg-card transition-opacity",
               selected ? "opacity-100" : "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-within:opacity-100"
             )}
           >
             <Checkbox className="h-4 w-4" checked={selected} onCheckedChange={onSelect} aria-label={`Select ${row.name}`} />
-          </span>
+          </span>}
         </div>
 
         <div className="min-w-0 flex-1">
           <Link
-            to={recordLink(Entity, row.name)}
+            to={recordLink(Entity, row.name, row, { portal })}
             renderOnRestrict={true}
             bare
             className="block truncate font-medium leading-tight text-foreground hover:underline"
@@ -120,6 +121,7 @@ export function GridView(props) {
   } = useTable();
 
   const { hasSearchForm, hasSelectAll, gridTemplate, gridMinWidth = "22rem" } = useViewOptions();
+  const portal = useWorkspace().workspace === "portal";
 
   const rows = props.rows || useTable().rows || [];
   const Entity = Document?.Entity || {};
@@ -187,7 +189,8 @@ export function GridView(props) {
         detailCols={detailCols}
         iconCol={iconCol}
         selected={selectedRows.includes(row.name)}
-        onSelect={(checked) => selectRow(row, checked)}
+        onSelect={hasSelectAll !== false ? (checked) => selectRow(row, checked) : null}
+        portal={portal}
         onDelete={(r) => deleteRow(r, true)}
       />
     )

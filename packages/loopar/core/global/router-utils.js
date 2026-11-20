@@ -148,11 +148,12 @@ export function getWorkspaceName(pathname) {
     : 'web';
 }
 
-export function setDefaultParams(params, workspaceName) {
+export function setDefaultParams(params, workspaceName, { portalHome = null } = {}) {
   if (workspaceName === 'portal') {
+    // `/portal`: the portal home page when installed, else the profile.
     if (!params.document) {
-      params.document = 'Profile';
-      params.action = 'update';
+      params.document = portalHome || 'Profile';
+      params.action = portalHome ? 'view' : 'update';
     }
     params.action ??= 'view';
     return params;

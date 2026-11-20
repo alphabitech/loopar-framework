@@ -1,24 +1,29 @@
 'use strict';
 
 /**
- * Backups inside the running core: the restore gate (requests of a tenant
- * being restored get a 503), unplugging the tenant so it re-initializes on
- * the restored data, and background jobs the desk follows by polling.
+ * Backups inside the running core: the maintenance gate (requests of a
+ * tenant being restored or migrated get a 503), unplugging the tenant so it
+ * re-initializes on the new data, and background jobs the desk follows by
+ * polling.
  */
 
-import { getTenantInstance, evictTenantInstance } from '../loopar.js';
+import { getTenantInstance, getOrCreateTenantInstance, evictTenantInstance } from '../loopar.js';
 import { hookManager } from '../HookManager.js';
 import { PermissionManager } from '../auth/PermissionManager.js';
 import { requestContext } from '../server/router/request-context.js';
 import { tenantRegistry } from '../server/tenant-registry.js';
 import { createBackup, restoreBackup, listLocalBackups } from './engine.js';
 import { readSettingsBare } from './settings.js';
+import { migrateDatabase } from '../db-migration/migrate.js';
 
-const restoring = new Set();
+const maintenance = new Map(); // tenant → why it is closed ('restore' | 'migrate')
 const jobs = new Map(); // tenant → { id, type, step, startedAt, finishedAt, ok, error, result }
 
-/** Is this tenant being restored right now? (server.js answers its requests with a 503) */
-export const isRestoring = (tenant) => restoring.has(tenant);
+/** Is this tenant closed for maintenance right now? (server.js answers its requests with a 503) */
+export const isRestoring = (tenant) => maintenance.has(tenant);
+
+/** Why the tenant is closed ('restore' | 'migrate'), or null when it is open. */
+export const maintenanceReason = (tenant) => maintenance.get(tenant) ?? null;
 
 /**
  * Close a tenant's connections and drop its in-memory state (hooks, cached
@@ -54,7 +59,14 @@ function startJob(tenant, type, fn) {
   setImmediate(() => {
     fn(onStep)
       .then((result) => { job.ok = true; job.result = result; })
-      .catch((e) => { job.ok = false; job.error = e?.message || String(e); console.error(`[backup] ${type} of ${tenant} failed:`, e); })
+      .catch((e) => {
+        job.ok = false;
+        job.error = e?.message || String(e);
+        // Details the desk lists under the error (rejected values of a migration).
+        if (e?.issues) job.issues = e.issues;
+        if (e?.warnings) job.warnings = e.warnings;
+        console.error(`[backup] ${type} of ${tenant} failed:`, e);
+      })
       .finally(() => { job.finishedAt = new Date().toISOString(); job.step = 'done'; });
   });
   return job;
@@ -73,15 +85,54 @@ export function startRestoreJob({ root = process.cwd(), tenant, file, passphrase
   return startJob(tenant, 'restore', (onStep) => restoreBackup({
     root, tenant, file, passphrase, settings, mode: 'replace', requireMadeHere: true, onStep,
     beforeSwap: async (t) => {
-      restoring.add(t);
+      maintenance.set(t, 'restore');
       await new Promise((r) => setTimeout(r, DRAIN_MS));
       await unplugTenant(t);
     },
     afterSwap: async (t) => {
       tenantRegistry.invalidate();
-      restoring.delete(t);
+      maintenance.delete(t);
     },
   }));
+}
+
+/**
+ * Move a tenant's database to another engine, in the background (Tenant
+ * Manager). A pre-migrate snapshot is taken first; the tenant answers
+ * "maintenance" while its records are copied, then re-initializes on the new
+ * database. With `test` the copy is made, checked and dropped, and the tenant
+ * stays open on its current database the whole time.
+ */
+export function startMigrationJob({ root = process.cwd(), tenant, target, test = false }) {
+  return startJob(tenant, test ? 'migration test' : 'migration', async (onStep) => {
+    let snapshot = null;
+    if (!test) {
+      onStep('safety');
+      const settings = await readSettingsBare(root, tenant);
+      snapshot = (await createBackup({ root, tenant, kind: 'pre-migrate', settings, upload: false })).file;
+      maintenance.set(tenant, 'migrate');
+      await new Promise((r) => setTimeout(r, DRAIN_MS));
+    }
+    try {
+      const inst = await getOrCreateTenantInstance(tenant);
+      // Stamp it like server.js does for the instances it creates: otherwise
+      // the tenant's next request (a test run keeps it open) takes it for a
+      // stale, pre-restore instance and unplugs it — closing the database
+      // the copy is reading.
+      if (inst && inst.__restoredAt === undefined) inst.__restoredAt = tenantRegistry.get(tenant)?.restoredAt ?? null;
+      const result = await requestContext.run({ tenant: { name: tenant } }, () =>
+        migrateDatabase({ target, test, onStep }));
+      if (!test) {
+        // The instance still holds the old connection: the next request
+        // initializes the tenant on the new database.
+        await unplugTenant(tenant);
+        tenantRegistry.invalidate();
+      }
+      return { ...result, snapshot };
+    } finally {
+      maintenance.delete(tenant);
+    }
+  });
 }
 
 const SAFETY_WINDOW_MS = 10 * 60 * 1000;

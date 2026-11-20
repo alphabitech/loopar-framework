@@ -8,5 +8,5 @@ export { readSettingsBare, normalizeSettings, SETTINGS_DEFAULTS, SECRET_FIELDS, 
 export { DESTINATIONS, makeDestination, gdriveAuthUrl, gdriveExchangeCode } from './destinations/index.js';
 export { backupsToDelete, DEFAULT_RETENTION } from './retention.js';
 export { isEncryptedFile } from './crypto.js';
-export { isRestoring, unplugTenant, backupJob, startBackupJob, startRestoreJob, safetySnapshot } from './core-ops.js';
+export { isRestoring, maintenanceReason, unplugTenant, backupJob, startBackupJob, startRestoreJob, startMigrationJob, safetySnapshot } from './core-ops.js';
 export { lastSlot } from './schedule.js';

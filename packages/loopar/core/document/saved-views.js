@@ -171,7 +171,7 @@ export function scheduledEmailDue(schedule, lastDay, now = new Date()) {
 /**
  * Sets (or clears, with "none") the email schedule of one of the user's own
  * views. Sending a list by email is an export: it needs the `export` grant
- * over every record (no 'own' / 'customer' narrowing — the email is built
+ * over every record (no 'own' / 'portal' narrowing — the email is built
  * outside a request, where there is no user to narrow to). Without
  * recipients it goes to the user's own address. → the saved view.
  */

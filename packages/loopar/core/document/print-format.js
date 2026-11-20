@@ -96,9 +96,15 @@ function formatPayload(format) {
   };
 }
 
-export async function printPayload(entity, { requested = null, format: forced = null } = {}) {
+/**
+ * `designedOnly` (the portal): only the entity's designed formats — the
+ * customer-facing ones —, never the automatic "standard" sheet (every field)
+ * while the entity has one; an unknown request falls back to the default.
+ */
+export async function printPayload(entity, { requested = null, format: forced = null, designedOnly = false } = {}) {
   const formats = listPrintFormats(entity);
-  const format = forced || resolvePrintFormat(formats, requested);
+  if (designedOnly && formats.length && !formats.some(f => f.name === requested)) requested = null;
+  const format = forced || resolvePrintFormat(formats, requested) || (designedOnly ? formats[0] || null : null);
 
   return {
     format: formatPayload(format),
@@ -248,9 +254,10 @@ export function snapshotHTML(snapshot) {
         return `<p><strong>${escapeHTML(lh.company_name)}</strong>${lines.map((l) => `<br>${multiline(l)}`).join('')}</p>`;
       }
       case 'doc_header':
-        return `<h1>${escapeHTML(d.label || snapshot.entity)}</h1><p>${escapeHTML(snapshot.name)} · ${escapeHTML(String(snapshot.printed_at).slice(0, 10))}</p>`;
+        return `<h1>${escapeHTML((d.title_field && data[d.title_field]) || d.label || snapshot.entity)}</h1><p>${escapeHTML(snapshot.name)} · ${escapeHTML(String(snapshot.printed_at).slice(0, 10))}</p>`;
       case 'doc_field': {
         const node = fields.get(d.field);
+        if (truthy(d.hide_zero) && Number(data[d.field]) === 0) return '';
         const value = node && valueOf(node, data[d.field]);
         if (value == null) return '';
         const label = truthy(d.show_label ?? 1) ? `<strong>${escapeHTML(d.label || node.data?.label || humanize(d.field))}:</strong> ` : '';

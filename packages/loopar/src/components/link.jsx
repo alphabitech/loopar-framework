@@ -122,7 +122,12 @@ export function Link({
   const { designing } = useDesigner();
 
   // The target is authored in a designer: only navigable schemes are followed.
-  const to = safeTarget(rawTo);
+  // In the portal, desk routes are served by the portal itself (a Web user
+  // never enters the desk): the shared document chrome keeps working there,
+  // and those links are checked against the user's grants like on the desk.
+  const safe = safeTarget(rawTo);
+  const deskInPortal = workspace === "portal" && /^\/desk(\/|$)/.test(safe);
+  const to = deskInPortal ? safe.replace(/^\/desk/, "/portal") : safe;
   const url = useMakeUrl(to);
 
   const isAbsolute = isExternalTarget(to);
@@ -137,13 +142,14 @@ export function Link({
   }, [url, workspace]);
 
   const canRender = useMemo(() => {
-    if (awardProp === false || workspace != "desk" || isAbsolute) return true;
+    if (awardProp === false || isAbsolute) return true;
+    if (workspace !== "desk" && !deskInPortal) return true;
     
     const doc = params.document?.toLowerCase().replaceAll(" ", "") ?? '';
     const action = params.action ?? 'view';
 
     return award(doc, action, false);
-  }, [params, award, awardProp, workspace, url, to]);
+  }, [params, award, awardProp, workspace, url, to, deskInPortal]);
 
   const handleClick = useCallback((e) => {
     if (isHashLink) {

@@ -8,6 +8,7 @@ import {getProvider, providerKeys, providerLabel, generateState, generateCodeVer
 import {setOauthTx, readOauthTx, clearOauthTx, oauthRedirectUri, loadProviderConfig, parseScopes, linkUser} from "./oauth.js"
 import {completeLogin, verifyChallenge, cancelChallenge, verifyFactor, hasMfa} from "./mfa.js"
 import {confirmEmailChange} from "./email-change.js"
+import {signInWithLink} from "./sign-in-link.js"
 
 export default class AuthController extends BaseController {
  static actionsEnabled = ['login', 'logout', 'requestReset', 'oauthCallback'];
@@ -226,6 +227,14 @@ export default class AuthController extends BaseController {
     // No forced /auth/set-password — the desk banner (must_change_password)
     // and Profile's "Reset by email" cover it.
     return this.redirect('/desk', { hard: true });
+  }
+
+  /**
+   * GET /auth/link?token=… — sign-in link of a portal user (sign-in-link.js):
+   * opens the session and lands on the page the link was made for.
+   */
+  async publicActionLink() {
+    return this.redirect(await signInWithLink(this.query?.token), { hard: true });
   }
 
   /**
