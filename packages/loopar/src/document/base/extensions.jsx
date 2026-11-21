@@ -26,12 +26,7 @@ const without = (group, names) => (prev) => {
   return { ...prev, [group]: next };
 };
 
-/** Reads the node at render time, so closures stay fresh. */
-function LiveNode({ read }) {
-  return read() ?? null;
-}
-
-/** AppBar actions (`{ name: <ReactNode> }`) while the caller is mounted. */
+/** AppBar actions (`{ name: descriptor }`, see chrome/toolbar.jsx) while the caller is mounted. */
 export function useActions(actions) {
   const patch = useViewOptionsPatch();
   const [ref, names] = useLiveMap(actions);
@@ -39,7 +34,11 @@ export function useActions(actions) {
 
   useEffect(() => {
     if (!names.length) return;
-    const live = Object.fromEntries(names.map((name) => [name, <LiveNode key={name} read={() => ref.current[name]} />]));
+    // Read at render time: the AppBar resolves functions, so closures stay fresh.
+    const live = Object.fromEntries(names.map((name) => [name, () => {
+      const a = ref.current[name];
+      return typeof a === "function" ? a() : a;
+    }]));
     patch({ actions: live });
     return () => patch(without("actions", names));
     // eslint-disable-next-line react-hooks/exhaustive-deps

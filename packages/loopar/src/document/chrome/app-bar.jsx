@@ -1,7 +1,11 @@
-import { Toolbar } from "./toolbar";
+import { Toolbar, ActionButton, normalizeActions, planActions } from "./toolbar";
+import { Trail, moduleCrumbs, homeCrumbs } from "./trail";
+import { useLocation } from "react-router";
+import { StateBadge, useWorkflowActions } from "../form/workflow-bar";
+import { cn } from "@cn/lib/utils";
 import loopar from "loopar";
 import { Button } from "@cn/components/ui/button";
-import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, KanbanIcon, CalendarIcon, ChartColumnIcon, CheckIcon, PrinterIcon, ArrowLeftIcon, PencilIcon, FileTextIcon, TextCursorInputIcon } from "lucide-react";
+import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, KanbanIcon, CalendarIcon, ChartColumnIcon, CheckIcon, PrinterIcon, PanelRightIcon, PencilIcon, FileTextIcon, TextCursorInputIcon } from "lucide-react";
 import {Link} from "@link";
 import { useDocument, useViewOptions } from "@loopar/document";
 import { canOn } from "@context/auth-context";
@@ -52,13 +56,6 @@ function goToTarget(Document) {
   if (Entity.name === "Dashboard") return `/desk/Dashboard/view?name=${encodeURIComponent(data.name)}`;
   return null;
 }
-
-const GoToAction = ({ to, name }) => (
-  <Link variant="secondary" to={to}>
-    <ArrowBigRight className="pr-1" />
-    {__("Go to {0}", [__(loopar.utils.Capitalize(name))])}
-  </Link>
-);
 
 /**
  * Rename a meta record (an entity, page, form…): asks the new name, shows what
@@ -177,26 +174,6 @@ const SaveState = ({ Document }) => {
   return <DirtyPill control={form.control} />;
 };
 
-function backTarget(Document, contextName) {
-  const { Entity = {}, meta = {}, name, data } = Document;
-
-  if (["form", "view", "print"].includes(contextName) && Entity.name && !Entity.is_single) {
-    return `/desk/${Entity.name}/list`;
-  }
-  return Entity.module ? `/desk/${Entity.module}` : null;
-}
-
-function headerTexts(Document, contextName) {
-  const { Entity = {}, data = {} } = Document;
-
-  // Module pages render the "Module" entity: show the module itself.
-  if (Document.__MODULE__) return { title: __(Document.__MODULE__.description || Document.__MODULE__.name), subtitle: null };
-  if (contextName === "module") return { title: __(Entity.name), subtitle: null };
-  if (contextName === "list" || Entity.is_single || Document.isNew) return { title: __(Entity.name), subtitle: null };
-  const name = Document.name || data.name;
-  return { title: __(Entity.name), subtitle: name && name !== Entity.name ? name : null };
-}
-
 /** Toggle button: shows the view it switches to. */
 // Labels are functions: translated on render, in the request's language
 // (a module-level __() would freeze the server's language at import time).
@@ -246,90 +223,164 @@ function ViewSwitch({ Document, viewType, viewTypeToggle, setViewType }) {
   );
 }
 
-export function AppBar({Document, viewTypeToggle, setViewType, viewType, applyView, sidebarOpen, ...props}) {
-  const { actions = {}, actionsInMenu, primaryAction, onlyGrid, onlyList, canUpdate, hasListSettings } = useViewOptions();
-  const { inModal } = useDocument();
-  const { meta, Entity } = Document;
+/**
+ * Where the page sits: app › module › entity list (› record on its print).
+ * Ancestors only — the page itself is the title.
+ */
+function trailOf(Document, contextName, apps, search) {
+  const { Entity = {}, name } = Document;
+  const home = homeCrumbs(apps, Document, search);
+  if (home) return home;
+  if (Document.__MODULE__) {
+    const moduleName = Document.__MODULE__.name || Document.__MODULE__;
+    // The module itself closes the trail (active): the top bar already shows the app.
+    return moduleCrumbs(apps, moduleName);
+  }
+
+  const crumbs = moduleCrumbs(apps, Entity.module);
+  if (["form", "view", "print"].includes(contextName) && Entity.name && !Entity.is_single) {
+    crumbs.push({ label: __(Entity.name), to: `/desk/${Entity.name}/list` });
+  }
+  if (contextName === "print" && name) crumbs.push({ label: name, to: recordUrl(Document) });
+  return crumbs;
+}
+
+function headerTitle(Document, contextName) {
+  const { Entity = {}, data = {} } = Document;
+  if (Document.__MODULE__) return __(Document.__MODULE__.description || Document.__MODULE__.name || Document.__MODULE__);
+  if (contextName === "print") return __("Print");
+  if (contextName === "list" || contextName === "module" || Entity.is_single) return __(Entity.name);
+  if (Document.isNew) return __("New {0}", [__(Entity.name)]);
+  return Document.name || data.name || __(Entity.name);
+}
+
+/** Record state next to the title: the view's `status` option, else the workflow state. */
+function StatusBadge({ status, workflow }) {
+  const value = typeof status === "function" ? status() : status;
+  if (value) {
+    const { label, color } = typeof value === "string" ? { label: value } : value;
+    return label ? <StateBadge state={__(label)} color={color} className="shrink-0" /> : null;
+  }
+  return workflow ? <StateBadge state={workflow.state} color={workflow.color} className="shrink-0" /> : null;
+}
+
+const PanelToggle = ({ panel }) => (
+  <Button
+    variant="secondary"
+    // Pressed look without a second filled button next to the primary.
+    className={cn("px-2", panel.open && "bg-accent text-accent-foreground ring-1 ring-border")}
+    onClick={(e) => { e.preventDefault(); panel.toggle(); }}
+    aria-pressed={panel.open}
+    aria-label={__("Details")}
+    title={__("Details")}
+  >
+    <PanelRightIcon />
+  </Button>
+);
+
+/**
+ * Document header:
+ *   1. breadcrumbs — where the page sits, in the desk top bar (not in modals)
+ *   2. title + status · toolbar — sticky under the top bar; the toolbar drops below the title when both don't fit
+ *   3. `headerTabs` (view option) — always visible, scrolls sideways on narrow screens
+ */
+export function AppBar({ Document, viewTypeToggle, setViewType, viewType, applyView, panel, hasBreadcrumb }) {
+  const {
+    actions = {}, status, headerTabs, onlyGrid, onlyList, canUpdate, hasListSettings,
+  } = useViewOptions();
+  const { inModal, docRef } = useDocument();
+  const { __META__ } = useWorkspace();
+  const { search } = useLocation();
+  const apps = Array.isArray(__META__?.menu_data) ? __META__.menu_data : [];
+  const { meta = {}, Entity = {} } = Document;
 
   const contextName = ["create", "update"].includes(meta.action) ? "form" : meta.action;
-  const { title, subtitle } = headerTexts(Document, contextName);
   const isList = contextName === "list";
+  const title = headerTitle(Document, contextName);
+  const crumbs = !inModal && hasBreadcrumb !== false ? trailOf(Document, contextName, apps, search) : [];
 
-  const back = !inModal && props.hasBreadcrumb !== false ? backTarget(Document, contextName) : null;
+  const workflow = useWorkflowActions(Document);
 
   // Also on read-only views: a builder locked in production still leads to what it builds.
-  const goTo = (canUpdate || Document.meta?.action === "view") ? goToTarget(Document) : null;
-
+  const goTo = (canUpdate || meta.action === "view") ? goToTarget(Document) : null;
   const edit = editTarget(Document);
-
-  const viewActions = Object.entries(actions).filter(([, node]) => node);
-  // Records with translatable fields: all their translations at once.
   const recordTranslations = useRecordTranslations();
 
-  const defaults = [
-    ...(goTo ? [["__goto", <GoToAction key="__goto" to={goTo} name={Document.data?.name} />]] : []),
-    ...(!inModal && eventTarget(Document) ? [["__schedule", <ScheduleAction key="__schedule" Document={Document} />]] : []),
-    ...(recordTranslations && canUpdate ? [["__translations", <RecordTranslationsButton key="__translations" />]] : []),
-    ...(isList && applyView && hasListSettings !== false && onlyGrid !== true && onlyList !== true ? [[
-      "__savedviews",
-      <SavedViewsMenu key="__savedviews" Document={Document} viewType={viewType} applyView={applyView} />,
-    ]] : []),
-    ...(isList && onlyGrid !== true && onlyList !== true ? [[
-      "__viewtype",
-      <ViewSwitch key="__viewtype" Document={Document} viewType={viewType} viewTypeToggle={viewTypeToggle} setViewType={setViewType} />,
-    ]] : []),
+  const list = [
+    ...workflow.actions,
+    ...normalizeActions(actions),
+    ...(goTo ? [{
+      key: "__goto", pin: true, icon: ArrowBigRight, to: goTo,
+      label: __("Go to {0}", [__(loopar.utils.Capitalize(Document.data?.name))]),
+    }] : []),
+    // Read-only view: Edit is the primary unless the view names another one.
+    ...(edit ? [{ key: "__edit", primary: true, icon: PencilIcon, label: __("Edit"), to: edit }] : []),
+    // Read-only entities: records come from the app's flows — no New.
+    ...(isList && !Entity.read_only ? [{
+      key: "__new", primary: true, fallback: true, icon: PlusIcon, label: __("New"), to: `/desk/${Entity.name}/create`,
+    }] : []),
+    ...(isList && applyView && hasListSettings !== false && onlyGrid !== true && onlyList !== true ? [{
+      key: "__savedviews",
+      render: <SavedViewsMenu key="__savedviews" Document={Document} viewType={viewType} applyView={applyView} />,
+    }] : []),
+    ...(isList && onlyGrid !== true && onlyList !== true ? [{
+      key: "__viewtype",
+      render: <ViewSwitch key="__viewtype" Document={Document} viewType={viewType} viewTypeToggle={viewTypeToggle} setViewType={setViewType} />,
+    }] : []),
   ];
 
-  // `primaryAction` (view option) replaces the default one: New on lists, Save elsewhere.
-  // Read-only entities: records come from the app's flows — no New.
-  const primary = primaryAction ? (typeof primaryAction === "function" ? primaryAction() : primaryAction)
-    : isList && Entity.read_only ? null
-    : isList ? (
-      <Link variant="default" className="text-primary-foreground hover:text-primary-foreground" tabIndex="0" to={`/desk/${Entity.name}/create`}>
-        <PlusIcon className="pr-1" />
-        {__("New")}
-      </Link>
-    ) : edit ? (
-      // Read-only view: Edit takes Save's place.
-      <Link variant="default" className="text-primary-foreground hover:text-primary-foreground" to={edit}>
-        <PencilIcon className="pr-1" />
-        {__("Edit")}
-      </Link>
-    ) : <SaveButton />;
+  // An editable form keeps Save as its primary; the view's primaries lead the row.
+  const hasSave = !!(canUpdate && docRef?.save && !isList && ["form", "view"].includes(contextName) && !edit);
+  const planned = planActions(list, { keepPrimary: hasSave });
 
+  const utilities = [
+    ...(!inModal && eventTarget(Document) ? [["__schedule", <ScheduleAction key="__schedule" Document={Document} />]] : []),
+    ...(recordTranslations && canUpdate ? [["__translations", <RecordTranslationsButton key="__translations" />]] : []),
+  ];
+  const toggles = [
+    ["__print", <PrintToggle key="__print" Document={Document} />],
+    ...(panel?.available ? [["__panel", <PanelToggle key="__panel" panel={panel} />]] : []),
+  ];
+  const menu = canRename(Document, canUpdate) ? [["__rename", <RenameAction key="__rename" Document={Document} />]] : [];
+
+  const primary = hasSave ? <SaveButton /> : planned.primary ? <ActionButton action={planned.primary} variant="default" /> : null;
+  const tabs = typeof headerTabs === "function" ? headerTabs() : headerTabs;
+
+  // A fragment: the title row must be a direct child of the document column to
+  // stay sticky through the whole document (inside a <header> it would leave with it).
   return (
-    <div
-      className="flex w-full flex-row items-center gap-3 border-b pb-2"
-      // Right gutter for the fixed ⋮ sidebar toggle (desk-ui), so it never
-      // covers the actions; kept on every page so buttons don't jump (record ⇄ print).
-      style={{ paddingRight: !sidebarOpen ? "2rem" : undefined }}
-      data-print-hide
-    >
-      <div className="flex min-w-0 flex-1 flex-row items-center gap-2">
-        {back && (
-          <Link variant="ghost" className="-ml-1 h-8 w-8 shrink-0 p-0" to={back} aria-label={__("Back")} title={__("Back")}>
-            <ArrowLeftIcon />
-          </Link>
+    <>
+      <Trail items={crumbs} />
+      <div
+        data-print-hide
+        // Sticky under the top bar: Save, the actions and the panel toggle stay at hand on long documents.
+        className={cn(
+          // top: below the top bar and its 1px border. py-2 keeps the same room above and
+          // below while stuck; unstuck, -mt-2 cancels the desk content's pt-2 so the
+          // buttons stay centered between the top bar and this row's border.
+          "sticky top-[calc(var(--spacing-header-height)+1px)] z-30 -mx-2 flex flex-row flex-wrap items-center gap-x-3 gap-y-2 bg-background/95 px-2 py-2 backdrop-blur-sm",
+          !inModal && "sm:-mt-2",
+          !tabs && "border-b"
         )}
-        {/* wide: Entity (big) · record (small) — phones: record (bold) under a small Entity */}
-        <h1 className="flex min-w-0 flex-row items-baseline gap-2 max-sm:flex-col-reverse max-sm:items-start max-sm:gap-0">
-          <span className={`truncate text-xl font-semibold ${subtitle ? "max-sm:text-xs max-sm:font-normal max-sm:text-muted-foreground" : "max-sm:text-lg"}`}>{title}</span>
-          {subtitle && <span className="truncate text-base text-muted-foreground max-sm:font-bold max-sm:text-foreground">{subtitle}</span>}
-        </h1>
-        <span className="flex shrink-0 empty:hidden"><SaveState Document={Document} /></span>
+      >
+        {/* The title keeps at least 16rem: past that, the toolbar wraps below it. */}
+        <div className="flex min-w-0 flex-[1_1_16rem] flex-row items-center gap-2">
+          <h1 className="truncate text-xl font-semibold" title={typeof title === "string" ? title : undefined}>{title}</h1>
+          <StatusBadge status={status} workflow={workflow.state} />
+          <span className="flex shrink-0 empty:hidden"><SaveState Document={Document} /></span>
+        </div>
+        <Toolbar
+          // Compact row: every action (buttons and links from any view) at h-9; icons keep their size.
+          className="ml-auto [&_:is(a,button)]:h-9"
+          actions={planned}
+          utilities={utilities}
+          toggles={toggles}
+          menu={menu}
+          primary={primary}
+        />
       </div>
-      <Toolbar
-        // Compact row: every action (buttons and links from any view) at h-9; icons keep their size.
-        className="[&_:is(a,button)]:h-9"
-        // View actions sit in the row (⋯ on phones) unless the view opts into `actionsInMenu`.
-        inline={[...(actionsInMenu ? [] : viewActions), ...defaults]}
-        menu={[
-          ...(actionsInMenu ? viewActions : []),
-          ...(canRename(Document, canUpdate) ? [["__rename", <RenameAction key="__rename" Document={Document} />]] : []),
-        ]}
-        toggle={<PrintToggle Document={Document} />}
-        primary={primary}
-      />
-    </div>
+      {tabs && <div className="-mt-3 min-w-0 overflow-x-auto border-b" data-print-hide>{tabs}</div>}
+      {workflow.modal}
+    </>
   );
 }

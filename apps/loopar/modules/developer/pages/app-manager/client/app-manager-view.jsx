@@ -614,26 +614,8 @@ function sendAppAction(appName, action, optsOrSlide = false) {
 
 // Built on render: their labels are translated in the request's language.
 const actions = () => ({
-  addApp: (
-    <Link
-      variant="secondary"
-      className="bg-success text-white hover:bg-success/80"
-      to="/desk/App/create"
-    >
-      <PlusIcon className="mr-2"/> {__("Add App")}
-    </Link>
-  ),
-  getApp: (
-    <Button
-      variant="primeblue"
-      onClick={(e) => {
-        e.preventDefault();
-        cloneApp();
-      }}
-    >
-      <DownloadIcon className="mr-2"/> {__("Get App")}
-    </Button>
-  ),
+  addApp: { label: __("Add App"), icon: PlusIcon, primary: true, to: "/desk/App/create" },
+  getApp: { label: __("Get App"), icon: DownloadIcon, onClick: () => cloneApp() },
 });
 
 const gridTemplate = (app) => <AppCard app={app} action={sendAppAction} />;

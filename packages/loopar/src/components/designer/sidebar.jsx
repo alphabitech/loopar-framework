@@ -7,7 +7,7 @@ import {Button as BaseButton} from "@cn/components/ui/button";
 import {DesignerForm} from "./designer-form";
 import {ElementEditor} from "./element-editor";
 import {Separator} from "@cn/components/ui/separator";
-import {useDocument} from "@loopar/document";
+import {useDocument, useReserveSidePanel} from "@loopar/document";
 import { getNodeKey } from "@global/prune-doc-structure";
 import { __ } from "@global/i18n";
 
@@ -21,6 +21,8 @@ function Button({...props}){
 
 export const Sidebar = memo(() => {
   const { handleSetSidebarOpen, sidebarOpen, docRef } = useDocument();
+  // Fixed on the right: the desk layout keeps room for it and hides the record panel.
+  useReserveSidePanel();
   const { handleChangeMode, designerModeType, updatingElement, dragEnabled, setDragEnable, undo, redo, canUndo, canRedo, sidebarView, setSidebarView, previewInline, openPreview } = useDesigner();
 
   const preferred = sidebarView ?? (designerModeType === "editor" ? "properties" : "elements");

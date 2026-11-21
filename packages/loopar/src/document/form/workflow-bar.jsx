@@ -1,6 +1,5 @@
 import { useState } from "react";
 import loopar from "loopar";
-import { Button } from "@cn/components/ui/button";
 import { cn } from "@cn/lib/utils";
 import { EntryModal } from "@app/entry-modal";
 import { __ } from "@global/i18n";
@@ -123,46 +122,39 @@ export function runTransition({ entity, name, transition, docStructure, current,
   send();
 }
 
-const VARIANTS = { primary: "default", destructive: "destructive", default: "secondary" };
-
 /**
- * Current state badge + one button per available transition, at the top of
- * the form (not in the AppBar overflow menu: moving the record forward is the
- * main thing to do on it).
+ * The record's workflow in the header: its state (a badge next to the title)
+ * and one action per available transition — `style: primary` is the record's
+ * main action, `destructive` sits last in "Actions". `modal` hosts a document
+ * a transition opens; render it once.
  */
-export function WorkflowBar({ ctrl }) {
-  const Document = ctrl?.Document || {};
+export function useWorkflowActions(Document = {}) {
   const [opened, setOpened] = useState(null);
   const workflow = Document.workflow;
+  const modal = opened
+    ? <EntryModal initialPath={opened} onClose={() => { setOpened(null); loopar.refresh(); }} />
+    : null;
 
-  if (!workflow || Document.isNew) return null;
-  const transitions = workflow.transitions || [];
+  if (!workflow || Document.isNew) return { state: null, actions: [], modal };
 
-  const run = (t) => (e) => {
-    e.preventDefault();
-    runTransition({
-      entity: Document.Entity?.name,
-      name: Document.name,
-      transition: t,
-      docStructure: Document.Entity?.doc_structure,
-      current: Document.data,
-      onOpen: setOpened,
-    });
-  };
+  const actions = (workflow.transitions || []).map((t) => ({
+    key: `__wf_${t.action}`,
+    label: t.action,
+    primary: t.style === "primary",
+    danger: t.style === "destructive",
+    group: "workflow",
+    onClick: (e) => {
+      e?.preventDefault?.();
+      runTransition({
+        entity: Document.Entity?.name,
+        name: Document.name,
+        transition: t,
+        docStructure: Document.Entity?.doc_structure,
+        current: Document.data,
+        onOpen: setOpened,
+      });
+    },
+  }));
 
-  return (
-    <>
-      <div className="flex flex-wrap items-center gap-2 pb-3">
-        <span className="text-sm text-muted-foreground">{__("Status")}</span>
-        <StateBadge state={workflow.state} color={workflow.color} />
-        {transitions.length > 0 && <span className="mx-1 h-5 w-px bg-border" />}
-        {transitions.map((t) => (
-          <Button key={t.action} size="sm" variant={VARIANTS[t.style] || "secondary"} onClick={run(t)}>
-            {t.action}
-          </Button>
-        ))}
-      </div>
-      {opened && <EntryModal initialPath={opened} onClose={() => { setOpened(null); loopar.refresh(); }} />}
-    </>
-  );
+  return { state: workflow, actions, modal };
 }

@@ -10,3 +10,6 @@ export { useDocument, Layout, DefaultView } from "./base/provider";
 export { useViewOptions } from "./base/view-options";
 export { useActions, useHandlers, useDocumentConfig, useFieldEvent } from "./base/extensions";
 export { useFieldMeta } from "./base/use-field-meta";
+export { HeaderTabs } from "./chrome/header-tabs";
+export { useReserveSidePanel } from "./chrome/side-panel";
+export { normalizeActions, planActions } from "./chrome/toolbar";

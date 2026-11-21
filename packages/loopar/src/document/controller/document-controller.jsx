@@ -107,7 +107,8 @@ export class DocumentController {
     this.fields.on(fieldName, event, callback);
   }
 
-  getDocumentHistory(isPage) {
+  /** History and comments of the record; `panel`: compact, for the record panel (desk-ui). */
+  getDocumentHistory(isPage, { panel = false } = {}) {
     const entity = this.Document?.Entity || {};
     const enableHistory = loopar.utils.trueValue(entity.enable_history);
     const enableComments = loopar.utils.trueValue(entity.enable_comments);
@@ -120,7 +121,7 @@ export class DocumentController {
     if (!documentType || !documentName || (!isPage && this.Document?.isNew)) return null;
 
     return (
-      <section className="mt-10 pt-6 border-t border-border w-full max-w-3xl">
+      <section className={panel ? "w-full" : "mt-10 pt-6 border-t border-border w-full max-w-3xl"}>
         <DocumentHistory
           document={documentType}
           documentName={documentName}

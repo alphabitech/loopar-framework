@@ -9,7 +9,6 @@ import { PrintHeader, PrintStructure } from "./structure";
 import { PrintRecordProvider, indexFields } from "./record";
 import { LetterheadBlock, LetterheadFooter } from "./letterhead";
 import { usePersist } from "@services/persist-state";
-import { Button } from "@cn/components/ui/button";
 import { PrinterIcon } from "lucide-react";
 import { __ } from "@global/i18n";
 
@@ -81,7 +80,9 @@ export const PrintLayout = defineLayout("PrintLayout", ({ ctrl, children }) => {
     `/${portal ? "portal" : "desk"}/${encodeURIComponent(entity)}/print?name=${encodeURIComponent(Document.name)}&format=${encodeURIComponent(formatName)}`;
 
   const toolbar = useMemo(() => ({
-    printFormat: formats.length > (portal ? 1 : 0) && Document.name ? (
+    // The sheet's Print is the page's primary action (the only filled button).
+    printNow: { label: __("Print"), icon: PrinterIcon, primary: true, onClick: () => window.print() },
+    printFormat: formats.length > (portal ? 1 : 0) && Document.name ? { render: (
       <select
         key="printFormat"
         aria-label={__("Print format")}
@@ -93,33 +94,25 @@ export const PrintLayout = defineLayout("PrintLayout", ({ ctrl, children }) => {
         {!portal && <option value={STANDARD}>{__("Standard")}</option>}
         {formats.map((f) => <option key={f.name} value={f.name}>{f.name}{f.is_default ? " (default)" : ""}</option>)}
       </select>
-    ) : null,
-    printPaper: (
+    ) } : null,
+    printPaper: { render: (
       <select key="printPaper" aria-label={__("Paper size")} className={selectClass} value={paper}
         disabled={!!format?.paper_size} onChange={(e) => setPaper(e.target.value)}>
         {Object.entries(PAPER_SIZES).map(([key, p]) => <option key={key} value={key}>{p.label}</option>)}
       </select>
-    ),
-    printOrientation: (
+    ) },
+    printOrientation: { render: (
       <select key="printOrientation" aria-label={__("Orientation")} className={selectClass} value={orientation}
         disabled={!!format?.orientation} onChange={(e) => setOrientation(e.target.value)}>
         <option value="portrait">{__("Portrait")}</option>
         <option value="landscape">{__("Landscape")}</option>
       </select>
-    ),
+    ) },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [Document.name, entity, formats, format, paper, orientation, setPaper, setOrientation, portal]);
 
-  // The sheet's Print is the page's primary action (the only filled button).
-  const printNow = (
-    <Button key="printNow" onClick={() => window.print()}>
-      <PrinterIcon className="pr-1" />
-      {__("Print")}
-    </Button>
-  );
-
   return (
-    <ViewOptionsScope defaults={{ actions: toolbar, primaryAction: printNow }}>
+    <ViewOptionsScope defaults={{ actions: toolbar }}>
       <DeskUI docRef={ctrl}>
         <style>{pageCss}</style>
         <div className="lp-print-stage">

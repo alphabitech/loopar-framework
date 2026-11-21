@@ -72,11 +72,11 @@ export default function SignatureRequestForm() {
   };
 
   const actions = {};
-  if (source) actions.source = <Button variant="link" onClick={open}><ExternalLink className="mr-2 size-4" /> {__("Open")} {getValue('document')}</Button>;
+  if (source) actions.source = { label: `${__("Open")} ${getValue('document')}`, icon: ExternalLink, onClick: open };
   if (status === 'Pending' || status === 'Expired') {
-    actions.resend = <Button variant="secondary" onClick={resend}><Send className="mr-2 size-4" /> {__("Send new link")}</Button>;
+    actions.resend = { label: __("Send new link"), icon: Send, onClick: resend };
   }
-  if (status === 'Pending') actions.revoke = <Button variant="destructive" onClick={revoke}><Ban className="mr-2 size-4" /> {__("Revoke")}</Button>;
+  if (status === 'Pending') actions.revoke = { label: __("Revoke"), icon: Ban, onClick: revoke, danger: true };
 
   return <FormLayout slots={SLOTS} actions={name ? actions : {}} />;
 }

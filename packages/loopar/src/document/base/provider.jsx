@@ -28,11 +28,13 @@ export const DocumentProvider = ({ ctrl, layout, options, children }) => {
     spacing: Document.spacing,
     layout,
     inModal,
+    /** Rendered inside another document (a page's contact form): the outer one owns title and trail. */
+    nested,
     onClose,
     onSaved,
     sidebarOpen,
     handleSetSidebarOpen: setSidebarOpen,
-  }), [ctrl, Document, layout, inModal, onClose, onSaved, sidebarOpen, setSidebarOpen]);
+  }), [ctrl, Document, layout, inModal, nested, onClose, onSaved, sidebarOpen, setSidebarOpen]);
 
   return (
     <DocumentContext.Provider value={value}>

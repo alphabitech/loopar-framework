@@ -751,9 +751,10 @@ const CoreModeToggle = () => {
 };
 
 const ACTIONS = {
-  coremode: <CoreModeToggle />,
-  install: <InstallButton />,
-  deploy: <DeployButton />,
+  // Controls with their own state and dialogs: custom toolbar entries.
+  coremode: { render: <CoreModeToggle /> },
+  install: { render: <InstallButton /> },
+  deploy: { render: <DeployButton /> },
 };
 
 export const config = { onlyList: true };

@@ -167,21 +167,12 @@ export default function FileManagerList() {
   const { onSelect } = ctrl.props;
   const [uploading, setUploading] = useState(false);
 
-  const primaryAction = (
-    <Button
-      variant="secondary"
-      onClick={(e) => {
-        e.preventDefault();
-        setUploading(true);
-      }}
-    >
-      <UploadIcon className="pr-1" />
-      {__("Upload")}
-    </Button>
-  );
+  const actions = {
+    upload: { label: __("Upload"), icon: UploadIcon, primary: true, onClick: () => setUploading(true) },
+  };
 
   return (
-    <ListLayout columns={columns} gridTemplate={gridTemplate} primaryAction={primaryAction}>
+    <ListLayout columns={columns} gridTemplate={gridTemplate} actions={actions}>
       <ListenerSelect onSelect={onSelect} />
       {uploading ? (
         <FileUploader

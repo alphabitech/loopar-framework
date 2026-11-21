@@ -2,7 +2,7 @@
 
 import { SideNavItem } from "./side-nav-item";
 import { useWorkspace } from "@workspace/workspace-provider";
-import { ChevronLeftIcon, ChevronsUpDownIcon, HouseIcon, LayoutDashboardIcon, LayoutGridIcon } from "lucide-react";
+import { ChevronLeftIcon, HouseIcon, LayoutDashboardIcon, LayoutGridIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 import { usePersist } from "@services/persist-state";
@@ -20,7 +20,7 @@ const appOwns = (app, key) =>
 const APP_HOME = "App Home";
 
 /** The app's entry point: its home Desk Page, else the generic App Home. */
-const homePath = (app) => app.home
+export const homePath = (app) => app.home
   ? `/desk/${app.home}/view`
   : `/desk/${APP_HOME}/view?app=${encodeURIComponent(app.name)}`;
 
@@ -29,7 +29,7 @@ const homePath = (app) => app.home
  * its modules). Routes owned by no app (Profile, Desk home…) keep the last
  * active one, persisted per user.
  */
-function useActiveApp(apps) {
+export function useActiveApp(apps) {
   const { activeModule } = useWorkspace();
   const { pathname, search } = useLocation();
   const [stored, setStored] = usePersist("desk-active-app", null);
@@ -40,7 +40,9 @@ function useActiveApp(apps) {
   const appHome = segment === APP_HOME ? query.get("app") : null;
   const fromRoute = (appHome && apps.find(a => a.name === appHome))
     || (dashboard && apps.find(a => (a.dashboards || []).some(d => d.name === dashboard)))
-    || apps.find(a => appOwns(a, activeModule)) || apps.find(a => appOwns(a, segment));
+    // The route first: while the next document loads, `activeModule` still names the
+    // previous one's module (App Home lives in core → Loopar flashed in between).
+    || apps.find(a => appOwns(a, segment)) || apps.find(a => appOwns(a, activeModule));
 
   useEffect(() => {
     if (fromRoute && fromRoute.name !== stored) setStored(fromRoute.name);
@@ -50,12 +52,12 @@ function useActiveApp(apps) {
 }
 
 /** Short name for the rail label: the app's name, humanized ("my_app" → "My app"). */
-const appLabel = (app) => {
+export const appLabel = (app) => {
   const s = String(app.name || "").replace(/[-_]+/g, " ").trim();
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-function AppIcon({ app, className }) {
+export function AppIcon({ app, className }) {
   return app.icon
     ? <Icon data={{ icon: app.icon }} className={className} />
     : <LayoutGridIcon className={className} />;
@@ -65,7 +67,7 @@ function AppIcon({ app, className }) {
 function AppRail({ apps, activeApp }) {
   return (
     <nav aria-label={__("Apps")} className="flex w-[72px] shrink-0 flex-col items-center border-r border-border/60">
-      <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto pb-3">
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto pb-3 lg:pt-2">
       <LogoMark />
       {apps.map(app => {
         const active = app.name === activeApp?.name;
@@ -104,25 +106,25 @@ function AppRail({ apps, activeApp }) {
 /** Brand mark heading the rail (Slack/Discord: workspace icon on top). */
 function LogoMark() {
   return (
-    <Link award={false} bare to="/desk" title={__("Desk")} className="mb-1 flex h-header-height w-full shrink-0 items-center justify-center">
+    // Phones only: on lg the brand sits in the top bar, above the sidebar.
+    <Link award={false} bare to="/desk" title={__("Desk")} className="mb-1 flex h-header-height w-full shrink-0 items-center justify-center lg:hidden">
       <img src="/assets/public/images/logo-dark-min.svg" alt={__("Loopar")} className="h-7 w-8" loading="lazy" decoding="async" />
     </Link>
   );
 }
 
-/** First row of the module panel, same height as the content header:
- *  the app selector plus the sidebar toggle. */
-function PanelTop({ children }) {
+/** First row of the drawer's module panel (phones): its close toggle. On lg
+ *  the toggle and the app selector live in the top bar. */
+function PanelTop() {
   return (
-    <div className="flex h-header-height shrink-0 items-center gap-1">
-      <div className="min-w-0 flex-1">{children}</div>
+    <div className="flex h-header-height shrink-0 items-center justify-end gap-1 lg:hidden">
       <MainNav logo={false} />
     </div>
   );
 }
 
 /** App list shared by the header selector and the collapsed switcher. */
-function AppMenuItems({ apps, activeApp, detailed }) {
+export function AppMenuItems({ apps, activeApp, detailed }) {
   return apps.map(app => (
     <Link
       key={app.name}
@@ -150,41 +152,11 @@ function AppMenuItems({ apps, activeApp, detailed }) {
 }
 
 /** Closes a popover on navigation (Link takes no onClick without turning into a <button>). */
-function useCloseOnNavigate() {
+export function useCloseOnNavigate() {
   const [open, setOpen] = useState(false);
   const { pathname, search } = useLocation();
   useEffect(() => setOpen(false), [pathname, search]);
   return [open, setOpen];
-}
-
-/** Panel title doubles as an app selector (Slack/Notion workspace switcher pattern). */
-function AppHeader({ apps, activeApp, multiApp }) {
-  const [open, setOpen] = useCloseOnNavigate();
-  const title = (
-    <span className="min-w-0 flex-1 truncate text-left font-semibold text-slate-900 dark:text-slate-200">
-      {__(activeApp.description)}
-    </span>
-  );
-
-  if (!multiApp) return <h5 className="flex px-1">{title}</h5>;
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          title={__(activeApp.description)}
-          className="flex w-full items-center gap-1 rounded-md px-1 py-1 hover:bg-secondary/60"
-        >
-          {title}
-          <ChevronsUpDownIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="max-h-[70vh] w-72 overflow-y-auto p-1">
-        <AppMenuItems apps={apps} activeApp={activeApp} detailed />
-      </PopoverContent>
-    </Popover>
-  );
 }
 
 /** Collapsed sidebar: no room for the rail, the active app opens a switcher. */
@@ -318,7 +290,8 @@ export function SideNav({ items = [] }) {
 
   return (
     <div
-      className={`fixed inset-0 z-50 overflow-hidden duration-100 ease-in bg-popover/90 lg:bg-transparent border-r ${openNav ? '!w-sidebar-width lg:!w-sidebar-width' : 'w-0 lg:!w-collapse-sidebar-width'}`}
+      // lg: below the top bar (which spans the full width); phones: a full-height drawer over it.
+      className={`fixed inset-0 z-50 overflow-hidden duration-100 ease-in bg-popover/90 lg:top-header-height lg:z-30 lg:bg-transparent border-r ${openNav ? '!w-sidebar-width lg:!w-sidebar-width' : 'w-0 lg:!w-collapse-sidebar-width'}`}
     >
       <div
         className={`fixed inset-0 backdrop-blur-sm ${!openNav && "hidden"} lg:hidden`}
@@ -326,22 +299,20 @@ export function SideNav({ items = [] }) {
         data-headlessui-state
         onClick={() => setOpenNav(false)}
       />
-      <div className="relative flex h-dvh w-full flex-col bg-background lg:bg-transparent">
+      <div className="relative flex h-dvh w-full flex-col bg-background lg:h-[calc(100dvh-var(--spacing-header-height))] lg:bg-transparent">
         <div className="relative flex min-h-0 flex-1 flex-col lg:text-sm lg:leading-6">
           <div className="flex min-h-0 flex-1">
             {openNav ? (
               <>
                 {multiApp && <AppRail apps={apps} activeApp={activeApp} />}
-                <div className="flex min-w-0 flex-1 flex-col overflow-auto px-2">
-                  <PanelTop>
-                    {activeApp && <AppHeader apps={apps} activeApp={activeApp} multiApp={multiApp} />}
-                  </PanelTop>
+                <div className="flex min-w-0 flex-1 flex-col overflow-auto px-2 lg:pt-2">
+                  <PanelTop />
                   <ModuleList app={activeApp} />
                 </div>
               </>
             ) : (
-              <div className="flex w-full flex-col items-stretch overflow-auto">
-                <div className="flex h-header-height shrink-0 items-center justify-center">
+              <div className="flex w-full flex-col items-stretch overflow-auto lg:pt-1">
+                <div className="flex h-header-height shrink-0 items-center justify-center lg:hidden">
                   <MainNav logo={false} />
                 </div>
                 {multiApp && activeApp && <AppSwitcher apps={apps} activeApp={activeApp} />}

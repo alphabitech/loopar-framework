@@ -23,7 +23,7 @@ Workspace
 | `page/` | Page kind: `PageLayout`, `WebLayout` (no logic layer) | `@loopar/page` |
 | `print/` | Print kind: `PrintLayout`, `PrintHeader`, `PrintStructure`, `formatPrintValue` (automatic print format + paper sheet) | `@loopar/print` |
 | `controller/` | `DocumentController`, `FormController` (plain classes), field store, view-options vocabulary, `useController` | internal |
-| `chrome/` | Desk UI pieces used by layouts: `DeskUI`, `AppBar` (one row: ← · Entity (big) record (small) · save state · `Toolbar`; phones: record in bold under a small entity), `Toolbar` (record ⇄ print toggle icon right before the primary button, same spot on both pages; framework buttons — Go to, view toggle — on wide screens, in "⋯" on phones; the view's `actions` always in "⋯", in order; Save/New the only filled button) | internal |
+| `chrome/` | Desk UI pieces used by layouts: `DeskUI` (content + record panel: the view's `summary` and the record's activity — sticky beside the content on lg, a drawer below; toggled from the toolbar), `AppBar` (3 rows: breadcrumbs app › module › entity — the closest one after "…" on phones; title + status badge + save state with the `Toolbar`, which wraps below the title when both don't fit (title keeps 16rem); `headerTabs`), `Toolbar` (actions as data: up to 2 secondaries in the row, the rest in "Actions ▾" grouped, destructive last; utility icons; "⋯" for document commands like Rename; one filled primary), `HeaderTabs` (underline tabs for `headerTabs`) | internal |
 
 Kinds (`Document.entry`): `form` `view` `report` `installer` `auth` `print` → form middleware ·
 `list` → list middleware · `page` `desk-page` `dashboard` `web` `controller` → base only.
@@ -50,8 +50,8 @@ export default function AppForm() {
   return (
     <FormLayout
       slots={{ totals: () => <LiveTotals /> }}            // components rendered inside the structure
-      actions={{ bump: <BumpVersionButton /> }}         // AppBar buttons
-      sidebar={<Notes />}
+      actions={{ bump: { label: "Bump", icon: ArrowUp, onClick: bump } }}  // AppBar actions (data)
+      summary={<Totals />}                              // record panel
     >
       {/* extra content below the structure */}
     </FormLayout>
@@ -65,8 +65,8 @@ No file at all? The entry renders `DefaultView` = its layout with defaults.
 | I want to… | Where |
 |---|---|
 | Fixed flags (`canUpdate`, `hasSidebar`, `hasHistory`, `notRequireChanges`, `mapDocument`) | `export const config` |
-| Order of AppBar buttons | the view's `actions` live in the "⋯" menu, in the order they're passed; give them an icon and a text label (menu rows) |
-| Content in the structure (`slot`), AppBar buttons, sidebar, list columns/cards | layout props: `slots`, `actions`, `sidebar`, `columns`, `gridTemplate`, `primaryAction` |
+| AppBar actions | `{ key: { label, icon, onClick \| to, primary, fallback, pin, group, danger, disabled, title, visible } }` or a function returning one; `render` for a custom control (selects). `primary` = the only filled button (on an editable form Save keeps it and the view's primaries lead the row); the row shows up to 2 secondaries, the rest go to "Actions ▾" by `group`, `danger` last. Workflow transitions join automatically (state as the title badge) |
+| Content in the structure (`slot`), AppBar actions, header badge and tabs, record panel, list columns/cards | layout props: `slots`, `actions`, `status` (`"Paid"` or `{ label, color }`), `headerTabs`, `summary`, `columns`, `gridTemplate` |
 | React to save / a field change / a JSON button (`data.action`) | `useFormEvents`, `useFieldEvent`, `useHandlers` |
 | Read / write values, submit | `useForm()` → `getValue`, `setValue`, `setError`, `save`, `send` |
 | Document, `inModal`, the controller itself | `useDocument()` |
@@ -85,7 +85,7 @@ they can be called unconditionally at the top of a view.
 |---|---|
 | `useDocument()` | `{ ctrl, Document, name, entity, entityMenu, layout, inModal, onClose, onSaved, sidebarOpen, handleSetSidebarOpen }` |
 | `useViewOptions()` | Merged view options (see vocabulary below) |
-| `useActions({ name: <Node> })` | AppBar buttons while mounted |
+| `useActions({ name: action })` | AppBar actions (descriptors, see above) while mounted |
 | `useHandlers({ name: (ctrl) => … })` | Targets for JSON buttons (`data.action`) |
 | `useDocumentConfig({ hasSidebar: false, … })` | Runtime patch of view flags |
 | `useFieldEvent(field, event, (e, ctrl) => …)` | Subscribes to a rendered field (`change`, `changed`…) |
@@ -186,7 +186,7 @@ controller. Prefer events; override only when the built-in behaviour must be rep
 ## Options vocabulary (`controller/view-options.js`)
 
 **View options** (React state, read by chrome/layouts): `slots` `actions` `rowActions` `handlers`
-`columns` `gridTemplate` `sidebar` `sidebarHeader` `primaryAction` `canUpdate` `readOnly`
+`columns` `gridTemplate` `summary` `status` `headerTabs` `canUpdate` `readOnly`
 `hasSidebar` `hasHeader` `hasBreadcrumb` `hasHistory` `hasSearchForm` `hasSelectAll`
 `hasSelectRow` `disabledSearchFields` `onlyList` `onlyGrid`.
 `has*` flags are opt-out: everything is on unless a `config` or a layout prop says `false`.

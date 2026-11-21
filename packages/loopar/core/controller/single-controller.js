@@ -190,6 +190,8 @@ export default class SingleController extends BaseController {
     return await this.render({
       Entity: {
         name: document.__ENTITY__?.name,
+        // The desk trail (app › module › page) places the page by its module.
+        module: document.__ENTITY__?.module || pageRef.module || pageRef.__MODULE__ || null,
         background_image: document.__ENTITY__?.background_image,
         doc_structure: document.__ENTITY__?.doc_structure || "[{}]",
         enable_history: loopar.utils.trueToBinary(pageRef.enable_history),

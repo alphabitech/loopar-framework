@@ -24,7 +24,9 @@ export default function DeskWorkspace(props){
           </div>
          <div
             data-print-root
-            className={`flex flex-col flex-1 min-w-0 px-4 pt-2 pb-4 overflow-auto ${
+            // overflow-x-clip, not overflow-auto: a scroll container here would break `sticky` in the views
+            // (the window scrolls, not this box) — the document header and record panel stick to the viewport.
+            className={`flex flex-col flex-1 min-w-0 px-4 pt-2 pb-4 overflow-x-clip ${
               openNav ? "lg:ml-sidebar-width" : "lg:ml-collapse-sidebar-width"
             }`}
           >
