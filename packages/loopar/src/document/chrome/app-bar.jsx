@@ -5,7 +5,7 @@ import { StateBadge, useWorkflowActions } from "../form/workflow-bar";
 import { cn } from "@cn/lib/utils";
 import loopar from "loopar";
 import { Button } from "@cn/components/ui/button";
-import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, KanbanIcon, CalendarIcon, ChartColumnIcon, CheckIcon, PrinterIcon, PanelRightIcon, PencilIcon, FileTextIcon, TextCursorInputIcon } from "lucide-react";
+import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, KanbanIcon, ListTreeIcon, CalendarIcon, ChartColumnIcon, CheckIcon, PrinterIcon, PanelRightIcon, PencilIcon, FileTextIcon, TextCursorInputIcon } from "lucide-react";
 import {Link} from "@link";
 import { useDocument, useViewOptions } from "@loopar/document";
 import { canOn } from "@context/auth-context";
@@ -180,6 +180,7 @@ const SaveState = ({ Document }) => {
 const VIEW_BUTTON = {
   List: { icon: <MenuIcon />, label: () => __("List view") },
   Grid: { icon: <GridIcon />, label: () => __("Grid view") },
+  Tree: { icon: <ListTreeIcon />, label: () => __("Tree view") },
   Kanban: { icon: <KanbanIcon />, label: () => __("Board view") },
   Calendar: { icon: <CalendarIcon />, label: () => __("Calendar view") },
   Report: { icon: <ChartColumnIcon />, label: () => __("Report view") },
@@ -358,8 +359,9 @@ export function AppBar({ Document, viewTypeToggle, setViewType, viewType, applyV
           // top: below the top bar and its 1px border. py-2 keeps the same room above and
           // below while stuck; unstuck, -mt-2 cancels the desk content's pt-2 so the
           // buttons stay centered between the top bar and this row's border.
-          "sticky top-[calc(var(--spacing-header-height)+1px)] z-30 -mx-2 flex flex-row flex-wrap items-center gap-x-3 gap-y-2 bg-background/95 px-2 py-2 backdrop-blur-sm",
-          !inModal && "sm:-mt-2",
+          "sticky z-30 -mx-2 flex flex-row flex-wrap items-center gap-x-3 gap-y-2 bg-background/95 px-2 py-2 backdrop-blur-sm",
+          // A modal scrolls its own box (no desk top bar above): stick to its top edge.
+          inModal ? "top-0" : "top-[calc(var(--spacing-header-height)+1px)] sm:-mt-2",
           !tabs && "border-b"
         )}
       >

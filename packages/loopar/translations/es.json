@@ -657,5 +657,19 @@
   "The 1st of every month": "El día 1 de cada mes",
   "Send this view by email (a table, and the whole of it as CSV)": "Enviar esta vista por correo (una tabla, y completa como CSV)",
   "Emails, separated by commas (empty: yours)": "Correos separados por comas (vacío: el tuyo)",
-  "Send by email on a schedule": "Enviar por correo de forma programada"
+  "Send by email on a schedule": "Enviar por correo de forma programada",
+  "Tree view": "Vista de árbol",
+  "Drop here to move it to the top level": "Suelta aquí para moverlo al nivel superior",
+  "Collapse": "Contraer",
+  "Expand": "Expandir",
+  "Expand all": "Expandir todo",
+  "Collapse all": "Contraer todo",
+  "New under {0}": "Nuevo dentro de {0}",
+  "Own: {0}": "Propio: {0}",
+  "This tree has more records than it can show ({0}). The rest is in the list view.": "Este árbol tiene más registros de los que puede mostrar ({0}). El resto está en la vista de lista.",
+  "No records yet.": "Aún no hay registros.",
+  "{0} of {1} records match": "{0} de {1} registros coinciden",
+  "{0} records": "{0} registros",
+  "{0}: a record can't be its own parent.": "{0}: un registro no puede ser su propio padre.",
+  "{0}: {1} is below this record, it can't be its parent.": "{0}: {1} está debajo de este registro, no puede ser su padre."
 }

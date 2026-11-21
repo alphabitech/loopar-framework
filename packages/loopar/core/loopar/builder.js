@@ -8,6 +8,7 @@ import { fileManage } from "../file-manage.js";
 import { elementsDict, elementsDefinition } from "../global/element-definition.js";
 import { formulaFields } from "../global/formula.js";
 import { calendarFields } from "../global/calendar.js";
+import { treeFields } from "../global/tree.js";
 import { writePolicyMap } from "../global/field-policy.js";
 import { deskHomes, listDeskPages } from "../document/desk-page.js";
 import { isAuditableEntity, AUDIT_COLUMN_NAMES, orderChildRows } from "../global/audit.js";
@@ -155,6 +156,8 @@ export class Builder {
         __FORMULAS__: formulaFields(fields),
         // Date fields the calendar draws this entity by (global/calendar.js), or null.
         __CALENDAR__: calendarFields(fields),
+        // Parent field the tree nests this entity by (global/tree.js), or null.
+        __TREE__: treeFields(fields, doc.name),
         // Who may write each restricted field and through which path
         // (see global/field-policy.js). Built from the entity JSON — server side.
         __WRITE_POLICY__: writePolicyMap(fields),

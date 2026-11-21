@@ -172,10 +172,18 @@ export class FormController extends DocumentController {
     return request;
   }
 
+  /**
+   * Query of the form's own requests: its record's name plus, on the page,
+   * the page's query. A form in a modal has no URL of its own: the one in
+   * the address bar belongs to the page behind it (its filters, its record's
+   * name) and must not reach the modal's requests.
+   */
   get queryParams() {
+    const name = this.__DOCUMENT_NAME__ ?? (this.Document?.isNew ? undefined : this.Document?.name) ?? undefined;
+    if (this.props.inModal) return name === undefined ? {} : { name };
     const searchParams = new URLSearchParams(window.location.search);
     return {
-      name: this.__DOCUMENT_NAME__,
+      name,
       ...(Object.fromEntries(searchParams.entries()) || {}),
     };
   }

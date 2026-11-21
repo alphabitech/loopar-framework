@@ -12,7 +12,8 @@ const Entry = ({ children, className = "" }) => (
   <div className={cn("lp-toolbar-menu-item flex empty:hidden [&>*]:w-full [&>*]:justify-start", className)}>{children}</div>
 );
 
-export function RowMenu({ row, Entity = {}, onDelete }) {
+/** `onEdit(row)`: the view opens the record itself (e.g. in a modal) instead of navigating to it. */
+export function RowMenu({ row, Entity = {}, onDelete, onEdit }) {
   const [open, setOpen] = useState(false);
   const { rowActions } = useViewOptions();
 
@@ -51,7 +52,9 @@ export function RowMenu({ row, Entity = {}, onDelete }) {
         {custom.length > 0 && <div role="separator" className="my-1 h-px bg-border" />}
 
         <Entry>
-          {canEdit ? (
+          {canEdit && onEdit ? (
+            <Button variant="ghost" onClick={() => onEdit(row)}><PencilIcon />{__("Edit")}</Button>
+          ) : canEdit ? (
             <Link variant="ghost" to={`update?name=${name}`}><PencilIcon />{__("Edit")}</Link>
           ) : (
             <Link variant="ghost" to={`view?name=${name}`}><EyeIcon />{__("View")}</Link>

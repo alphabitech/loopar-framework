@@ -864,6 +864,7 @@ export default class CoreDocument {
 
     const selectTypes = await this.validateLinkDocuments();
     !loopar.installing && errors.push(...selectTypes);
+    if (!loopar.installing && this.treeParentErrors) errors.push(...await this.treeParentErrors());
 
     errors.length > 0 && loopar.throw(errors.join('<br/>'));
   }

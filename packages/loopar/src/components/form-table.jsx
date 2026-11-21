@@ -451,14 +451,18 @@ export default function FormTableInput(props) {
   const { renderInput } = BaseInput(props);
   const meta = useMemo(() => props.__META__, [props.__META__]);
   const docRef = props.docRef;
+  // The render callback runs inside the field's Controller, and a read-only
+  // record renders the table as a value without calling it: it must not call
+  // hooks (the Controller would render fewer hooks). The handler lives here.
+  const fieldRef = useRef(null);
+  const handleChange = useCallback((newRows) => {
+    fieldRef.current?.onChange({ target: { value: newRows } });
+  }, []);
 
   return (
     renderInput(field => {
       const rows = field.value || [];
-
-      const handleChange = useCallback((newRows) => {
-        field.onChange({ target: { value: newRows } });
-      }, [field]);
+      fieldRef.current = field;
 
       return (
         <FormTableMiddleware

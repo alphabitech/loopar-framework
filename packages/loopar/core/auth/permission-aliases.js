@@ -7,7 +7,7 @@
  *                     on it (plus a fresh re-authentication, checked by the
  *                     action itself).
  *   board, calendar,  the data of a list view is the list seen another way:
- *   report            whoever may `list` an entity may read them, narrowed
+ *   tree, report      whoever may `list` an entity may read them, narrowed
  *                     to the same records ('own' / 'portal' scope).
  *   bulkUpdate,       a bulk action is its single action on each selected
  *   bulkTransition    record: the same grant, the same scope per record.
@@ -19,6 +19,7 @@ export const PERMISSION_ALIASES = Object.freeze({
   changeprotected: 'update',
   board: 'list',
   calendar: 'list',
+  tree: 'list',
   report: 'list',
   bulkupdate: 'update',
   bulktransition: 'transition',

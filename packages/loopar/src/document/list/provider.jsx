@@ -5,11 +5,11 @@ import { TableProvider, useTable } from "@@table/TableContext";
 import { listFields, flatElements, defaultReportSpec } from "@@table/list-fields";
 import { queryOf, urlWith } from "@@table/list-url";
 import { REPORT_PARAM, REPORT_PARAMS, formatReportSpec } from "@global/list-report";
-import { listViews, nextListView } from "./views";
+import { listViews, nextListView, treeOf } from "./views";
 
 /**
  * List middleware: table state (rows, selection, search, pagination) + the
- * view type. List / Grid / Kanban / Calendar are persisted per user; Report
+ * view type. List / Grid / Tree / Kanban / Calendar are persisted per user; Report
  * is in the URL (`?report=…`): opening such a link shows the report, picking
  * another view leaves it.
  */
@@ -18,15 +18,18 @@ const ListContext = createContext(null);
 export function ListProvider({ ctrl, children }) {
   const Document = ctrl.Document;
   const { pathname: currentUrl, navigate } = useWorkspace();
-  const [viewType, setPersisted] = usePersist(
-    Document.Entity.name + "_viewType",
-    Document.Entity.default_list_view || "List"
-  );
+  // The view a list opens in until the user picks another: the entity's own
+  // (`default_list_view`) when it names one other than the plain list; an
+  // entity that nests opens as a tree.
+  const configured = Document.Entity.default_list_view;
+  const defaultView = configured && configured !== "List" ? configured : (treeOf(Document) ? "Tree" : "List");
+  const [viewType, setPersisted] = usePersist(Document.Entity.name + "_viewType", defaultView);
 
   // Kanban only exists for entities with an active workflow.
   const views = listViews(Document);
   const reportInUrl = queryOf(currentUrl).has(REPORT_PARAM);
-  const stored = views.includes(viewType) && viewType !== "Report" ? viewType : "List";
+  const fallback = views.includes(defaultView) && defaultView !== "Report" ? defaultView : "List";
+  const stored = views.includes(viewType) && viewType !== "Report" ? viewType : fallback;
   const current = reportInUrl ? "Report" : stored;
 
   const setViewType = useCallback((view) => {

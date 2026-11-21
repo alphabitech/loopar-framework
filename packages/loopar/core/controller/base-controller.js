@@ -84,6 +84,16 @@ export default class BaseController extends CoreController {
     }
   }
 
+  /** "New child" from the tree: `create?<parent field>=<record>` starts the record under it. */
+  #prefillParent(document) {
+    const tree = document.__ENTITY__?.__REF__?.__TREE__ || loopar.getRef(document.__ENTITY__?.name, false)?.__TREE__;
+    const field = tree && document.fields?.[tree.parent];
+    const input = String(this.query?.[tree?.parent] ?? '').trim();
+    if (!field || !input || field.value) return;
+    if (loopar.utils.trueValue(field.readonly) || field.formula) return;
+    field.value = input.slice(0, 255);
+  }
+
   #prefill(document, text) {
     const fieldName = String(document.titleFields?.() || 'name').split(',').map(f => f.trim()).find(Boolean);
     const field = fieldName && document.fields?.[fieldName];
@@ -101,6 +111,7 @@ export default class BaseController extends CoreController {
     // the new record's first title field (when the user may write it).
     if (!this.hasData() && this.query?.prefill) this.#prefill(document, String(this.query.prefill));
     if (!this.hasData()) this.#prefillDates(document);
+    if (!this.hasData()) this.#prefillParent(document);
 
     if (document.__ENTITY__.is_single) {
       return loopar.throw({
@@ -179,6 +190,19 @@ export default class BaseController extends CoreController {
       q: this.#listSearch(["calendar", "cal_from", "cal_to"]),
       page: parseInt(this.query?.page, 10) || 1,
     });
+  }
+
+  /**
+   * Tree view (data): `{Entity}/tree` — every record with the one it hangs
+   * from, plus the records the list's filters match. Same permission and
+   * owner scope as the list.
+   */
+  async actionTree() {
+    const page = this.#listPage();
+    if (page) return page;
+
+    const document = await loopar.newDocument(this.document);
+    return await document.treeRows({ q: this.#listSearch() });
   }
 
   /**

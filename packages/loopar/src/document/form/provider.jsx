@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef } from "react";
+import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { FormWrapper } from "@form-provider";
 import { RecordTranslations } from "../../components/translation/record-translations";
 
@@ -21,11 +21,14 @@ const sameValue = (a, b) => {
  * values in `ctrl.Document.data`, but react-hook-form only reads its
  * defaultValues on mount. Re-base the form on the new data so fields the
  * server changed (status, reports...) show at once, and keep the fields the
- * user edited and has not saved yet.
+ * user edited and has not saved yet. Returns a version that changes after
+ * each re-base: what read the old values while rendering (the entity's form
+ * component, its actions) renders again with the new ones.
  */
 function useServerSync(ctrl) {
   const data = ctrl.Document.data;
   const appliedRef = useRef(data);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     if (data === appliedRef.current) return;
@@ -41,11 +44,13 @@ function useServerSync(ctrl) {
     for (const k of edited) {
       if (!sameValue(current[k], data[k])) form.setValue(k, current[k], { shouldDirty: true });
     }
+    setVersion((v) => v + 1);
   }, [data, ctrl]);
+  return version;
 }
 
 export function FormProvider({ ctrl, schema = true, children }) {
-  useServerSync(ctrl);
+  const version = useServerSync(ctrl);
 
   const api = useMemo(() => {
     const bound = {};
@@ -54,8 +59,9 @@ export function FormProvider({ ctrl, schema = true, children }) {
       ...bound,
       ctrl,
       get form() { return ctrl.Form; },   // react-hook-form instance (set by FormWrapper)
+      version,                            // changes after a server re-base (useServerSync)
     };
-  }, [ctrl]);
+  }, [ctrl, version]);
 
   return (
     <FormContext.Provider value={api}>
@@ -64,10 +70,13 @@ export function FormProvider({ ctrl, schema = true, children }) {
         STRUCTURE={schema ? ctrl.__STRUCTURE__ : undefined}
         docRef={ctrl}
       >
-        {/* Translate icons on translatable fields (record forms only). */}
-        {["create", "update"].includes(ctrl.Document?.meta?.action)
-          ? <RecordTranslations entity={ctrl.Document?.Entity}>{children}</RecordTranslations>
-          : children}
+        {/* Fields mount again after a server re-base: they read the new values (the form keeps unsaved edits). */}
+        <Fragment key={version}>
+          {/* Translate icons on translatable fields (record forms only). */}
+          {["create", "update"].includes(ctrl.Document?.meta?.action)
+            ? <RecordTranslations entity={ctrl.Document?.Entity}>{children}</RecordTranslations>
+            : children}
+        </Fragment>
       </FormWrapper>
     </FormContext.Provider>
   );

@@ -17,6 +17,7 @@ import { dayOf, bucketOf } from '../global/date-buckets.js';
 import { parseOptionLines } from '../global/select-options.js';
 import { resolveColumnFormat } from '../global/element-definition.js';
 import { calendarFields, isDay } from '../global/calendar.js';
+import { treeFields } from '../global/tree.js';
 import { workflowFor } from './workflow.js';
 
 /** The entity a select links to, or null for inline options. */
@@ -826,6 +827,90 @@ export default class BaseDocument extends CoreDocument {
       titleFields: this.getFieldSelectLabels().map((f) => f.trim()).filter(Boolean),
       states: workflow ? { field: workflow.field, colors: Object.fromEntries(workflow.states.map((s) => [s.state, s.color || "gray"])) } : null,
     };
+  }
+
+  /**
+   * Tree (data): every record of this entity the user may list (at most
+   * `limit`), with the columns of the list, for entities that nest by
+   * convention (global/tree.js). The tree always loads whole: with a search
+   * (`q`), `matches` names the records it finds and the client keeps them
+   * with the ones above them.
+   *
+   * → { parent, editable, rows, matches, truncated, titleFields }
+   */
+  async treeRows({ q = null, limit = 2000 } = {}) {
+    const name = this.__ENTITY__.name;
+    const tree = treeFields(this.__ENTITY__.doc_structure, name);
+    if (!tree) loopar.throw(`${name} has no parent field to show as a tree.`);
+
+    const columns = await this.#tableColumnNames();
+    const scoped = await requestOwnerFilter(name);
+    const ownerColumn = await this.#ownerColumn();
+    const auditable = await this.#softDeletes();
+    const base = (condition) => {
+      let qb = loopar.db.qx()(name);
+      const where = loopar.db.buildWhereCb(condition);
+      if (where) qb = qb.where(where);
+      if (auditable) qb = qb.whereNull("__deleted_at__");
+      return qb;
+    };
+
+    const titleFields = this.getFieldSelectLabels().map((f) => f.trim()).filter(Boolean);
+    // The list's columns, with the ones the user added to it.
+    const listed = this.getFieldListNames();
+    const settings = isListTarget(name) ? await readListSettings(name) : null;
+    const fields = [...new Set(["id", "name", tree.parent, ...titleFields, ...listed, ...this.#extraListFields(settings, listed, columns), ...ownerColumn])]
+      .filter((f) => f && (!columns || columns.has(f)));
+    const order = titleFields.find((f) => fields.includes(f)) || "name";
+
+    const search = q ? { ...q } : null;
+    if (search) delete search[tree.parent];
+    const filtered = !!search && Object.keys(search).length > 0;
+
+    const [all, found] = await Promise.all([
+      base(combineSConditions(scoped)).select(fields).orderBy(order, "asc").limit(limit + 1),
+      filtered ? base(combineSConditions(this.buildCondition(search, columns), scoped)).select("name") : null,
+    ]);
+    const rows = all.slice(0, limit);
+    await this.#attachLinkTitles(rows);
+
+    return {
+      parent: tree.parent,
+      editable: tree.editable,
+      rows,
+      matches: found ? found.map((r) => r.name) : null,
+      truncated: all.length > limit,
+      titleFields,
+    };
+  }
+
+  /**
+   * A record can't hang from itself nor from a record below it: the tree
+   * would lose the whole branch. Error messages, empty when the parent is fine.
+   */
+  async treeParentErrors() {
+    const name = this.__ENTITY__.name;
+    const tree = !this.__ENTITY__.is_single && treeFields(this.__ENTITY__.doc_structure, name);
+    if (!tree) return [];
+    const own = this.name;
+    let above = this.fields?.[tree.parent]?.value;
+    const filled = (v) => v !== null && v !== undefined && v !== "";
+    if (!filled(above) || !filled(own)) return [];
+
+    const label = __(this.fields[tree.parent].label || tree.parent);
+    if (String(above) === String(own)) return [__("{0}: a record can't be its own parent.", [label])];
+    if (this.__IS_NEW__) return [];
+
+    const seen = new Set();
+    while (filled(above) && !seen.has(String(above))) {
+      seen.add(String(above));
+      const [row] = await loopar.db.getAll(name, ["name", tree.parent], { name: above });
+      above = row?.[tree.parent];
+      if (filled(above) && String(above) === String(own)) {
+        return [__("{0}: {1} is below this record, it can't be its parent.", [label, [...seen][0]])];
+      }
+    }
+    return [];
   }
 
   /** Whether the table soft-deletes: queries on the raw builder leave deleted rows out by hand. */
