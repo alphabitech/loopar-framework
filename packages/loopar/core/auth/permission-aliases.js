@@ -9,6 +9,8 @@
  *   board, calendar,  the data of a list view is the list seen another way:
  *   tree, report      whoever may `list` an entity may read them, narrowed
  *                     to the same records ('own' / 'portal' scope).
+ *   geocode           looking up the address of a record's form reads no
+ *                     record: whoever may `list` the entity may ask.
  *   bulkUpdate,       a bulk action is its single action on each selected
  *   bulkTransition    record: the same grant, the same scope per record.
  *
@@ -20,6 +22,7 @@ export const PERMISSION_ALIASES = Object.freeze({
   board: 'list',
   calendar: 'list',
   tree: 'list',
+  geocode: 'list',
   report: 'list',
   bulkupdate: 'update',
   bulktransition: 'transition',

@@ -240,7 +240,7 @@ export function snapshotHTML(snapshot) {
         .map((r) => `${escapeHTML(r.name ?? r.label)}: ${escapeHTML(r.value ?? '')}`).join('<br>') || null;
     }
     if (kind === 'markdown') return multiline(value);
-    const text = formatPrintValue(kind, value, { data: node.data, titles });
+    const text = formatPrintValue(kind, value, { data: node.data, titles, currency: data.currency });
     return text == null ? null : multiline(text);
   };
 
@@ -271,7 +271,7 @@ export function snapshotHTML(snapshot) {
         if (!rows.length || !columns.length) return '';
         const label = d.label || node.data?.label;
         return `${label ? `<h2>${escapeHTML(label)}</h2>` : ''}<table><thead><tr>${columns.map((c) => `<th>${escapeHTML(c.data.label || humanize(c.data.name))}</th>`).join('')}</tr></thead><tbody>${
-          rows.map((row) => `<tr>${columns.map((c) => `<td>${escapeHTML(formatPrintValue(c.kind, row[c.data.name], { data: c.data, titles }) ?? '')}</td>`).join('')}</tr>`).join('')
+          rows.map((row) => `<tr>${columns.map((c) => `<td>${escapeHTML(formatPrintValue(c.kind, row[c.data.name], { data: c.data, titles, currency: data.currency }) ?? '')}</td>`).join('')}</tr>`).join('')
         }</tbody></table>`;
       }
       default: {

@@ -34,6 +34,9 @@ import { orphanManager } from "./orphan-manager.js";
 import { wireQueryProbes } from "./query-probes.js";
 
 /** Format key a field's column is built with (data.format/type → element default → data). */
+/** Default (precision, scale) of the fixed-precision formats — those of COLUMN_FORMATS' `sql`. */
+const DECIMAL_DEFAULTS = { decimal: [10, 2], currency: [18, 4], percent: [7, 4] };
+
 function resolveColumnFormatKey(field) {
   const fmt = resolveColumnFormat(field);
   if (fmt && COLUMN_FORMATS[fmt]) return fmt;
@@ -574,6 +577,7 @@ export default class Core {
             newFields.push(field);
           } else if (
             this.#columnTypeFamilyChanged(field, existing) ||
+            this.#decimalColumnTooNarrow(field, existing) ||
             this.#keyedTextColumn(field, existing) ||
             this.#textOnVarcharColumn(field, existing)
           ) {
@@ -778,6 +782,22 @@ export default class Core {
     return /char/i.test(existingCol?.type || "");
   }
 
+  /**
+   * A fixed-precision field whose column holds fewer decimals or fewer whole
+   * digits than it now declares (same "decimal" family, so the family check
+   * misses it): `scale: 6` on a column created as (10,2) would keep rounding
+   * to cents. Columns are only ever widened here, never narrowed. SQLite
+   * doesn't enforce precision.
+   */
+  #decimalColumnTooNarrow(field, existingCol) {
+    if (this.isSQLiteLike) return false;
+    const defaults = DECIMAL_DEFAULTS[resolveColumnFormatKey(field)];
+    if (!defaults || !Number.isFinite(existingCol?.scale) || !Number.isFinite(existingCol?.precision)) return false;
+    const precision = Number(field.data?.precision) || defaults[0];
+    const scale = Number(field.data?.scale) || defaults[1];
+    return scale > existingCol.scale || precision - scale > existingCol.precision - existingCol.scale;
+  }
+
   #columnTypeFamilyChanged(field, existingCol) {
     const family = (rawType) => {
       const t = (rawType || "").toLowerCase();
@@ -867,7 +887,8 @@ export default class Core {
 
   /**
    * Read column metadata for a table. Returned shape: an array of
-   * `{ name, type, nullable, default, primary }` per column. Used by
+   * `{ name, type, nullable, default, primary }` per column, plus
+   * `precision` and `scale` on fixed-precision ones (MySQL, Postgres). Used by
    * orphan-manager and the install/update flow.
    */
   async getTableDescription(document) {
@@ -881,16 +902,27 @@ export default class Core {
         // DESCRIBE works the same on MySQL and MariaDB. Column shape:
         // { Field, Type, Null, Key, Default, Extra }
         raw   = await this.qx().raw(`DESCRIBE \`${document}\``);
-        mapFn = r => ({ name: r.Field, type: r.Type, nullable: r.Null === "YES", default: r.Default, primary: r.Key === "PRI" });
+        mapFn = r => {
+          // "decimal(10,2)": the shape of a fixed-precision column.
+          const shape = /^(?:decimal|numeric)\((\d+),(\d+)\)/i.exec(r.Type || "");
+          return {
+            name: r.Field, type: r.Type, nullable: r.Null === "YES", default: r.Default, primary: r.Key === "PRI",
+            ...(shape ? { precision: Number(shape[1]), scale: Number(shape[2]) } : {}),
+          };
+        };
       } else if (this.isPostgresLike) {
         // current_schema() exists on PG/Cockroach/Redshift. We scope by it
         // to avoid picking up rows from other schemas in shared deployments.
         raw   = await this.qx().raw(
-          `SELECT column_name, data_type, is_nullable, column_default
+          `SELECT column_name, data_type, is_nullable, column_default, numeric_precision, numeric_scale
              FROM information_schema.columns
              WHERE table_schema = current_schema() AND table_name = ?`, [document]
         );
-        mapFn = r => ({ name: r.column_name, type: r.data_type, nullable: r.is_nullable === "YES", default: r.column_default, primary: false });
+        mapFn = r => ({
+          name: r.column_name, type: r.data_type, nullable: r.is_nullable === "YES", default: r.column_default, primary: false,
+          // The shape of a fixed-precision column (null for `numeric` without one).
+          ...(r.data_type === "numeric" && r.numeric_scale != null ? { precision: Number(r.numeric_precision), scale: Number(r.numeric_scale) } : {}),
+        });
       } else {
         // MSSQL / Oracle / unknown — best-effort generic information_schema.
         raw   = await this.qx().raw(

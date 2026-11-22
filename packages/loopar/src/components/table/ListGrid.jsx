@@ -55,7 +55,7 @@ export function ListGrid(props) {
       // Dates, money and choices in the user's regional format / language.
       if (col.element === "date") col.render ??= (row) => formatDate(row[name], "short");
       if (col.element === "date_time") col.render ??= (row) => formatDateTime(row[name], "short");
-      if (col.element === "currency" || col.data.format === "currency") col.render ??= (row) => formatCurrency(row[name]);
+      if (col.element === "currency" || col.data.format === "currency") col.render ??= (row) => formatCurrency(row[name], row.currency || null);
       if (["select", "radio_group"].includes(col.element) && typeof col.data.options === "string") {
         const labels = Object.fromEntries(parseOptionLines(col.data.options).map((o) => [o.value, o.label]));
         const multiple = [1, "1", true, "true"].includes(col.data.multiple);

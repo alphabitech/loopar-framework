@@ -315,6 +315,8 @@ export const elementsDefinition = {
     { element: "video_embed", icon: "MonitorPlay", droppable: false, content: { title: "line" } },
     { element: "before_after", icon: "SquareSplitHorizontal", droppable: false, content: { before_label: "line", after_label: "line" } },
     { element: "embed", icon: "Frame", droppable: false, content: { title: "line" } },
+    // A place on a map: a fixed one on a page, the record's own in a form (global/geo.js).
+    { element: "map", icon: "MapPin", droppable: false },
   ],
   components: [
     { element: "feature_card", icon: "BadgeCheck", content: { title: "line", text: "text" } },
@@ -842,7 +844,7 @@ const DOCUMENT_CONTEXTS = Object.freeze({
     extra: ["row", "col", "tabs", "tab"],
     // Offered to a human only: grouping, navigation and controller actions.
     // None of them is writable, so they never become a column or a value.
-    paletteExtra: ["panel", "div", "link", "button"],
+    paletteExtra: ["panel", "div", "link", "button", "map"],
     aiGroups: ["form"],
     paletteGroups: ["form", "system"],
   },

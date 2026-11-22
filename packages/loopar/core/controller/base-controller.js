@@ -193,6 +193,19 @@ export default class BaseController extends CoreController {
   }
 
   /**
+   * The point of an address, for the map of a record's form:
+   * `{Entity}/geocode` with `address` in the body → `{ place }` (null when
+   * it is not found or no geocoder is set). For whoever may list the entity.
+   */
+  async actionGeocode() {
+    const page = this.#listPage();
+    if (page) return page;
+
+    const maps = await loopar.getDocument('Maps');
+    return { place: await maps.geocode(this.data?.address) };
+  }
+
+  /**
    * Tree view (data): `{Entity}/tree` — every record with the one it hangs
    * from, plus the records the list's filters match. Same permission and
    * owner scope as the list.

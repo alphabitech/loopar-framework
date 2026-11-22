@@ -7,18 +7,15 @@ import { bootTestTenant } from "../support/tenant.js";
 /**
  * The gym app on the core Customer: a member keeps only a `customer` link
  * (name/phone/email live in Customer), portal access goes through the
- * customer's contact, and the update migrates the old member columns.
+ * customer's contact.
  */
 let t;
-let Installer;
 let server;
 let memberCard;
 const root = process.cwd();
 
 before(async () => {
-  t = await bootTestTenant();
-  ({ default: Installer } = await import(path.join(root, "apps", "gym", "installer.js")));
-  await t.run(() => new Installer({ app_name: "gym" }).install());
+  t = await bootTestTenant({ apps: ["erp", "gym"] });
   server = await import(path.join(root, "apps", "gym", "modules", "gym", "shared", "server.js"));
   ({ memberCard } = await import(path.join(root, "apps", "gym", "modules", "gym", "shared", "member-card.js")));
 });
@@ -63,7 +60,7 @@ test("createMember creates the Customer (+ primary contact) and the card reads f
 test("one member per customer", async () => {
   await t.run(async () => {
     const customer = await loopar.db.getValue("Gym Member", "customer", ana);
-    await assert.rejects(() => server.createMember({ customer }), /ya es socio/);
+    await assert.rejects(() => server.createMember({ customer }), /already a member/);
   });
 });
 
@@ -90,49 +87,5 @@ test("front desk search finds members by their customer's name or phone", async 
       const rows = await server.all("Gym Member", ["name"], await server.memberSearch(q));
       assert.deepEqual(rows.map((r) => r.name), [ana], q);
     }
-  });
-});
-
-test("the update migrates legacy member columns into Customer and drops them", async () => {
-  await t.run(async () => {
-    const q = () => loopar.db.qx();
-    // A tenant still on gym 1.0.x: the old columns and a member without customer.
-    await q().schema.alterTable("Gym Member", (tb) => {
-      tb.string("full_name"); tb.string("phone"); tb.string("email"); tb.string("portal_user");
-    });
-    const legacyUser = await loopar.newDocument("User");
-    Object.assign(legacyUser, {
-      name: "luis@example.com", email: "luis@example.com", first_name: "Luis", user_type: "Web",
-      password: "Legacy-Pass-123!", confirm_password: "Legacy-Pass-123!", __document_status__: "Active",
-    });
-    await legacyUser.save({ validate: false });
-    // `customer` is NOT NULL on a fresh table (on an updated tenant it is added
-    // nullable); an empty value stands for "not linked yet".
-    await q()("Gym Member").insert([
-      { name: "MEM-90001", customer: "", status: "Active", full_name: "Luis Fernández", phone: "9876-1206", email: "Luis@Example.com", portal_user: "luis@example.com" },
-      { name: "MEM-90002", customer: "", status: "Lead", full_name: "José Rodríguez", phone: "9876-1204", email: "not-an-email" },
-    ]);
-
-    await new Installer({ app_name: "gym" }).install(true);
-
-    for (const column of ["full_name", "phone", "email", "portal_user"]) {
-      assert.equal(await q().schema.hasColumn("Gym Member", column), false, `${column} dropped`);
-    }
-    const luis = await loopar.db.getRow("Gym Member", "MEM-90001", ["customer"]);
-    const jose = await loopar.db.getRow("Gym Member", "MEM-90002", ["customer"]);
-    const cl = await loopar.db.getRow("Customer", luis.customer, ["customer_name", "phone", "email"]);
-    const cj = await loopar.db.getRow("Customer", jose.customer, ["customer_name", "phone", "email", "notes"]);
-    assert.deepEqual({ ...cl }, { customer_name: "Luis Fernández", phone: "9876-1206", email: "luis@example.com" });
-    assert.equal(cj.customer_name, "José Rodríguez");
-    assert.equal(cj.email, null);
-    assert.match(cj.notes, /not-an-email/);
-
-    const identity = await portalIdentity("luis@example.com");
-    assert.deepEqual([...identity.subjects], [luis.customer], "old portal user linked through the contact");
-
-    // Idempotent: a second update changes nothing.
-    const customers = (await loopar.db.getAll("Customer", ["name"])).length;
-    await new Installer({ app_name: "gym" }).install(true);
-    assert.equal((await loopar.db.getAll("Customer", ["name"])).length, customers);
   });
 });

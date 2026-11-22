@@ -198,11 +198,13 @@ const MetaDialog = (props) => {
           <DialogHeader>
             <DialogTitle className="flex space-x-2">
               {props.icon ? props.icon : (props.type && <Icon type={props.type} size={36} className=" opacity-50"/>)}
-              <h2 className="text-2xl">{props.title}</h2>
+              {/* DialogTitle is the heading (an <h2>): the text goes in a span. */}
+              <span className="text-2xl">{props.title}</span>
             </DialogTitle>
           </DialogHeader>
-          <DialogDescription className={`overflow-auto max-h-[80vh] ${props.size == 'full' && 'h-[100vh]'}`}>
-            <>
+          {/* asChild: a <div>, not Radix's <p> — the content holds blocks (paragraphs, lists, forms). */}
+          <DialogDescription asChild className={`overflow-auto max-h-[80vh] ${props.size == 'full' ? 'h-[100vh]' : ''}`}>
+            <div>
             {
               contentType === "text" ? (
                 renderTextContent(content)
@@ -211,7 +213,7 @@ const MetaDialog = (props) => {
               )
             }
             <div className="fixed bottom-5 right-5 z-0 opacity-5" style={{zIndex:"-1"}}><Icon type={props.type} size={130}/></div>
-            </>
+            </div>
           </DialogDescription>
           {props.hasFooter !== false && (
             <DialogFooter>

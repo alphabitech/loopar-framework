@@ -40,7 +40,11 @@ export function formatNumber(value, options = {}, r = regional()) {
   return new Intl.NumberFormat(safeLocale(r.locale), { maximumFractionDigits: 2, ...options }).format(n);
 }
 
-/** Money; without a currency (none set in Company) a plain 2-decimal number. */
+/**
+ * Money; without a currency (none set in Company) a plain 2-decimal number.
+ * Convention: a record that has a `currency` field (an invoice in dollars)
+ * shows its money in it — lists and prints pass `record.currency` here.
+ */
 export function formatCurrency(value, currency = null, options = {}, r = regional()) {
   const n = toNumber(value);
   if (value === "" || value == null || !Number.isFinite(n)) return value == null ? "" : String(value);

@@ -18,6 +18,7 @@ import { purgePrivateFiles } from '../global/private-files.js';
 import { guardedChanges, comparable, GUARDED_POLICIES, WRITE_POLICY } from '../global/field-policy.js';
 import { policyMapOf, lockStructure } from '../auth/field-access.js';
 import { isSourceLocked } from '../auth/source-lock.js';
+import { geoFields, addressText, coordinatesOf, samePlace, roundCoordinate } from '../global/geo.js';
 
 const isTrue = (v) => [1, '1', true, 'true'].includes(v);
 
@@ -463,6 +464,40 @@ export default class CoreDocument {
     }
   }
 
+  /**
+   * Entities with a place (global/geo.js): the address fills the
+   * coordinates. Looked up when the record has no point yet, or when its
+   * address changed and nobody moved the point in the same save (a point
+   * placed by hand is kept). A lookup that finds nothing changes nothing.
+   */
+  async #locate() {
+    if (loopar.installing || this.__ENTITY__.is_single) return;
+    const geo = geoFields(this.__ENTITY__.doc_structure);
+    if (!geo?.address.length) return;
+
+    const latitude = this.#fields[geo.latitude], longitude = this.#fields[geo.longitude];
+    const address = addressText(Object.fromEntries(geo.address.map((name) => [name, this.#fields[name]?.value])), geo.address);
+    if (!address) return;
+
+    const point = coordinatesOf(latitude.value, longitude.value);
+    if (point) {
+      if (this.__IS_NEW__) return;
+      const [stored] = await loopar.db.getAll(this.__ENTITY__.name, [geo.latitude, geo.longitude, ...geo.address], { name: this.__DOCUMENT_NAME__ });
+      if (!stored) return;
+      const moved = !samePlace(point, coordinatesOf(stored[geo.latitude], stored[geo.longitude]));
+      if (moved || addressText(stored, geo.address) === address) return;
+    }
+
+    try {
+      const place = await (await loopar.getDocument('Maps')).geocode(address);
+      if (!place) return;
+      latitude.value = roundCoordinate(place.latitude);
+      longitude.value = roundCoordinate(place.longitude);
+    } catch (e) {
+      console.warn(`[geo] ${this.__ENTITY__.name}: address not located:`, e?.message || e);
+    }
+  }
+
   async save() {
     const args = arguments[0] || {};
     const validate = args.validate !== false;
@@ -475,6 +510,7 @@ export default class CoreDocument {
     // client-sent value never reaches the database.
     await this.#applyFormulas();
     this.beforeSave && await this.beforeSave();
+    await this.#locate();
     await this.#applyFormulas();
     // Field write policy, layer B: after beforeSave (it may authorize).
     await this.#guardFieldPolicy(args);

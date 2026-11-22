@@ -89,7 +89,7 @@ export function PrintValue({ element, data = {}, value }) {
     );
   }
 
-  const text = formatPrintValue(kind, value, { data, titles: Document?.linkTitles });
+  const text = formatPrintValue(kind, value, { data, titles: Document?.linkTitles, currency: Document?.data?.currency });
   if (text == null) return null;
   return <span className={isNumericKind(kind) ? "lp-num" : undefined}>{text}</span>;
 }
@@ -144,7 +144,7 @@ export function PrintTable({ el, value, columns: names = null }) {
           <tr key={row.name ?? row.id ?? i}>
             {columns.map((c) => (
               <td key={c.data.name} className={isNumericKind(c.kind) ? "lp-num" : undefined}>
-                {formatPrintValue(c.kind, row[c.data.name], { data: c.data, titles }) ?? ""}
+                {formatPrintValue(c.kind, row[c.data.name], { data: c.data, titles, currency: Document?.data?.currency }) ?? ""}
               </td>
             ))}
           </tr>

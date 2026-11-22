@@ -889,6 +889,8 @@ export default class BaseDocument extends CoreDocument {
    * would lose the whole branch. Error messages, empty when the parent is fine.
    */
   async treeParentErrors() {
+    // Documents without an entity (the app installer) have no tree.
+    if (!this.__ENTITY__) return [];
     const name = this.__ENTITY__.name;
     const tree = !this.__ENTITY__.is_single && treeFields(this.__ENTITY__.doc_structure, name);
     if (!tree) return [];

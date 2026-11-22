@@ -71,14 +71,16 @@ const TRUE_VALUES = new Set([true, 1, "1", "true", "on", "yes"]);
 /**
  * @param {string} kind from printKind()
  * @param {*} value raw value as stored (strings from rawValues)
- * @param {object} [opts] { data: field data (select labels), titles, locale }
+ * @param {object} [opts] { data: field data (select labels), titles, locale, currency }
+ *   `currency` = the printed record's own (`record.currency`, when it has
+ *   one): its money prints in it instead of the Company's.
  *   `titles` = { [Entity]: { [name]: title } } — the `linkTitles` the print
  *   action sends, so entity selects print the linked record's title.
  *   Stored date/time strings are naive (no zone): parsed and formatted in the
  *   runtime's local zone, so the wall time is the same on server and client.
  * @returns {string|null}
  */
-export function formatPrintValue(kind, value, { data = {}, titles = null, locale = DEFAULT_LOCALE } = {}) {
+export function formatPrintValue(kind, value, { data = {}, titles = null, locale = DEFAULT_LOCALE, currency = null } = {}) {
   if (kind === "skip") return null;
   if (kind === "bool") return TRUE_VALUES.has(typeof value === "string" ? value.toLowerCase() : value) ? __("Yes") : __("No");
   if (isEmptyValue(value)) return null;
@@ -89,7 +91,7 @@ export function formatPrintValue(kind, value, { data = {}, titles = null, locale
 
   switch (kind) {
     case "money":
-      return formatCurrency(value, null, {}, r);
+      return formatCurrency(value, currency || null, {}, r);
     case "decimal":
     case "int":
       return formatNumber(value, NUMBER_FORMATS[kind], r);

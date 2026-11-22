@@ -671,5 +671,16 @@
   "{0} of {1} records match": "{0} de {1} registros coinciden",
   "{0} records": "{0} registros",
   "{0}: a record can't be its own parent.": "{0}: un registro no puede ser su propio padre.",
-  "{0}: {1} is below this record, it can't be its parent.": "{0}: {1} está debajo de este registro, no puede ser su padre."
+  "{0}: {1} is below this record, it can't be its parent.": "{0}: {1} está debajo de este registro, no puede ser su padre.",
+  "Locate address": "Ubicar dirección",
+  "Remove pin": "Quitar marcador",
+  "Drag the pin to adjust it.": "Arrastra el marcador para ajustarlo.",
+  "Click the map to place the pin.": "Haz clic en el mapa para colocar el marcador.",
+  "Directions": "Cómo llegar",
+  "This address was not found. Place the pin by hand.": "No se encontró esta dirección. Coloca el marcador a mano.",
+  "This address was not found. Set the latitude and longitude instead.": "No se encontró esta dirección. Indica la latitud y la longitud.",
+  "This record has no place on the map yet.": "Este registro aún no tiene ubicación en el mapa.",
+  "Map": "Mapa",
+  "Map. In a form with latitude and longitude fields it shows and edits the record's place; on a page, set its address or coordinates.": "Mapa. En un formulario con campos de latitud y longitud muestra y edita la ubicación del registro; en una página, indica su dirección o coordenadas.",
+  "Set the latitude and longitude of the place (or its address and \"Locate address\").": "Indica la latitud y la longitud del lugar (o su dirección y «Ubicar dirección»)."
 }

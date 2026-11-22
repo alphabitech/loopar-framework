@@ -1,0 +1,25 @@
+/* MapLibre inside Loopar: its controls and popups follow the theme tokens. */
+.lp-map { font: inherit; }
+.lp-map.lp-map-pick .maplibregl-canvas { cursor: crosshair; }
+
+.lp-map .maplibregl-popup-content {
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+}
+.lp-map .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: hsl(var(--popover)); }
+.lp-map .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: hsl(var(--popover)); }
+.lp-map .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: hsl(var(--popover)); }
+.lp-map .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: hsl(var(--popover)); }
+
+.lp-map .maplibregl-ctrl-group {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  box-shadow: none;
+}
+.lp-map .maplibregl-ctrl-group button + button { border-top-color: hsl(var(--border)); }
+.dark .lp-map .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1); }

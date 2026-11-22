@@ -1,6 +1,6 @@
 import path from "pathe";
 import fs from "fs";
-import { loopar, fileManage } from "loopar";
+import { loopar, fileManage, Op } from "loopar";
 import BaseDocument from "../../../../../../core/document/base-document.js";
 import { readRenameRecords, applyRenameToDatabase } from "../../../../../../core/document/entity-rename.js";
 import { normalizeScope } from "../../../../../../core/auth/PermissionManager.js";
@@ -769,6 +769,9 @@ export default class Installer extends BaseDocument {
 
     await this.ensureFrameworkColumns();
 
+    // An update also takes away what the app no longer ships.
+    if (reinstall) await this.pruneRemoved(appData);
+
     const topLevelVersion = appData?.App?.version;
     if (topLevelVersion) {
       try {
@@ -783,6 +786,72 @@ export default class Installer extends BaseDocument {
     }
 
     return `App ${this.app_name} installed successfully!`;
+  }
+
+  /**
+   * Update cleanup. Structure the app used to ship and no longer does —
+   * entities, builder documents (pages, print formats, forms…) and modules
+   * of this app that are neither listed in installer.json nor present on
+   * disk — is removed from the tenant. Only the records that describe the
+   * structure go: the data table of a removed entity is left as it is.
+   * Returns the removed `Constructor:Name` keys.
+   */
+  async pruneRemoved(appData) {
+    const key = (v) => loopar.utils.toEntityKey(String(v ?? ''));
+    const entryKey = (k) => {
+      const [constructor, ...name] = String(k).split(':');
+      return `${key(constructor)}:${key(name.join(':'))}`;
+    };
+    const shipped = new Set([
+      ...Object.keys(appData?.documents || {}),
+      ...Object.keys(appData?.postInstaller || {}),
+    ].map(entryKey));
+    const onDisk = new Set(loopar.getEntities(this.app_name).map((e) => key(e.name)));
+    const kept = (constructor, name) => shipped.has(`${key(constructor)}:${key(name)}`) || onDisk.has(key(name));
+
+    const modules = (await loopar.db.getAll('Module', ['name'], { app_name: this.app_name })).map((m) => m.name);
+    if (!modules.length) return [];
+
+    // Every kind of structure document: entities and each builder's records.
+    const types = ['Entity'];
+    if (loopar.getRef('Builder', false)) {
+      for (const b of await loopar.db.getAll('Builder', ['name'])) types.push(b.name);
+    }
+
+    const removed = [];
+    const remove = async (type, name) => {
+      const doc = await loopar.getDocument(type, name, null, { ifNotFound: null });
+      if (!doc) return;
+      await doc.delete({ sofDelete: false, force: true, build: false });
+      removed.push(`${type}:${name}`);
+    };
+
+    for (const type of [...new Set(types)]) {
+      const ref = loopar.getRef(type, false);
+      if (!ref || !(ref.__FIELDS__ || []).includes('module')) continue;
+      const rows = await loopar.db.getAll(type, ['name', 'module'], { module: { [Op.in]: modules } });
+      for (const row of rows) {
+        if (kept(type, row.name)) continue;
+        console.warn([`[installer] ${this.app_name} no longer ships ${type}:${row.name}: removing it`]);
+        await remove(type, row.name);
+      }
+    }
+
+    // A module the app no longer ships, once nothing is left in it.
+    for (const module of modules) {
+      if (kept('Module', module)) continue;
+      let left = 0;
+      for (const type of [...new Set(types)]) {
+        const ref = loopar.getRef(type, false);
+        if (ref && (ref.__FIELDS__ || []).includes('module')) left += await loopar.db.count(type, { module });
+      }
+      if (left) continue;
+      console.warn([`[installer] ${this.app_name} no longer ships Module:${module}: removing it`]);
+      await remove('Module', module);
+    }
+
+    if (removed.length) console.log([`[installer] ${this.app_name}: removed ${removed.length} document(s) it no longer ships`, removed]);
+    return removed;
   }
 
   async ensureFrameworkColumns() {
