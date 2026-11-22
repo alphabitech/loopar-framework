@@ -8,12 +8,13 @@ import { KanbanBoard } from "./kanban";
 import { CalendarView } from "./calendar";
 import { ReportView } from "./report";
 import { TreeView } from "./tree";
+import { MapListView } from "./map";
 
-/** Desk list: chrome + List/Grid/Tree/Kanban/Calendar/Report (view picked from the list layer). */
+/** Desk list: chrome + List/Grid/Tree/Kanban/Calendar/Map/Report (view picked from the list layer). */
 export const ListLayout = defineLayout("ListLayout", ({ ctrl, children }) => {
   const { viewType, viewTypeToggle, setViewType, applyView } = useList();
   const { hasSearchForm = true, onlyGrid, onlyList } = useViewOptions();
-  // Tree, Kanban, Calendar and Report only on full lists, never on embedded ones.
+  // Tree, Kanban, Calendar, Map and Report only on full lists, never on embedded ones.
   const special = onlyGrid !== true && !onlyList;
   const showList = (onlyGrid === true ? "Grid" : viewType) === "List" || onlyList;
 
@@ -26,6 +27,8 @@ export const ListLayout = defineLayout("ListLayout", ({ ctrl, children }) => {
         <KanbanBoard ctrl={ctrl} />
       ) : viewType === "Calendar" && special ? (
         <CalendarView ctrl={ctrl} />
+      ) : viewType === "Map" && special ? (
+        <MapListView ctrl={ctrl} />
       ) : viewType === "Report" && special ? (
         <ReportView ctrl={ctrl} />
       ) : showList ? (

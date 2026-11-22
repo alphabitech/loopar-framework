@@ -4,6 +4,7 @@ import { BaseDocument, loopar } from 'loopar';
 
 /** OpenFreeMap: OpenStreetMap vector tiles, free and without a key. */
 const DEFAULT_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+const DEFAULT_STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
 
 const TIMEOUT_MS = 5000;
 // Public geocoders allow one request per second at most: lookups go one by one.
@@ -36,10 +37,12 @@ function spaced(task) {
 export default class Maps extends BaseDocument {
   /** What a browser needs to draw a map: no key of the geocoder ever leaves the server. */
   publicConfig() {
-    const style = String(this.map_style || '').trim() || DEFAULT_STYLE;
+    const own = String(this.map_style || '').trim();
+    const style = own || DEFAULT_STYLE;
     return {
       style,
-      style_dark: String(this.map_style_dark || '').trim() || style,
+      // A site with its own style and no dark one keeps it in both themes.
+      style_dark: String(this.map_style_dark || '').trim() || (own ? style : DEFAULT_STYLE_DARK),
       geocoder: this.geocoderActive(),
     };
   }

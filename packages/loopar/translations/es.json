@@ -682,5 +682,12 @@
   "This record has no place on the map yet.": "Este registro aún no tiene ubicación en el mapa.",
   "Map": "Mapa",
   "Map. In a form with latitude and longitude fields it shows and edits the record's place; on a page, set its address or coordinates.": "Mapa. En un formulario con campos de latitud y longitud muestra y edita la ubicación del registro; en una página, indica su dirección o coordenadas.",
-  "Set the latitude and longitude of the place (or its address and \"Locate address\").": "Indica la latitud y la longitud del lugar (o su dirección y «Ubicar dirección»)."
+  "Set the latitude and longitude of the place (or its address and \"Locate address\").": "Indica la latitud y la longitud del lugar (o su dirección y «Ubicar dirección»).",
+  "My location": "Mi ubicación",
+  "The location of this device is not available.": "La ubicación de este dispositivo no está disponible.",
+  "Map view": "Vista de mapa",
+  "This map has more records than it can show ({0}). Add filters to see the rest.": "Este mapa tiene más registros de los que puede mostrar ({0}). Agrega filtros para ver el resto.",
+  "None of these records has a place on the map yet.": "Ninguno de estos registros tiene ubicación en el mapa todavía.",
+  "{0} on the map": "{0} en el mapa",
+  "{0} without a place": "{0} sin ubicación"
 }

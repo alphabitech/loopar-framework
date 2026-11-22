@@ -18,6 +18,7 @@ import { parseOptionLines } from '../global/select-options.js';
 import { resolveColumnFormat } from '../global/element-definition.js';
 import { calendarFields, isDay } from '../global/calendar.js';
 import { treeFields } from '../global/tree.js';
+import { geoFields } from '../global/geo.js';
 import { workflowFor } from './workflow.js';
 
 /** The entity a select links to, or null for inline options. */
@@ -881,6 +882,62 @@ export default class BaseDocument extends CoreDocument {
       matches: found ? found.map((r) => r.name) : null,
       truncated: all.length > limit,
       titleFields,
+    };
+  }
+
+  /**
+   * Map (data): the records of this entity that have a place (global/geo.js),
+   * with the same search (`q`) and owner scope as the list, at most `limit`.
+   * `unplaced` counts the matching records without coordinates: they exist,
+   * the map just can't show them.
+   *
+   * → { latitude, longitude, address, rows, truncated, unplaced, titleFields, state }
+   */
+  async mapRows({ q = null, limit = 2000 } = {}) {
+    const name = this.__ENTITY__.name;
+    const geo = geoFields(this.__ENTITY__.doc_structure);
+    if (!geo) loopar.throw(`${name} has no latitude and longitude fields to show on a map.`);
+
+    const columns = await this.#tableColumnNames();
+    const scoped = await requestOwnerFilter(name);
+    const where = loopar.db.buildWhereCb(combineSConditions(this.buildCondition(q, columns), scoped));
+    const ownerColumn = await this.#ownerColumn();
+    const auditable = await this.#softDeletes();
+    const workflow = await workflowFor(name);
+
+    const base = () => {
+      let qb = loopar.db.qx()(name);
+      if (where) qb = qb.where(where);
+      if (auditable) qb = qb.whereNull("__deleted_at__");
+      return qb;
+    };
+    const placed = (qb) => qb.whereNotNull(geo.latitude).whereNotNull(geo.longitude);
+
+    const titleFields = this.getFieldSelectLabels().map((f) => f.trim()).filter(Boolean);
+    const fields = [...new Set([
+      "id", "name", geo.latitude, geo.longitude, ...geo.address, ...titleFields,
+      ...(workflow ? [workflow.field] : []), ...this.getFieldListNames(), ...ownerColumn,
+    ])].filter((f) => f && (!columns || columns.has(f)));
+
+    const [found, total] = await Promise.all([
+      placed(base()).select(fields).orderBy("id", "desc").limit(limit + 1),
+      base().count({ count: "id" }).first(),
+    ]);
+    const rows = found.slice(0, limit);
+    await this.#attachLinkTitles(rows);
+    const onMap = found.length > limit
+      ? Number((await placed(base()).count({ count: "id" }).first())?.count || 0)
+      : rows.length;
+
+    return {
+      latitude: geo.latitude,
+      longitude: geo.longitude,
+      address: geo.address,
+      rows,
+      truncated: found.length > limit,
+      unplaced: Math.max(0, Number(total?.count || 0) - onMap),
+      titleFields,
+      state: workflow ? { field: workflow.field, colors: Object.fromEntries(workflow.states.map((s) => [s.state, s.color || "gray"])) } : null,
     };
   }
 

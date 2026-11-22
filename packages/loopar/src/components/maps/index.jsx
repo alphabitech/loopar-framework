@@ -6,7 +6,7 @@ const MapCanvas = lazy(() => import("./map-canvas"));
 
 /** The site's map settings (`Maps/config`), asked once per page load. */
 let pending = null;
-const FALLBACK = { style: "https://tiles.openfreemap.org/styles/liberty", style_dark: "https://tiles.openfreemap.org/styles/liberty", geocoder: false };
+const FALLBACK = { style: "https://tiles.openfreemap.org/styles/liberty", style_dark: "https://tiles.openfreemap.org/styles/dark", geocoder: false };
 
 export function useMapsConfig() {
   const [config, setConfig] = useState(null);

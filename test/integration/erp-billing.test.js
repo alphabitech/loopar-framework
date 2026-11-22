@@ -144,3 +144,44 @@ test("a generated quote is written by its generator only while Draft", async () 
     await assert.rejects(() => writeGeneratedQuote({ customer, lines: [] }, name), /revise it/);
   });
 });
+
+test("a generated invoice carries its service period and the customer's reference, and is written only while Draft", async () => {
+  await t.run(async () => {
+    const { writeGeneratedInvoice, generatedInvoices } = await erp("billing", "invoices.js");
+    const generator = { document: "Signature Request", name: "run-1" };
+    const name = await writeGeneratedInvoice({
+      generator, customer, title: "Services, first week",
+      customer_reference: "PO-4471", period_start: "2026-11-02", period_end: "2026-11-08",
+      lines: [{ description: "Regular hours", quantity: 40, unit: "Hour", rate: 30, source_key: "week-1" }],
+    });
+    const invoice = await loopar.getDocument("Invoice", name);
+    assert.equal(invoice.status, "Draft");
+    assert.equal(invoice.generator_name, "run-1");
+    assert.equal(invoice.customer_reference, "PO-4471");
+    assert.equal(String(invoice.period_start).slice(0, 10), "2026-11-02");
+    assert.equal(Number(invoice.total), 1200);
+
+    // Rewritten while it is a draft: same invoice, new lines.
+    await writeGeneratedInvoice({ generator, customer, lines: [{ description: "Regular hours", quantity: 38, unit: "Hour", rate: 30 }] }, name);
+    assert.equal(Number(await loopar.db.getValue("Invoice", "total", name)), 1140);
+    assert.deepEqual((await generatedInvoices(generator.document, generator.name)).map((i) => i.name), [name]);
+
+    await assert.rejects(
+      () => writeGeneratedInvoice({ generator, customer, period_start: "2026-11-08", period_end: "2026-11-02", lines: [{ description: "x", quantity: 1, rate: 1 }] }),
+      /period ends before it starts/);
+
+    await (await loopar.getDocument("Invoice", name)).issue();
+    await assert.rejects(() => writeGeneratedInvoice({ generator, customer, lines: [] }, name), /can no longer be rewritten/);
+  });
+});
+
+test("stored invoice print formats get the reference and the service period once", async () => {
+  const { withReferenceAndPeriod } = await erp("billing", "print-upgrades.js");
+  const old = [{ node: "ivc_1", element: "row", elements: [
+    { node: "ivc_2", element: "doc_field", data: { field: "due_date" } },
+    { node: "ivc_3", element: "doc_field", data: { field: "quote" } },
+  ] }];
+  const next = withReferenceAndPeriod(old);
+  assert.deepEqual(next[0].elements.map((n) => n.data.field), ["due_date", "quote", "customer_reference", "period_start", "period_end"]);
+  assert.equal(withReferenceAndPeriod(next), null);
+});

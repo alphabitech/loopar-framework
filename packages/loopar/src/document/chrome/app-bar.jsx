@@ -5,7 +5,7 @@ import { StateBadge, useWorkflowActions } from "../form/workflow-bar";
 import { cn } from "@cn/lib/utils";
 import loopar from "loopar";
 import { Button } from "@cn/components/ui/button";
-import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, KanbanIcon, ListTreeIcon, CalendarIcon, ChartColumnIcon, CheckIcon, PrinterIcon, PanelRightIcon, PencilIcon, FileTextIcon, TextCursorInputIcon } from "lucide-react";
+import { PlusIcon, SaveIcon, ArrowBigRight, MenuIcon, GridIcon, KanbanIcon, ListTreeIcon, CalendarIcon, MapIcon, ChartColumnIcon, CheckIcon, PrinterIcon, PanelRightIcon, PencilIcon, FileTextIcon, TextCursorInputIcon } from "lucide-react";
 import {Link} from "@link";
 import { useDocument, useViewOptions } from "@loopar/document";
 import { canOn } from "@context/auth-context";
@@ -183,6 +183,7 @@ const VIEW_BUTTON = {
   Tree: { icon: <ListTreeIcon />, label: () => __("Tree view") },
   Kanban: { icon: <KanbanIcon />, label: () => __("Board view") },
   Calendar: { icon: <CalendarIcon />, label: () => __("Calendar view") },
+  Map: { icon: <MapIcon />, label: () => __("Map view") },
   Report: { icon: <ChartColumnIcon />, label: () => __("Report view") },
 };
 

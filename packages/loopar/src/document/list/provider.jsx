@@ -9,7 +9,7 @@ import { listViews, nextListView, treeOf } from "./views";
 
 /**
  * List middleware: table state (rows, selection, search, pagination) + the
- * view type. List / Grid / Tree / Kanban / Calendar are persisted per user; Report
+ * view type. List / Grid / Tree / Kanban / Calendar / Map are persisted per user; Report
  * is in the URL (`?report=…`): opening such a link shows the report, picking
  * another view leaves it.
  */

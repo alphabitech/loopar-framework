@@ -1,6 +1,6 @@
-import { useContext, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import loopar from "loopar";
-import { Loader2, LocateFixedIcon, MapPinIcon, MapPinOffIcon, NavigationIcon } from "lucide-react";
+import { CrosshairIcon, Loader2, LocateFixedIcon, MapPinIcon, MapPinOffIcon, NavigationIcon } from "lucide-react";
 import { Button } from "@cn/components/ui/button";
 import { cn } from "@cn/lib/utils";
 import { useDesigner } from "@context/designer-context";
@@ -21,14 +21,27 @@ import { __ } from "@global/i18n";
  * and `longitude`) it shows the record's point and edits it: the pin can be
  * dragged, a click places it when there is none, and "Locate address" asks
  * the geocoder for the address typed in the form. Saving an address without
- * a point looks it up by itself (core-document).
+ * a point looks it up by itself (core-document). Without a geocoder the pin
+ * is placed by hand: the map opens where this browser last placed one (a
+ * business works around the same area), and "My location" drops it where
+ * the device is.
  */
 
 const DEFAULT_ZOOM = 14;
 const DEFAULT_HEIGHT = 360;
 // Somewhere to start from before there is a point: the whole world.
 const WORLD = { latitude: 20, longitude: 0 };
+const NEARBY_ZOOM = 11;
 const truthy = (v) => [true, "true", 1, "1"].includes(v);
+
+/** Where this browser last placed a pin: the next empty map opens around it. */
+const LAST_PLACE = "loopar-map-last-place";
+function lastPlace() {
+  try { return coordinatesOf(...String(localStorage.getItem(LAST_PLACE) || "").split(",")); } catch { return null; }
+}
+function rememberPlace(at) {
+  try { localStorage.setItem(LAST_PLACE, `${roundCoordinate(at.latitude)},${roundCoordinate(at.longitude)}`); } catch { /* private mode: nothing to remember */ }
+}
 
 const heightOf = (value) => {
   const text = String(value ?? "").trim();
@@ -55,6 +68,12 @@ export default function MapElement(props) {
   const config = useMapsConfig();
   const form = useContext(BaseFormContext);
   const [locating, setLocating] = useState(false);
+  const [finding, setFinding] = useState(false);
+  // Known only in the browser: asked after mounting so hydration matches.
+  const [canFind, setCanFind] = useState(false);
+  useEffect(() => setCanFind(!!navigator.geolocation), []);
+  // Read once: placing a pin must not move the map it is being placed on.
+  const [nearby] = useState(() => (typeof window === "undefined" ? null : lastPlace()));
 
   // In the form of an entity with a place, the map is the record's.
   const Entity = form?.docRef?.Document?.Entity;
@@ -81,6 +100,16 @@ export default function MapElement(props) {
     const place = (at) => {
       form.setValue(geo.latitude, at ? roundCoordinate(at.latitude) : "", { shouldDirty: true, shouldTouch: true });
       form.setValue(geo.longitude, at ? roundCoordinate(at.longitude) : "", { shouldDirty: true, shouldTouch: true });
+      if (at) rememberPlace(at);
+    };
+
+    const here = () => {
+      setFinding(true);
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => { place({ latitude: coords.latitude, longitude: coords.longitude }); setFinding(false); },
+        () => { loopar.notify(__("The location of this device is not available."), "warning"); setFinding(false); },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
     };
 
     const locate = () => {
@@ -97,6 +126,12 @@ export default function MapElement(props) {
           <Button type="button" variant="secondary" size="sm" onClick={locate} disabled={!address || locating}>
             {locating ? <Loader2 className="animate-spin" /> : <LocateFixedIcon />}
             {__("Locate address")}
+          </Button>
+        )}
+        {canFind && (
+          <Button type="button" variant="secondary" size="sm" onClick={here} disabled={finding}>
+            {finding ? <Loader2 className="animate-spin" /> : <CrosshairIcon />}
+            {__("My location")}
           </Button>
         )}
         {point && (
@@ -119,8 +154,8 @@ export default function MapElement(props) {
 
     return frame(
       <MapView
-        center={point || WORLD}
-        zoom={point ? zoom : 1}
+        center={point || nearby || WORLD}
+        zoom={point ? zoom : nearby ? NEARBY_ZOOM : 1}
         markers={point ? [{ id: "record", ...point, label: address, draggable: editable }] : []}
         onMove={editable ? (id, at) => place(at) : undefined}
         onPick={editable && !point ? place : undefined}

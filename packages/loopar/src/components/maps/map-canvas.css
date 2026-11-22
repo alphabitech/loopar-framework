@@ -16,6 +16,16 @@
 .lp-map .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: hsl(var(--popover)); }
 .lp-map .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: hsl(var(--popover)); }
 
+.lp-map .maplibregl-ctrl-attrib {
+  background: hsl(var(--background) / 0.8);
+  color: hsl(var(--muted-foreground));
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 1px 6px;
+  border-top-left-radius: 0.375rem;
+}
+.lp-map .maplibregl-ctrl-attrib a { color: inherit; }
+
 .lp-map .maplibregl-ctrl-group {
   background: hsl(var(--background));
   border: 1px solid hsl(var(--border));

@@ -23,7 +23,7 @@ const SOURCE_DOCUMENTS = new Set(["app", "module", "appmanager"]);
 
 /** Actions that only read: allowed on every locked document. */
 const READ_ACTIONS = new Set([
-  "view", "list", "search", "board", "calendar", "tree", "geocode", "report", "export", "print", "history",
+  "view", "list", "search", "board", "calendar", "tree", "map", "geocode", "report", "export", "print", "history",
   "orphancolumns",
 ]);
 

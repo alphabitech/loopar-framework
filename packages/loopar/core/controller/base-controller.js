@@ -206,6 +206,18 @@ export default class BaseController extends CoreController {
   }
 
   /**
+   * Map view (data): `{Entity}/map` — the records that have a place, with
+   * the list's filters. Same permission and owner scope as the list.
+   */
+  async actionMap() {
+    const page = this.#listPage();
+    if (page) return page;
+
+    const document = await loopar.newDocument(this.document);
+    return await document.mapRows({ q: this.#listSearch() });
+  }
+
+  /**
    * Tree view (data): `{Entity}/tree` — every record with the one it hangs
    * from, plus the records the list's filters match. Same permission and
    * owner scope as the list.

@@ -18,7 +18,7 @@ let t;
 let Installer;
 let clients;
 before(async () => {
-  t = await bootTestTenant();
+  t = await bootTestTenant({ apps: ["erp"] });
   ({ default: Installer } = await staffing("installer.js"));
   clients = await staffing("modules", "staffing", "shared", "clients.js");
   await t.run(() => new Installer({ app_name: "staffing" }).install());
@@ -32,7 +32,7 @@ test("an update migrates old clients and their contacts to core Customers", asyn
   await t.run(async () => {
     // Recreate the pre-1.12.0 shape: old columns, the old child table and its meta row.
     await q().schema.alterTable("Staffing Client", (tb) => {
-      for (const c of ["company_name", "phone", "email", "billing_address", "billing_city", "billing_state", "billing_zip_code"]) tb.string(c).nullable();
+      for (const c of ["company_name", "phone", "email", "billing_address", "billing_city", "billing_state", "billing_zip_code", "payment_terms"]) tb.string(c).nullable();
     });
     await q().schema.createTable(OLD_CONTACT, (tb) => {
       tb.increments("id");
@@ -73,9 +73,12 @@ test("an update migrates old clients and their contacts to core Customers", asyn
   await t.run(() => new Installer({ app_name: "staffing" }).install(true));
 
   await t.run(async () => {
-    const client = await loopar.db.getRow("Staffing Client", "CLI-9001", ["customer", "payment_terms", "industry"]);
+    const client = await loopar.db.getRow("Staffing Client", "CLI-9001", ["customer", "industry"]);
     assert.ok(client.customer, "client linked to a Customer");
-    assert.equal(client.payment_terms, "Net 45", "staffing data kept");
+    assert.equal(client.industry, "Parking", "staffing data kept");
+    // Free-text terms became a template on the Customer (staffing 1.13.0 billing move).
+    assert.equal(await loopar.db.getValue("Customer", "payment_terms", client.customer), "Net 45");
+    assert.equal(await loopar.db.getValue("Payment Terms Template", "name", "Net 45"), "Net 45");
 
     const customer = await loopar.db.getRow("Customer", client.customer, ["customer_name", "customer_type", "email", "phone", "address", "city", "state", "zip_code"]);
     assert.deepEqual({ ...customer }, {
@@ -92,7 +95,7 @@ test("an update migrates old clients and their contacts to core Customers", asyn
     assert.equal(people[0].user, "jane@acme.test", "old portal user linked to the contact");
     assert.equal((await clients.clientBillingContact("CLI-9001")).email, "jane@acme.test");
 
-    for (const c of ["company_name", "email", "phone", "billing_address", "billing_city", "billing_state", "billing_zip_code"]) {
+    for (const c of ["company_name", "email", "phone", "billing_address", "billing_city", "billing_state", "billing_zip_code", "payment_terms"]) {
       assert.equal(await q().schema.hasColumn("Staffing Client", c), false, `${c} dropped`);
     }
     assert.equal(await q().schema.hasTable(OLD_CONTACT), false, "old child table dropped");
