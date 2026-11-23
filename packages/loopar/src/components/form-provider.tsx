@@ -235,7 +235,9 @@ export const FormProvider = ({
     onChange?.(watchedValues);
   }, [watchedValues, onChange]);
 
-  useFormulas(form, STRUCTURE, watchedValues);
+  // References of formulas (`link.field`) are resolved through the form's entity.
+  const formulaEntity = (docRef as { Document?: { Entity?: { name?: string } } } | null | undefined)?.Document?.Entity?.name ?? null;
+  useFormulas(form, STRUCTURE, watchedValues, { entity: formulaEntity });
 
   // Unsaved work survives reloads (new deploy, crash, closed tab): autosaved
   // per user + document and offered back on the next mount.

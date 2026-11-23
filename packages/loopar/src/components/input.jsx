@@ -101,6 +101,13 @@ Input.metaFields = () => {
           },
           pattern_message: { element: INPUT, data: { label: "Pattern message", description: "Error shown when the pattern does not match." } },
           not_validate_type: { element: SWITCH },
+          virtual: {
+            element: SWITCH,
+            data: {
+              label: "Virtual",
+              description: "Never stored: computed every time the record is read, from the formula (own fields only) or by the model (virtualValues). Shown read-only; cannot be filtered or sorted.",
+            },
+          },
           formula: {
             element: TEXTAREA,
             data: {

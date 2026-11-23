@@ -1,6 +1,7 @@
 import { useWorkspace } from "@workspace/workspace-provider";
 import { parseOptionLines } from "@global/select-options";
 import { multipleValues } from "@global/element-definition";
+import { isVirtualField } from "@global/formula";
 import loopar from "loopar";
 import {Link} from "@link";
 import { useTable } from "./TableContext.jsx"
@@ -36,10 +37,10 @@ export function ListGrid(props) {
     const widths = listSettings?.widths || {};
     const nameVisible = visible.some((col) => col.data.name === "name");
 
-    // Type-aware rendering; every list column is a real column, so it can sort.
+    // Type-aware rendering; stored columns sort (virtual ones have no column).
     const decorate = (source) => {
       const name = source.data.name;
-      const col = { ...source, sortable: true, resizable: true, reorderable: true, width: widths[name] };
+      const col = { ...source, sortable: !isVirtualField(source.data), resizable: true, reorderable: true, width: widths[name] };
 
       if ([SWITCH, CHECKBOX].includes(col.element)) {
         col.headProps = { className: "text-center" };

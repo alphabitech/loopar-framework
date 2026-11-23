@@ -1,4 +1,4 @@
-import { BaseDocument, fileManage, loopar, Helpers, pruneDocStructure, TYPES, namingSeriesError } from "loopar";
+import { BaseDocument, fileManage, loopar, Helpers, pruneDocStructure, TYPES, namingSeriesError, isVirtualField, virtualFormulaIssue, formulaRefIssues } from "loopar";
 import { pluralize } from "inflection";
 
 export default class Entity extends BaseDocument {
@@ -429,7 +429,18 @@ export default class Entity extends BaseDocument {
     for (const field of fields) {
       if(!fieldIsWritable(field)) continue;
       this.validateFieldName(field.data.name);
+
+      // A virtual formula is evaluated on every read, over the record's own fields.
+      const formula = String(field.data?.formula ?? "").trim();
+      if (formula && isVirtualField(field.data)) {
+        const issue = virtualFormulaIssue(formula);
+        if (issue) loopar.throw(`Field ${field.data.name}: ${issue}.`);
+      }
     }
+
+    // References to linked records (`link.field`) in formulas.
+    const refIssues = formulaRefIssues(fields.filter(field => fieldIsWritable(field)), { installing: loopar.installing });
+    if (refIssues.length) loopar.throw(refIssues.join('<br/>'));
 
     const duplicates = fields.map(field => field.data.name).filter((value, index, self) => value && self.indexOf(value) !== index);
 

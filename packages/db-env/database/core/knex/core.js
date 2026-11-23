@@ -487,7 +487,7 @@ export default class Core {
       addPrimaryKey(table);
 
       const process = (field) => {
-        if (fieldIsWritable(field)) {
+        if (fieldHasColumn(field)) {
           if (this.#isFrameworkColumn(field?.data?.name, auditable)) {
             console.warn(
               `[createTable] ${literalName}: ignoring dev declaration of ` +
@@ -563,7 +563,7 @@ export default class Core {
     const uniqueDeclared = [];
 
     const visit = (field) => {
-      if (fieldIsWritable(field)) {
+      if (fieldHasColumn(field)) {
         const colName = field.data.name.toLowerCase();
 
         if (this.#isFrameworkColumn(field?.data?.name, auditable)) {
@@ -863,7 +863,7 @@ export default class Core {
   async reconcileOrphanColumns(tableName, fields, existingFields) {
     const structureCols = new Set();
     const collect = (field) => {
-      if (fieldIsWritable(field)) structureCols.add(field.data.name.toLowerCase());
+      if (fieldHasColumn(field)) structureCols.add(field.data.name.toLowerCase());
       field.elements?.forEach(collect);
     };
     fields.forEach(collect);

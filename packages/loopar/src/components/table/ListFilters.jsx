@@ -10,7 +10,7 @@ import { parseFilterKey, filterKey, OPS_BY_KIND, RANGE_SEPARATOR } from "@global
 import { parseOptionLines } from "@global/select-options";
 import { __ } from "@global/i18n";
 import { useTable } from "./TableContext";
-import { listFields, isDateKind } from "./list-fields";
+import { listFields, storedFields, isDateKind } from "./list-fields";
 import { queryOf, urlWith, sameUrl } from "./list-url";
 
 // Labels are functions: translated on render, in the page's language.
@@ -154,7 +154,7 @@ export function ListFilters() {
   const [open, setOpen] = useState(false);
 
   const fields = useMemo(
-    () => listFields(baseColumns(), { recordDates: !!Document?.record_dates }),
+    () => storedFields(listFields(baseColumns(), { recordDates: !!Document?.record_dates })),
     [baseColumns, Document?.record_dates]
   );
   const byName = useMemo(() => Object.fromEntries(fields.map((f) => [f.name, f])), [fields]);

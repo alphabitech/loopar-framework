@@ -5,6 +5,7 @@ import { translateStructure } from '../global/i18n.js';
 import DynamicField from './dynamic-field.js';
 import { inferParentFilter, parseFilters } from './parent-filter.js';
 import { loopar } from '../loopar.js';
+import { withoutReferenceChecks } from './referential-integrity.js';
 import { fileManage } from '../file-manage.js';
 import { parseDocStructure, stripEphemeralDocStructure, injectCookieIndexes } from './tools.js';
 import { FRAMEWORK_OWNED_COLUMN_NAMES, CHILD_POSITION_COLUMN, VERSION_COLUMN, orderChildRows } from '../global/audit.js';
@@ -12,7 +13,8 @@ import { documentManage } from './document-manage.js';
 import { isHashedSecret } from '../global/secrets.js';
 import { nextSeriesName } from './naming-series.js';
 import { guardWorkflowState, workflowFor, describeWorkflow } from './workflow.js';
-import { computeFormulas, tableRows } from '../global/formula.js';
+import { computeFormulas, tableRows, applyVirtualFormulas } from '../global/formula.js';
+import { formulaRefValues } from './formula-refs.js';
 import { acceptsFile } from '../global/file-accept.js';
 import { purgePrivateFiles } from '../global/private-files.js';
 import { guardedChanges, comparable, GUARDED_POLICIES, WRITE_POLICY } from '../global/field-policy.js';
@@ -44,6 +46,7 @@ export default class CoreDocument {
   // Guarded fields (write_policy protected/system) a verified flow cleared for
   // the next save — see authorize() and #guardFieldPolicy().
   #authorized = new Set();
+  #virtualFilled = false;
 
   constructor(props) {
     Object.assign(this, props);
@@ -200,47 +203,6 @@ export default class CoreDocument {
     await this.onLoad();
   }
 
-  async getConnectedDocuments() {
-    const refs = Object.values(loopar.getRefs());
-    const relatedEntities = [];
-
-    for (const ref of refs) {
-      // Virtual entities (File Manager…) have no table: nothing can point here from them.
-      if (ref.is_virtual) continue;
-      const ent = await fileManage.getConfigFile(ref.__NAME__, ref.__ROOT__);
-      const fields = loopar.utils.fieldList(ent.doc_structure);
-
-      fields.filter(field => (field.element === CONNECTION || field.element === FORM_TABLE) && field.data.options).map(field => {
-        const options = Array.isArray(field.data.options) ? field.data.options : (field.data.options || "").split("\n")[0];
-        if (options === this.__ENTITY__.name) {
-          relatedEntities.push({
-            is_single: ref.is_single,
-            entity: ref.__NAME__,
-            field: field.data.name,
-          })
-        }
-      });
-    }
-
-    const rels = [];
-    for (const r of relatedEntities) {
-      if(r.entity === "Document History") continue;
-
-      const docs = await loopar.db.getAll(r.entity, ["name"], {
-        [r.field]: this.name
-      }, { isSingle: r.is_single });
-
-      rels.push(...docs.filter(doc => doc.name).map(doc => {
-        return {
-          entity: r.entity,
-          name: doc.name,
-        }
-      }));
-    }
-
-    return rels
-  }
-
   async #makeField({ field, fieldName = field.data.name, value = null } = {}) {
     const nameToGet = (name) => {
       return loopar.utils.Capitalize(name.replaceAll(/_./g, match => match.charAt(1).toUpperCase()))
@@ -343,15 +305,68 @@ export default class CoreDocument {
 
   async #makeFields(fields = this.getDocypeStructure()) {
     const entityFields = this.__ENTITY__.__REF__.__FIELDS__;
+    // Virtual fields have no column (not in __FIELDS__) but are fields of the document.
+    const virtuals = this.virtualFieldMap();
 
     await Promise.all(fields.map(async (field) => {
-      if ((fieldIsWritable(field) || field.element === FORM_TABLE) && entityFields.includes(field.data.name)) {
+      if ((fieldIsWritable(field) || field.element === FORM_TABLE) && (entityFields.includes(field.data.name) || field.data?.name in virtuals)) {
         if(field.element !== SLOT || field.data.writable)
           await this.#makeField({ field });
       }
 
       await this.#makeFields(field.elements || []);
     }));
+  }
+
+  /** Virtual fields of this entity: `{ fieldName: formula | null }` (global/formula.js). */
+  virtualFieldMap() {
+    return this.__ENTITY__?.__REF__?.__VIRTUAL__ || loopar.getRef(this.__ENTITY__?.name, false)?.__VIRTUAL__ || {};
+  }
+
+  /**
+   * Model hook for virtual fields without a formula: fill `fields` on each
+   * row, in place. `rows` are plain records (a page of a list, the whole
+   * tree, or the one record a form shows) — compute them in bulk, one query
+   * for all the rows, never one per row. Default: nothing.
+   */
+  async virtualValues(rows, { fields = [] } = {}) {}
+
+  /**
+   * Computes the virtual fields of `rows`, in place: the model's
+   * (virtualValues) first, then the virtual formulas, which may read them.
+   * `fields`: the virtual fields wanted (default: all of them).
+   */
+  async applyVirtualValues(rows, fields = null) {
+    const virtuals = this.virtualFieldMap();
+    const names = (fields || Object.keys(virtuals)).filter((name) => name in virtuals);
+    if (!names.length || !Array.isArray(rows) || !rows.length) return rows;
+
+    const byModel = names.filter((name) => !virtuals[name]);
+    if (byModel.length) await this.virtualValues(rows, { fields: byModel });
+
+    const formulas = Object.fromEntries(Object.entries(virtuals).filter(([, formula]) => formula));
+    if (Object.keys(formulas).length) {
+      // Fields of linked records (`link.field`): one query per connection for all the rows.
+      const refsOf = await formulaRefValues(this.__ENTITY__.name, formulas, rows);
+      applyVirtualFormulas(formulas, rows, refsOf);
+    }
+    return rows;
+  }
+
+  /** The record's virtual fields, computed once per document instance. */
+  async #fillVirtualFields() {
+    if (this.#virtualFilled) return;
+    this.#virtualFilled = true;
+
+    const names = Object.keys(this.virtualFieldMap()).filter((name) => this.#fields[name]);
+    if (!names.length) return;
+
+    const row = { id: this.id, name: this.name };
+    for (const field of Object.values(this.#fields)) {
+      if (field.element !== FORM_TABLE) row[field.name] = field.value;
+    }
+    await this.applyVirtualValues([row], names);
+    for (const name of names) this.#fields[name].value = row[name] ?? null;
   }
 
   nameIsNull() {
@@ -894,8 +909,9 @@ export default class CoreDocument {
 
   async validate({ skipName = false } = {}) {
     const values = Object.fromEntries(Object.values(this.#fields).map(field => [field.name, field.formattedValue]));
+    const virtuals = this.virtualFieldMap();
     const errors = Object.values(this.#fields)
-      .filter(field => field.name !== ID && !(skipName && field.name === "name")).map(e => e.validate(values))
+      .filter(field => field.name !== ID && !(skipName && field.name === "name") && !(field.name in virtuals)).map(e => e.validate(values))
       .filter(e => !e.valid).map(e => e.message);
 
     const selectTypes = await this.validateLinkDocuments();
@@ -960,27 +976,15 @@ export default class CoreDocument {
   }
 
   async delete() {
-    const { sofDelete, force, build = true } = arguments[0] || {};
-    const connections = await this.getConnectedDocuments();
+    const { sofDelete, force } = arguments[0] || {};
 
-    let message = connections.map((e, index) => {
-      return `<a href='/desk/${e.entity}/update?name=${e.name}'>${index+1}: <strong>${e.entity}</strong>.${e.name}</a>`;
-    }).join("<br/>");
-    
-    message = `<h2>Is not possible to delete ${this.__ENTITY__.name}.${this.name} because it is connected to:</h2><br/> ${message}`;
-
-    if (connections.length > 0 && !force) {
-      loopar.throw({
-        ...VALIDATION_ERROR,
-        message: message
-      });
-      return;
-    }
-
-    await loopar.db.withTransaction(async () => {
+    // References are checked by the ORM (referential-integrity.js) inside the
+    // transaction, with the row locked. `force` (uninstalling an app) skips them.
+    const run = () => loopar.db.withTransaction(async () => {
       await this.deleteChildRecords();
       await loopar.db.deleteRow(this.__ENTITY__.name, this.__DOCUMENT_NAME__, sofDelete);
     });
+    await (force ? withoutReferenceChecks(run) : run());
     console.log(["Deleting", this.__ENTITY__.name, this.name]);
 
     // Deleted for good (not a restorable soft delete): its private files go too.
@@ -1100,6 +1104,7 @@ export default class CoreDocument {
   }
 
   async values(raw=false) {
+    await this.#fillVirtualFields();
     const value = async (field) => {
       if (field.element === DESIGNER) {
         return field.value ? JSON.stringify(await parseDocStructure(field.value, false, this.name, {}, this.__APP__)) : "[]";
@@ -1149,6 +1154,7 @@ export default class CoreDocument {
   }
 
   async rawValues() {
+    await this.#fillVirtualFields();
     const value = async (field) => {
       if (field.element === DESIGNER) {
         const fieldValue = loopar.utils.JSONparse(field.value, field.value)
@@ -1191,7 +1197,8 @@ export default class CoreDocument {
 
       const rowFormulas = loopar.getRef(field.options)?.__FORMULAS__ || {};
       if (rows && Object.keys(rowFormulas).length) {
-        rows = rows.map(row => ({ ...row, ...computeFormulas(rowFormulas, row) }));
+        const refsOf = await formulaRefValues(field.options, rowFormulas, rows);
+        rows = rows.map(row => ({ ...row, ...computeFormulas(rowFormulas, { ...row, ...refsOf(row) }) }));
         field.value = rows;
       }
 
@@ -1205,7 +1212,9 @@ export default class CoreDocument {
       if (field.element !== FORM_TABLE) scope[field.name] = field.value;
     }
 
-    for (const [name, value] of Object.entries(computeFormulas(formulas, scope))) {
+    // Fields of linked records (`link.field`), read now: a stored formula keeps them as they were.
+    const refsOf = await formulaRefValues(this.__ENTITY__.name, formulas, [scope]);
+    for (const [name, value] of Object.entries(computeFormulas(formulas, { ...scope, ...refsOf(scope) }))) {
       if (this.#fields[name]) this.#fields[name].value = value;
     }
   }
@@ -1225,8 +1234,11 @@ export default class CoreDocument {
   }
 
   stringifyValues(toSave = false) {
+    const virtuals = this.virtualFieldMap();
     return Object.values(this.#fields)
       .filter(field => field.element !== FORM_TABLE)
+      // Virtual fields are never stored.
+      .filter(field => !(field.name in virtuals))
       .filter(field => (field.element === PASSWORD ? field.value != this.protectedPassword : true))
       .reduce((acc, cur) => ({ ...acc, [cur.name]: cur.stringifyValue(toSave) }), this.#childPosition());
   }
@@ -1238,8 +1250,10 @@ export default class CoreDocument {
   }
 
   valuesToSetDataBase(toSave = false) {
+    const virtuals = this.virtualFieldMap();
     return Object.values(this.#fields).filter(field => {
-      if (field.element === FORM_TABLE) return false;
+      // Virtual fields are never stored.
+      if (field.element === FORM_TABLE || field.name in virtuals) return false;
 
       if (field.element === PASSWORD) {
         return field.value !== this.protectedPassword;

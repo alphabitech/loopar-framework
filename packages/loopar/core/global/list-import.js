@@ -3,6 +3,7 @@
 import { isListableField } from './list-settings.js';
 import { filterKind } from './list-filters.js';
 import { parseOptionLines } from './select-options.js';
+import { isComputedField } from './formula.js';
 
 /**
  * Import of records into a list from a spreadsheet — the rules the server
@@ -26,7 +27,7 @@ export function isImportableField(field) {
   const data = field?.data || {};
   if (data.name === "name") return true;
   if (!isListableField(field) || field.element === "id") return false;
-  if (truthy(data.readonly) || data.formula) return false;
+  if (truthy(data.readonly) || isComputedField(data)) return false;
   if (![undefined, null, "", "editable", "create_only"].includes(data.write_policy)) return false;
   return true;
 }

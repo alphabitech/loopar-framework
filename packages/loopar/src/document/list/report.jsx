@@ -14,7 +14,7 @@ import { useViewOptions } from "@loopar/document";
 import { useTable } from "@@table/TableContext";
 import { TableSearch } from "@@table/TableSearch";
 import { ListFilters } from "@@table/ListFilters";
-import { listFields, groupableFields, summableFields, isDateKind } from "@@table/list-fields";
+import { listFields, storedFields, groupableFields, summableFields, isDateKind } from "@@table/list-fields";
 import { queryOf, urlWith, downloadText } from "@@table/list-url";
 import {
   parseReportSpec, formatReportSpec, reportValueKey,
@@ -132,7 +132,7 @@ export function ReportView({ ctrl }) {
   );
   const byName = useMemo(() => Object.fromEntries(fields.map((f) => [f.name, f])), [fields]);
   const groupable = useMemo(() => groupableFields(fields), [fields]);
-  const summable = useMemo(() => summableFields(fields), [fields]);
+  const summable = useMemo(() => summableFields(storedFields(fields)), [fields]);
 
   const spec = useMemo(
     () => parseReportSpec(Object.fromEntries(queryOf(currentUrl))) || { groups: [], values: [], chart: "bar" },

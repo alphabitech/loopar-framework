@@ -12,6 +12,8 @@ import { policyMapOf, currentActor } from '../auth/field-access.js';
 import { hasFreshStepUp, clearStepUp, STEP_UP_REQUIRED_CODE } from '../auth/step-up.js';
 import { canWriteFromInput, WRITE_POLICY } from '../global/field-policy.js';
 import { parseReportSpec } from '../global/list-report.js';
+import { isComputedField, formulaRefs, refKey } from '../global/formula.js';
+import { formulaRefValues } from '../document/formula-refs.js';
 import { toCsv, csvFileName } from '../global/csv.js';
 import { importRecords } from '../document/list-import.js';
 import { bulkUpdateRecords, bulkTransitionRecords } from '../document/list-bulk.js';
@@ -78,7 +80,7 @@ export default class BaseController extends CoreController {
       const field = document.fields?.[name];
       const input = String(this.query?.[name] ?? '').trim();
       if (!field || !input) continue;
-      if (loopar.utils.trueValue(field.readonly) || field.formula) continue;
+      if (loopar.utils.trueValue(field.readonly) || isComputedField(field)) continue;
       if (name === calendar.allDay) field.value = ['1', 'true'].includes(input) ? 1 : 0;
       else if (value.test(input)) field.value = input.replace('T', ' ');
     }
@@ -90,7 +92,7 @@ export default class BaseController extends CoreController {
     const field = tree && document.fields?.[tree.parent];
     const input = String(this.query?.[tree?.parent] ?? '').trim();
     if (!field || !input || field.value) return;
-    if (loopar.utils.trueValue(field.readonly) || field.formula) return;
+    if (loopar.utils.trueValue(field.readonly) || isComputedField(field)) return;
     field.value = input.slice(0, 255);
   }
 
@@ -99,7 +101,7 @@ export default class BaseController extends CoreController {
     const field = fieldName && document.fields?.[fieldName];
     if (!field || field.value) return;
     if (![undefined, null, '', 'editable'].includes(field.write_policy)) return;
-    if (loopar.utils.trueValue(field.readonly) || field.formula) return;
+    if (loopar.utils.trueValue(field.readonly) || isComputedField(field)) return;
     field.value = text.slice(0, 255);
   }
 
@@ -203,6 +205,40 @@ export default class BaseController extends CoreController {
 
     const maps = await loopar.getDocument('Maps');
     return { place: await maps.geocode(this.data?.address) };
+  }
+
+  /**
+   * Live value of formulas that read a linked record (`link.field`, see
+   * global/formula.js): `{Entity}/formulaRefs` with `link` (a connection
+   * field), `value` (the record it points to) and, for the rows of a child
+   * table, `table` (the child table field). Answers only the fields this
+   * entity's own formulas name — never any field the caller asks for.
+   *
+   * → { values: { "link.field": value } }
+   */
+  async actionFormulaRefs() {
+    const page = this.#listPage();
+    if (page) return page;
+
+    const { link, value, table = null } = this.data || {};
+    let entity = this.document;
+    if (table) {
+      const meta = loopar.getRef(this.document)?.__FIELD_META__?.[table];
+      if (meta?.element !== FORM_TABLE || !meta.options) loopar.throw({ code: 400, message: `${table} is not a child table of ${this.document}.` });
+      entity = meta.options;
+    }
+
+    const ref = loopar.getRef(entity) || {};
+    const formulas = {
+      ...(ref.__FORMULAS__ || {}),
+      ...Object.fromEntries(Object.entries(ref.__VIRTUAL__ || {}).filter(([, formula]) => formula)),
+    };
+    const fields = formulaRefs(formulas)[link];
+    if (!fields || value === null || value === undefined || value === "") return { values: {} };
+
+    const refsOf = await formulaRefValues(entity, formulas, [{ [link]: String(value) }]);
+    const all = refsOf({ [link]: String(value) });
+    return { values: Object.fromEntries(fields.map((field) => [refKey(link, field), all[refKey(link, field)] ?? null])) };
   }
 
   /**

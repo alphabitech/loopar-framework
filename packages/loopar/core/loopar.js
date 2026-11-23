@@ -21,6 +21,7 @@ import { cacheManager } from './cache/cache-manager.js';
 import { RealtimeManager } from './realtime/RealtimeManager.js';
 import { HookManager } from "./HookManager.js";
 import { setupDocumentHistory } from "./document/document-history.js";
+import { setupReferentialIntegrity } from "./document/referential-integrity.js";
 import { setupComments } from "./document/comment.js";
 import { setupNotifications } from "./global/notifications.js";
 import { StorageManager } from "./global/storage/index.js";
@@ -53,6 +54,7 @@ export class Loopar extends Document {
     this.storage = new StorageManager();
 
     setupDocumentHistory(this, KnexORM);
+    setupReferentialIntegrity(KnexORM);
     setupComments(this);
     setupNotifications(this);
   }

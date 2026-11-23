@@ -20,6 +20,7 @@ import fileManager from "./core/global/file-manager.js";
 import ContactFormBase from "./core/document/contact-form-base.js";
 import { namingSeriesError } from "./core/document/naming-series.js";
 import { invalidateWorkflows, workflowFor, applyTransition, backfillInitialState } from "./core/document/workflow.js";
+import { grantWorkflowRoles, restrictWorkflowRoles } from "./core/document/workflow-roles.js";
 import BaseContactFormController from "./core/controller/base-contact-form-controller.js";
 import BaseController from "./core/controller/base-controller.js";
 import { readListSettings, writeListSettings } from "./core/document/list-settings.js";
@@ -73,6 +74,8 @@ export { SCOPE, normalizeScope } from "./core/auth/PermissionManager.js";
 export { userLimit, deskUserCount, assertUserLimit, tenantUserUsage } from "./core/auth/tenant-limits.js";
 export { sanitizeInput, trustedInput, isTrustedInput, policyMapOf, currentActor, lockStructure } from "./core/auth/field-access.js";
 export { WRITE_POLICY, writePolicyMap, filterInput } from "./core/global/field-policy.js";
+export { isVirtualField, isComputedField, virtualFields, virtualFormulaIssue, applyVirtualFormulas } from "./core/global/formula.js";
+export { formulaRefValues, formulaRefIssues } from "./core/document/formula-refs.js";
 export { markStepUp, hasFreshStepUp, clearStepUp, requireStepUp, stepUpLocked, registerStepUpFailure, markOauthProof, takeOauthProof, STEP_UP_REQUIRED_CODE } from "./core/auth/step-up.js";
 export { connectionFromInstallData } from "./core/global/install-connection.js";
 export { inferParentFilter, findFieldMeta, parseFilters } from "./core/document/parent-filter.js";
@@ -178,6 +181,8 @@ export {
   workflowFor,
   applyTransition,
   backfillInitialState,
+  grantWorkflowRoles,
+  restrictWorkflowRoles,
   BaseContactFormController,
   StorageDriver,
   LocalDriver,

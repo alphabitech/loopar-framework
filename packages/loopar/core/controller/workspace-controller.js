@@ -46,26 +46,59 @@ function deskDestination(ref, can, websiteApps) {
   return { name: ref.__NAME__, kind, link: `/desk/${ref.__NAME__}/${KIND_ACTION[kind]}` };
 }
 
-/** { [module, lowercased]: destinations } of every document the user reaches. */
+const relevanceCache = new WeakMap();
+
+/**
+ * Entity centrality per app, from the schema: +1 per connection field pointing
+ * at the entity, +1 per connection it holds (child tables included); 0 if unconnected.
+ * → { [entity name, lowercased]: score }, cached per refs build.
+ */
+function entityRelevance(refs) {
+  const cached = relevanceCache.get(refs);
+  if (cached) return cached;
+
+  const key = (name) => String(name ?? '').toLowerCase();
+  const connections = (ref) => Object.values(ref?.__FIELD_META__ || {})
+    .filter(m => m.element === 'connection' && m.options && key(m.options) !== key(ref.__NAME__));
+
+  const byName = Object.fromEntries(Object.values(refs).map(ref => [key(ref.__NAME__), ref]));
+  const score = {};
+  const add = (name, n = 1) => { score[name] = (score[name] || 0) + n; };
+
+  for (const ref of Object.values(refs)) {
+    for (const m of connections(ref)) add(key(m.options));
+    if (ref.is_child) continue;
+    add(key(ref.__NAME__), connections(ref).length);
+    for (const m of Object.values(ref.__FIELD_META__ || {})) {
+      if (m.element === 'form_table' && m.options) add(key(ref.__NAME__), connections(byName[key(m.options)]).length);
+    }
+  }
+
+  relevanceCache.set(refs, score);
+  return score;
+}
+
+/**
+ * { [module, lowercased]: destinations } of every document the user reaches,
+ * lists first (the most related ones on top), then settings, then pages.
+ */
 function moduleDestinations(username, websiteApps) {
   const can = (doc, action) => PermissionManager.can(doc, action, username);
+  const refs = loopar.getRefs() || {};
+  const relevance = entityRelevance(refs);
   const byModule = {};
-  for (const ref of Object.values(loopar.getRefs() || {})) {
+  for (const ref of Object.values(refs)) {
     const dest = deskDestination(ref, can, websiteApps);
     if (dest) (byModule[String(ref.__MODULE__ ?? '').toLowerCase()] ??= []).push(dest);
   }
   const order = { list: 0, single: 1, page: 2 };
+  const rank = (d) => relevance[d.name.toLowerCase()] || 0;
   for (const list of Object.values(byModule)) {
-    list.sort((a, b) => order[a.kind] - order[b.kind] || a.name.localeCompare(b.name));
+    list.sort((a, b) => order[a.kind] - order[b.kind] || rank(b) - rank(a) || a.name.localeCompare(b.name));
   }
   return byModule;
 }
 
-/**
- * A sidebar module with what it opens: its documents (`docs`), one section
- * per submodule, and `direct` — the only document it holds, opened straight
- * from the sidebar instead of through the module page.
- */
 /** Lowercased names of the installed apps that have a website (their pages are web pages). */
 async function websiteApps() {
   try {
@@ -76,6 +109,11 @@ async function websiteApps() {
   }
 }
 
+/**
+ * A sidebar module with what it opens: its documents (`docs`), one section
+ * per submodule, and `direct` — the only document it holds, opened straight
+ * from the sidebar instead of through the module page.
+ */
 function withDestinations(module, byModule) {
   const docs = byModule[String(module.link).toLowerCase()] || [];
   const sections = (module.submodules || [])

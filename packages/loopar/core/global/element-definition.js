@@ -822,6 +822,15 @@ global.fieldIsWritable = (field) => {
 }
 
 /**
+ * A writable field that keeps a column in its table. Virtual fields
+ * (`data.virtual`) are writable inputs of the document — shown, read-only —
+ * but are computed on every read and never stored (global/formula.js).
+ */
+global.fieldHasColumn = (field) => {
+  return !!fieldIsWritable(field) && ![1, "1", true, "true"].includes(field?.data?.virtual);
+}
+
+/**
  * Document contexts — allowlists by GROUP, not blacklists by element.
  *
  * One context describes what a document type can hold, and drives BOTH:

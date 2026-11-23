@@ -384,7 +384,7 @@ const FormTable = (props) => {
   )
 }
 
-const FormTableControl = ({Document, docRef}) => {
+const FormTableControl = ({Document, docRef, table}) => {
   const form = useFormContext();
   const { control, register } = form;
   const { fields, move, remove, append } = useFieldArray({
@@ -397,7 +397,8 @@ const FormTableControl = ({Document, docRef}) => {
     [Document]
   );
   const watchedRows = useWatch({ control, name: 'rows' });
-  useRowFormulas(form, rowStructure, watchedRows);
+  // References in the rows' formulas are resolved through the parent entity and this table.
+  useRowFormulas(form, rowStructure, watchedRows, "rows", { entity: docRef?.Document?.Entity?.name ?? null, table });
 
   return (
     <TableProvider
@@ -418,7 +419,7 @@ const FormTableControl = ({Document, docRef}) => {
 };
 
 const FormTableMiddleware = memo(function FormTableMiddleware(props) {
-  const { rows, onChange, meta, docRef } = props;
+  const { rows, onChange, meta, docRef, table } = props;
   const [changes, setChanges] = useState(false);
   const debounceTimer = useRef(null);
   const prevRows = useRef(rows);
@@ -442,7 +443,7 @@ const FormTableMiddleware = memo(function FormTableMiddleware(props) {
 
   return (
     <FormWrapper __DATA__={{ rows }} onChange={saveData} key={`form-wrapper-${changes}`}>
-      <FormTableControl Document={meta} docRef={docRef}/>
+      <FormTableControl Document={meta} docRef={docRef} table={table}/>
     </FormWrapper>
   );
 });
@@ -470,6 +471,7 @@ export default function FormTableInput(props) {
           onChange={handleChange}
           meta={meta}
           docRef={docRef}
+          table={props.data?.name}
         />
       );
     })

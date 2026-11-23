@@ -9,6 +9,10 @@
  *     abs round(x, decimals=0) floor ceil min(...) max(...) if(cond, a, b)
  *     coalesce(a, b, ...)
  *     sum(table.field) avg(table.field) count(table)   — child-table aggregates
+ *   link.field   a field of the record a `connection` field points to
+ *                (`app_name.description`): one level, resolved by the server
+ *                (on save for a stored formula, in bulk on read for a
+ *                virtual one) and handed in the scope under "link.field".
  *
  * Empty and non-numeric values count as 0 in arithmetic; division by zero is 0.
  * Inside a child table a formula sees its own row's fields only.
@@ -109,6 +113,13 @@ function parse(src) {
       expect(")");
       return { t: "call", fn, args };
     }
+    if (isOp(".")) {
+      i++;
+      const f = tokens[i++];
+      if (f?.type !== "id") throw new Error(`${tok.value}.? expects a field name`);
+      if (isOp(".")) throw new Error(`${tok.value}.${f.value}: only one level of reference`);
+      return { t: "ref", link: tok.value, field: f.value };
+    }
     return { t: "id", name: tok.value };
   };
 
@@ -123,27 +134,35 @@ function parse(src) {
   return ast;
 }
 
-function collect(ast, fields = new Set(), tables = new Set()) {
-  if (!ast) return { fields, tables };
+function collect(ast, fields = new Set(), tables = new Set(), refs = new Set()) {
+  if (!ast) return { fields, tables, refs };
   if (ast.t === "id") fields.add(ast.name);
+  // A reference reads its connection field (the record it points to).
+  else if (ast.t === "ref") { fields.add(ast.link); refs.add(refKey(ast.link, ast.field)); }
   else if (ast.t === "agg") tables.add(ast.table);
-  else if (ast.t === "bin") { collect(ast.left, fields, tables); collect(ast.right, fields, tables); }
-  else if (ast.t === "un") collect(ast.arg, fields, tables);
-  else if (ast.t === "call") ast.args.forEach((a) => collect(a, fields, tables));
-  return { fields, tables };
+  else if (ast.t === "bin") { collect(ast.left, fields, tables, refs); collect(ast.right, fields, tables, refs); }
+  else if (ast.t === "un") collect(ast.arg, fields, tables, refs);
+  else if (ast.t === "call") ast.args.forEach((a) => collect(a, fields, tables, refs));
+  return { fields, tables, refs };
 }
+
+/** Scope key of a reference: "link.field" (field names never hold a dot). */
+export const refKey = (link, field) => `${link}.${field}`;
 
 const cache = new Map();
 
-/** `{ ast, fields, tables }` for a formula, or `{ error }`. Cached by source. */
+/** `{ ast, fields, tables, refs }` for a formula, or `{ error }`. Cached by source. */
 export function compileFormula(src) {
   const key = String(src ?? "").trim();
   if (cache.has(key)) return cache.get(key);
   let compiled;
   try {
     const ast = parse(key);
-    const { fields, tables } = collect(ast);
-    compiled = { ast, fields: [...fields], tables: [...tables] };
+    const { fields, tables, refs } = collect(ast);
+    compiled = {
+      ast, fields: [...fields], tables: [...tables],
+      refs: [...refs].map((key) => { const [link, field] = key.split("."); return { link, field }; }),
+    };
   } catch (error) {
     compiled = { error: error.message };
   }
@@ -196,6 +215,7 @@ function evaluate(ast, scope) {
   switch (ast.t) {
     case "lit": return ast.value;
     case "id": return scope[ast.name];
+    case "ref": return scope[refKey(ast.link, ast.field)] ?? null;
     case "un": {
       const v = evaluate(ast.arg, scope);
       if (ast.op === "!") return truthy(v) ? 0 : 1;
@@ -308,6 +328,93 @@ export function computeFormulas(formulas = {}, values = {}) {
 
   for (const name of names) visit(name);
   return out;
+}
+
+/* ---------------------------------------------------------------- virtual */
+
+/*
+ * Virtual fields (`data.virtual`) are never stored: they have no column and
+ * are computed on every read. `formula` and `virtual` are independent:
+ *
+ *   formula, stored   computed on save, kept in its column (filterable)
+ *   formula, virtual  the formula is evaluated on read over the record's own
+ *                     fields (no child-table aggregates: lists read many rows)
+ *   virtual, no formula  filled by the model: `Document.virtualValues(rows)`
+ */
+
+const flagOn = (v) => [1, "1", true, "true"].includes(v);
+
+/** A virtual (never stored) field. */
+export const isVirtualField = (data) => flagOn(data?.virtual);
+
+/** A field whose value is computed (formula or virtual): read-only from input. */
+export const isComputedField = (data) => isVirtualField(data) || !!String(data?.formula ?? "").trim();
+
+/**
+ * Virtual fields of a doc structure: `{ fieldName: formula | null }`
+ * (null: the model fills it). Walks nested elements.
+ */
+export function virtualFields(structure = []) {
+  const out = {};
+  const walk = (nodes) => {
+    for (const el of nodes || []) {
+      if (el?.data?.name && isVirtualField(el.data)) {
+        const formula = typeof el.data.formula === "string" ? el.data.formula.trim() : "";
+        out[el.data.name] = formula || null;
+      }
+      walk(el?.elements);
+    }
+  };
+  walk(Array.isArray(structure) ? structure : []);
+  return out;
+}
+
+/** Why a virtual field's formula cannot be evaluated on read, or null. */
+export function virtualFormulaIssue(formula) {
+  const compiled = compileFormula(formula);
+  if (compiled.error) return compiled.error;
+  if (compiled.tables.length) return "a virtual formula cannot aggregate child tables (sum, avg, count): store it instead";
+  return null;
+}
+
+/** Fields a set of virtual formulas reads (to select them with the rows). */
+export function virtualDependencies(virtuals = {}) {
+  const deps = new Set();
+  for (const formula of Object.values(virtuals)) {
+    if (!formula) continue;
+    const compiled = compileFormula(formula);
+    if (!compiled.error) compiled.fields.forEach((f) => deps.add(f));
+  }
+  return [...deps];
+}
+
+/**
+ * Evaluates the virtual formulas over each row, in place. Other virtual
+ * fields a formula reads are evaluated first (computeFormulas orders them).
+ */
+export function applyVirtualFormulas(virtuals = {}, rows = [], refsOf = null) {
+  const formulas = Object.fromEntries(Object.entries(virtuals).filter(([, f]) => f));
+  if (!Object.keys(formulas).length) return rows;
+  for (const row of rows) {
+    // References ("link.field") join the scope only: they never land on the row.
+    if (row) Object.assign(row, computeFormulas(formulas, refsOf ? { ...row, ...refsOf(row) } : row));
+  }
+  return rows;
+}
+
+/**
+ * What a set of formulas reads from other records: `{ link: [field, …] }`
+ * (connection field → fields of the record it points to).
+ */
+export function formulaRefs(formulas = {}) {
+  const out = {};
+  for (const formula of Object.values(formulas)) {
+    if (!formula) continue;
+    const compiled = compileFormula(formula);
+    if (compiled.error) continue;
+    for (const { link, field } of compiled.refs) (out[link] ??= new Set()).add(field);
+  }
+  return Object.fromEntries(Object.entries(out).map(([link, fields]) => [link, [...fields]]));
 }
 
 /** Same value for the purpose of syncing a computed field (2 vs "2"). */

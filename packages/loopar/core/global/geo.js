@@ -1,5 +1,7 @@
 'use strict';
 
+import { isComputedField } from "./formula.js";
+
 /**
  * Place of a record — shared by the server (which locates addresses) and the
  * client (which draws the map). An entity has a place by convention; there
@@ -64,7 +66,7 @@ export function geoFields(structure) {
     || Object.keys(fields).find((name) => name.endsWith("_address") && !NOT_A_PLACE.test(name) && isText(name))
     || null;
   const address = [street, ...PARTS.map((names) => names.find(isText) || null)].filter(Boolean);
-  const readOnly = (name) => truthy(fields[name].data.readonly) || truthy(fields[name].data.read_only) || !!fields[name].data.formula;
+  const readOnly = (name) => truthy(fields[name].data.readonly) || truthy(fields[name].data.read_only) || isComputedField(fields[name].data);
 
   return {
     latitude,

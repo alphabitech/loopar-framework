@@ -2,6 +2,7 @@ import { isListableField } from "@global/list-settings";
 import { filterKind, SYSTEM_DATE_FIELDS } from "@global/list-filters";
 import { resolveColumnFormat } from "@global/element-definition";
 import { DEFAULT_GRAIN } from "@global/list-report";
+import { isVirtualField } from "@global/formula";
 
 /** Every element of a structure (string or array), containers and their children alike. */
 export function flatElements(structure) {
@@ -18,7 +19,10 @@ export function flatElements(structure) {
  * readable fields (`elements`: its structure, flat) and, when the table keeps
  * them (`recordDates`), the record dates.
  *
- * → [{ name, label, element, kind, format, data }]   kind: global/list-filters.js
+ * → [{ name, label, element, kind, format, data, virtual }]   kind: global/list-filters.js
+ *
+ * `virtual` fields (computed on read, no column) show and add up in the
+ * browser, but the server can't filter, sort, group or sum them.
  */
 export function listFields(elements = [], { recordDates = false } = {}) {
   const out = [];
@@ -27,7 +31,7 @@ export function listFields(elements = [], { recordDates = false } = {}) {
     const name = el?.data?.name;
     if (!name || seen.has(name) || !isListableField(el)) continue;
     seen.add(name);
-    out.push({ name, label: el.data.label || name, element: el.element, kind: filterKind(el), format: resolveColumnFormat(el), data: el.data });
+    out.push({ name, label: el.data.label || name, element: el.element, kind: filterKind(el), format: resolveColumnFormat(el), data: el.data, virtual: isVirtualField(el.data) });
   }
   if (recordDates) {
     for (const [name, label] of Object.entries(SYSTEM_DATE_FIELDS)) {
@@ -39,8 +43,11 @@ export function listFields(elements = [], { recordDates = false } = {}) {
 
 export const isDateKind = (kind) => kind === "date" || kind === "datetime";
 
+/** Fields the server can filter, group and sum by: stored ones (not virtual). */
+export const storedFields = (fields) => fields.filter((f) => !f.virtual);
+
 /** Fields a report can group by: choices, dates, switches and short text. */
-export const groupableFields = (fields) => fields.filter((f) =>
+export const groupableFields = (fields) => storedFields(fields).filter((f) =>
   ["choice", "bool", "date", "datetime"].includes(f.kind) || (f.kind === "text" && f.element === "input"));
 
 /** Numbers a report can add up (not percentages, ratings or sliders). */
@@ -54,6 +61,7 @@ export const summableFields = (fields) => fields.filter((f) =>
  */
 export function defaultReportSpec(fields, { workflowField = null } = {}) {
   const groupable = groupableFields(fields);
+  const stored = storedFields(fields);
   const inList = (f) => [1, "1", true, "true"].includes(f.data?.in_list_view);
   const choices = groupable.filter((f) => f.kind === "choice");
   const dates = groupable.filter((f) => isDateKind(f.kind));
@@ -63,7 +71,7 @@ export function defaultReportSpec(fields, { workflowField = null } = {}) {
     || dates.find(inList) || dates[0]
     || null;
 
-  const amount = summableFields(fields).find((f) => f.format === "currency");
+  const amount = summableFields(stored).find((f) => f.format === "currency");
   return {
     groups: group ? [{ field: group.name, grain: isDateKind(group.kind) ? DEFAULT_GRAIN : null }] : [],
     values: amount ? [{ fn: "sum", field: amount.name }] : [],

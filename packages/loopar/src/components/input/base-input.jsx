@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useMemo, useEffect, useReducer } from 'react';
 import { dataInterface } from "@global/element-definition";
+import { isComputedField } from "@global/formula";
 import { FormItem, FormMessage } from "@cn/components/ui/form";
 import { FormField } from "./form-field";
 import { cn } from "@cn/lib/utils";
@@ -54,10 +55,10 @@ const BaseInput = (props) => {
   // A field flagged `readonly` (metadata, or set by the server for one record)
   // reads the same way inside an editable form.
   const { readOnly: readOnlyOption } = useViewOptions();
-  // Computed fields (`formula`) are read-only too: their value comes from the formula.
+  // Computed fields (`formula`, `virtual`) are read-only too: their value is computed.
   const fieldReadOnly = [1, "1", true, "true"].includes(propData?.readonly)
     || propData?.write_policy === "display_only"
-    || !!String(propData?.formula ?? "").trim();
+    || isComputedField(propData);
   const readMode = !designerMode && ((readOnlyOption ?? ownerDocument?.readOnly) === true || fieldReadOnly);
   
   const getInitialData = useCallback(() => {

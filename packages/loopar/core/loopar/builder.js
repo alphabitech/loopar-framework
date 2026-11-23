@@ -6,7 +6,7 @@ import * as simpleIcons from 'simple-icons';
 
 import { fileManage } from "../file-manage.js";
 import { elementsDict, elementsDefinition } from "../global/element-definition.js";
-import { formulaFields } from "../global/formula.js";
+import { formulaFields, virtualFields, isVirtualField } from "../global/formula.js";
 import { calendarFields } from "../global/calendar.js";
 import { treeFields } from "../global/tree.js";
 import { writePolicyMap } from "../global/field-policy.js";
@@ -34,7 +34,8 @@ export class Builder {
 
       const declared = getFields(fields).filter(field => {
         const def = elementsDict[field.element]?.def || {};
-        return def.isWritable && !!field.data.name;
+        // Virtual fields have no column: they are listed in __VIRTUAL__.
+        return def.isWritable && !!field.data.name && !isVirtualField(field.data);
       }).map(field => field.data.name);
 
       const out = ["id", ...declared];
@@ -74,7 +75,7 @@ export class Builder {
       for (const field of getAll(fields)) {
         const data = field.data || {};
         const def = elementsDict[field.element]?.def || {};
-        if (!data.name || !def.isWritable) continue;
+        if (!data.name || !def.isWritable || isVirtualField(data)) continue;
         const firstLine = typeof data.options === "string" ? data.options.split(/\r?\n/)[0].trim() : "";
         out[data.name] = {
           element: field.element,
@@ -114,6 +115,7 @@ export class Builder {
       const isVirtual = doc.is_virtual ? 1 : 0;
       const isSingle = this.entityIsSingle(doc);
       const fields = this.utils.JSONparse(doc.doc_structure, []);
+      const virtuals = virtualFields(fields);
 
       const id = parseInt(doc.id) || 0;
 
@@ -152,8 +154,11 @@ export class Builder {
         __FIELD_META__: getFieldMeta(fields),
         __FORM_TABLE_FIELDS__: getFormTableFields(fields),
         __TRANSLATABLE__: getTranslatableFields(fields),
-        // Computed fields: { fieldName: formula }, recomputed on every save.
-        __FORMULAS__: formulaFields(fields),
+        // Stored computed fields: { fieldName: formula }, recomputed on every save.
+        __FORMULAS__: Object.fromEntries(Object.entries(formulaFields(fields)).filter(([name]) => !(name in virtuals))),
+        // Virtual fields: { fieldName: formula | null }, computed on every
+        // read and never stored (global/formula.js, Document.virtualValues).
+        __VIRTUAL__: virtuals,
         // Date fields the calendar draws this entity by (global/calendar.js), or null.
         __CALENDAR__: calendarFields(fields),
         // Parent field the tree nests this entity by (global/tree.js), or null.

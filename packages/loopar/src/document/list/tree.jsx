@@ -100,13 +100,14 @@ function Row({ node, row, title, columns, totals, sums, dimmed, movable, accepts
     <TableRow
       ref={ref}
       className={cn(
-        "group",
+        // A tree reads by its indentation: compact rows, no rules between them.
+        "group border-0",
         drag.isDragging && "opacity-40",
         dragging && !accepts && !drag.isDragging && "opacity-50",
         dragging && accepts && drop.isOver && "bg-primary/10 ring-2 ring-inset ring-primary/40"
       )}
     >
-      <TableCell className="py-1.5">
+      <TableCell className="py-0">
         <div className="flex min-w-0 items-center gap-1" style={{ paddingLeft: node.depth * INDENT }}>
           {node.hasChildren ? (
             <Button
@@ -129,7 +130,7 @@ function Row({ node, row, title, columns, totals, sums, dimmed, movable, accepts
               renderOnRestrict={true}
               // Edits in place (modal); without it the link opens the record's page.
               onClick={onOpen ? () => onOpen(row) : undefined}
-              className="flex min-w-0 flex-col items-start justify-center gap-0 p-0 leading-tight hover:underline"
+              className="flex h-auto min-w-0 flex-col items-start justify-center gap-0 p-0 leading-tight hover:underline"
             >
               <span className={cn("truncate text-foreground", node.hasChildren ? "font-semibold" : "font-medium")}>{title}</span>
               {showName && <span className="truncate text-xs text-muted-foreground">{row.name}</span>}
@@ -147,7 +148,7 @@ function Row({ node, row, title, columns, totals, sums, dimmed, movable, accepts
           return (
             <TableCell
               key={name}
-              className={cn("py-1.5 text-right align-middle tabular-nums", node.hasChildren && "font-semibold", dimmed && "opacity-60")}
+              className={cn("py-0 text-right align-middle tabular-nums", node.hasChildren && "font-semibold", dimmed && "opacity-60")}
               title={rolled ? __("Own: {0}", [amount(own, summed.format)]) : undefined}
             >
               {node.hasChildren || !blank(row[name]) ? amount(total, summed.format) : ""}
@@ -155,12 +156,12 @@ function Row({ node, row, title, columns, totals, sums, dimmed, movable, accepts
           );
         }
         return (
-          <TableCell key={name} className={cn("max-w-64 truncate py-1.5 align-middle", col.numeric && "text-right tabular-nums", dimmed && "opacity-60")}>
+          <TableCell key={name} className={cn("max-w-64 truncate py-0 align-middle", col.numeric && "text-right tabular-nums", dimmed && "opacity-60")}>
             {cellOf(col, row)}
           </TableCell>
         );
       })}
-      <TableCell className="w-24 py-1 pr-2 text-right align-middle">
+      <TableCell className="w-24 py-0 pr-2 text-right align-middle">
         <div className="flex items-center justify-end">
           {onAddChild && (
             <Button

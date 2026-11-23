@@ -21,7 +21,7 @@ const roles = () => loopar.db.getAll("Role", ["name"], { app: "erp" }).then((r) 
 
 test("no role differs from a declared one only in case", async () => {
   await t.run(async () => {
-    assert.deepEqual(await roles(), ["ERP Manager", "ERP User", "POS User"]);
+    assert.deepEqual(await roles(), ["ERP Manager", "ERP User", "HR Manager", "POS User"]);
   });
 });
 
@@ -33,7 +33,7 @@ test("an older install's duplicate is retired; its users keep their access under
 
     await new Installer({ app_name: "erp" }).seedRoles();
 
-    assert.deepEqual(await roles(), ["ERP Manager", "ERP User", "POS User"]);
+    assert.deepEqual(await roles(), ["ERP Manager", "ERP User", "HR Manager", "POS User"]);
     assert.equal((await loopar.db.getAll("Permission", ["name"], { relation: "Role", relation_name: "Erp Manager" })).length, 0, "no grant left on it");
     assert.deepEqual((await loopar.db.getAll("User Role", ["role"], { user: "Administrator", role: "ERP Manager" })).length, 1);
   });

@@ -20,6 +20,7 @@ import { calendarFields, isDay } from '../global/calendar.js';
 import { treeFields } from '../global/tree.js';
 import { geoFields } from '../global/geo.js';
 import { workflowFor } from './workflow.js';
+import { virtualDependencies } from '../global/formula.js';
 
 /** The entity a select links to, or null for inline options. */
 function linkedEntity(options) {
@@ -204,6 +205,22 @@ export default class BaseDocument extends CoreDocument {
     return [...new Set(["id", "name", ...titles])].filter(k => !listFields.includes(k));
   }
 
+  /**
+   * Splits the fields a read wants into the stored columns to select (virtual
+   * fields out, the fields their formulas read in) and the virtual fields to
+   * compute on the rows afterwards (applyVirtualValues).
+   */
+  #withVirtual(fields, columns = null) {
+    const virtuals = this.virtualFieldMap();
+    const virtual = [...new Set(fields.filter((f) => f in virtuals))];
+    if (!virtual.length) return { select: fields, virtual };
+    const stored = (f) => !(f in virtuals) && (f === "id" || f === "name" || !!this.fields[f]) && (!columns || columns.has(f));
+    return {
+      select: [...new Set([...fields.filter((f) => !(f in virtuals)), ...virtualDependencies(virtuals).filter(stored)])],
+      virtual,
+    };
+  }
+
   /** Names of the table's real columns, or null when they can't be read. */
   async #tableColumnNames() {
     try {
@@ -224,7 +241,7 @@ export default class BaseDocument extends CoreDocument {
     const seen = new Set();
     const valid = [].concat(sort || []).filter((s) => {
       const field = s?.field;
-      const known = field && (field === "id" || field === "name" || !!this.fields[field]) && (!columns || columns.has(field));
+      const known = field && (field === "id" || field === "name" || !!this.fields[field]) && !(field in this.virtualFieldMap()) && (!columns || columns.has(field));
       if (!known || seen.has(field)) return false;
       seen.add(field);
       return true;
@@ -249,7 +266,7 @@ export default class BaseDocument extends CoreDocument {
   #extraListFields(settings, listFields, columns = null) {
     return (settings?.shown || []).filter((name) => {
       const field = this.fields[name];
-      return field && !listFields.includes(name) && (!columns || columns.has(name))
+      return field && !listFields.includes(name) && (!columns || columns.has(name) || name in this.virtualFieldMap())
         && isListableField({ element: field.element, data: field });
     });
   }
@@ -273,6 +290,8 @@ export default class BaseDocument extends CoreDocument {
    */
   #filterField(name, columns = null) {
     const field = this.fields[name];
+    // Virtual fields have no column: nothing to filter, sort or sum in SQL.
+    if (field && name in this.virtualFieldMap()) return null;
     if (field) return { element: field.element, data: field };
     if (SYSTEM_DATE_FIELDS[name] && columns?.has(name)) {
       return { element: "date_time", data: { name, label: SYSTEM_DATE_FIELDS[name] } };
@@ -466,7 +485,9 @@ export default class BaseDocument extends CoreDocument {
     // decide per row whether an 'own'-scoped action applies (AuthContext.canOn).
     // Only when the table has it: child/static entities are not auditable and
     // an app not yet updated lacks the column.
-    const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, ...this.#rowKeys(listFields, columns), ...(await this.#ownerColumn())], condition, { orderBy: order.orderBy });
+    const read = this.#withVirtual([...listFields, ...this.#rowKeys(listFields, columns), ...(await this.#ownerColumn())], columns);
+    const rows = await loopar.db.getList(this.__ENTITY__.name, read.select, condition, { orderBy: order.orderBy });
+    await this.applyVirtualValues(rows, read.virtual);
     await this.#attachLinkTitles(rows);
 
     // Sums of the numeric columns over every record the filters match (not
@@ -529,7 +550,9 @@ export default class BaseDocument extends CoreDocument {
     // decide per row whether an 'own'-scoped action applies (AuthContext.canOn).
     // Only when the table has it: child/static entities are not auditable and
     // an app not yet updated lacks the column.
-    const rows = await loopar.db.getList(this.__ENTITY__.name, [...listFields, ...this.#rowKeys(listFields, columns), ...(await this.#ownerColumn())], condition, { orderBy: order.orderBy });
+    const read = this.#withVirtual([...listFields, ...this.#rowKeys(listFields, columns), ...(await this.#ownerColumn())], columns);
+    const rows = await loopar.db.getList(this.__ENTITY__.name, read.select, condition, { orderBy: order.orderBy });
+    await this.applyVirtualValues(rows, read.virtual);
 
     return rows;
   }
@@ -741,11 +764,12 @@ export default class BaseDocument extends CoreDocument {
       return qb;
     };
 
-    const fields = [...new Set(["id", "name", field, ...this.getFieldListNames(), ...ownerColumn])];
+    const read = this.#withVirtual([...new Set(["id", "name", field, ...this.getFieldListNames(), ...ownerColumn])]);
     const [rows, countRow] = await Promise.all([
-      base().select(fields).orderBy("id", "desc").limit(pageSize).offset((Math.max(1, page) - 1) * pageSize),
+      base().select(read.select).orderBy("id", "desc").limit(pageSize).offset((Math.max(1, page) - 1) * pageSize),
       base().count({ count: "id" }).first(),
     ]);
+    await this.applyVirtualValues(rows, read.virtual);
 
     return { state, rows, total: Number(countRow?.count || 0), page, pageSize };
   }
@@ -806,20 +830,22 @@ export default class BaseDocument extends CoreDocument {
       return qb.where((w) => w.where(touches).orWhere(recurs));
     };
 
-    const fields = [...new Set([
+    const read = this.#withVirtual([...new Set([
       "id", "name", start, ...(end ? [end] : []), ...(allDay ? [allDay] : []), ...repeatFields, ...(assignee ? [assignee] : []), ...(workflow ? [workflow.field] : []),
       ...this.getFieldSelectLabels().map((f) => f.trim()), ...this.getFieldListNames(), ...ownerColumn,
-    ].filter(Boolean))];
+    ].filter(Boolean))]);
 
     if (unscheduled) {
       const [rows, countRow] = await Promise.all([
-        base().select(fields).orderBy("id", "desc").limit(pageSize).offset((Math.max(1, page) - 1) * pageSize),
+        base().select(read.select).orderBy("id", "desc").limit(pageSize).offset((Math.max(1, page) - 1) * pageSize),
         base().count({ count: "id" }).first(),
       ]);
+      await this.applyVirtualValues(rows, read.virtual);
       return { rows, total: Number(countRow?.count || 0), page, pageSize };
     }
 
-    const rows = await base().select(fields).orderBy(start, "asc").limit(limit + 1);
+    const rows = await base().select(read.select).orderBy(start, "asc").limit(limit + 1);
+    await this.applyVirtualValues(rows, read.virtual);
     return {
       from, to,
       rows: rows.slice(0, limit),
@@ -860,8 +886,8 @@ export default class BaseDocument extends CoreDocument {
     // The list's columns, with the ones the user added to it.
     const listed = this.getFieldListNames();
     const settings = isListTarget(name) ? await readListSettings(name) : null;
-    const fields = [...new Set(["id", "name", tree.parent, ...titleFields, ...listed, ...this.#extraListFields(settings, listed, columns), ...ownerColumn])]
-      .filter((f) => f && (!columns || columns.has(f)));
+    const read = this.#withVirtual([...new Set(["id", "name", tree.parent, ...titleFields, ...listed, ...this.#extraListFields(settings, listed, columns), ...ownerColumn])], columns);
+    const fields = read.select.filter((f) => f && (!columns || columns.has(f)));
     const order = titleFields.find((f) => fields.includes(f)) || "name";
 
     const search = q ? { ...q } : null;
@@ -873,6 +899,7 @@ export default class BaseDocument extends CoreDocument {
       filtered ? base(combineSConditions(this.buildCondition(search, columns), scoped)).select("name") : null,
     ]);
     const rows = all.slice(0, limit);
+    await this.applyVirtualValues(rows, read.virtual);
     await this.#attachLinkTitles(rows);
 
     return {
@@ -914,16 +941,18 @@ export default class BaseDocument extends CoreDocument {
     const placed = (qb) => qb.whereNotNull(geo.latitude).whereNotNull(geo.longitude);
 
     const titleFields = this.getFieldSelectLabels().map((f) => f.trim()).filter(Boolean);
-    const fields = [...new Set([
+    const read = this.#withVirtual([...new Set([
       "id", "name", geo.latitude, geo.longitude, ...geo.address, ...titleFields,
       ...(workflow ? [workflow.field] : []), ...this.getFieldListNames(), ...ownerColumn,
-    ])].filter((f) => f && (!columns || columns.has(f)));
+    ])], columns);
+    const fields = read.select.filter((f) => f && (!columns || columns.has(f)));
 
     const [found, total] = await Promise.all([
       placed(base()).select(fields).orderBy("id", "desc").limit(limit + 1),
       base().count({ count: "id" }).first(),
     ]);
     const rows = found.slice(0, limit);
+    await this.applyVirtualValues(rows, read.virtual);
     await this.#attachLinkTitles(rows);
     const onMap = found.length > limit
       ? Number((await placed(base()).count({ count: "id" }).first())?.count || 0)
@@ -1181,7 +1210,7 @@ export default class BaseDocument extends CoreDocument {
     const listNames = this.getFieldListNames();
     const allowed = (f) => {
       const field = this.fields[f];
-      if (!field || field.element === PASSWORD || (columns && !columns.has(f))) return false;
+      if (!field || field.element === PASSWORD || (columns && !columns.has(f) && !(f in this.virtualFieldMap()))) return false;
       return listNames.includes(f) || isListableField({ element: field.element, data: field });
     };
     const wanted = Array.isArray(fields) && fields.length
@@ -1207,7 +1236,9 @@ export default class BaseDocument extends CoreDocument {
       const where = loopar.db.buildWhereCb(condition);
       if (where) qb = qb.where(where);
       if (await this.#softDeletes()) qb = qb.whereNull("__deleted_at__");
-      rows = await qb.select(exported).orderBy(order.orderBy).limit(limit + 1);
+      const read = this.#withVirtual(exported, columns);
+      rows = await qb.select(read.select).orderBy(order.orderBy).limit(limit + 1);
+      await this.applyVirtualValues(rows, read.virtual);
     }
 
     const truncated = rows.length > limit;

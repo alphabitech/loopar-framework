@@ -83,7 +83,7 @@ function mergeGroups(...arrays) {
 // structure, uploads, identity).
 const NO_DEFAULT_VALUE = new Set(["designer", "password", "form_table", "id", "file_input", "image_input", "metadata", "tailwind", "slot"]);
 const DEFAULT_VALUE_DROPPED_KEYS = new Set([
-  "readonly", "formula", "disabled", "hidden", "display_on", "required", "required_on", "unique",
+  "readonly", "formula", "virtual", "disabled", "hidden", "display_on", "required", "required_on", "unique",
   "write_policy", "write_roles", "protected_change", "default_value", "value", "description",
   "in_list_view", "list_order", "searchable", "print_hide", "translatable", "internal", "required_on_website",
 ]);

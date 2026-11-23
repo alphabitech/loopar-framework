@@ -1,4 +1,5 @@
 import loopar from "loopar";
+import { isVirtualField } from "@global/formula";
 import { MetaComponent } from "@meta-component";
 import { FormWrapper } from "@form-provider";
 import { useTable } from "./TableContext"
@@ -18,7 +19,7 @@ export function TableSearch(props){
   const hiddenFields = hiddenSearchFields || [];
 
   const searchFields = useMemo(() => {
-    return baseColumns().filter(col => fieldIsWritable(col) &&
+    return baseColumns().filter(col => fieldIsWritable(col) && !isVirtualField(col.data) &&
       // The same elements BaseDocument.buildCondition filters by.
       [INPUT, TEXTAREA, SELECT, CONNECTION, RADIO_GROUP, CHECKBOX, SWITCH].includes(col.element) &&
       loopar.utils.trueValue(col.data.searchable) &&

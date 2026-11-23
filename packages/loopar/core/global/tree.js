@@ -1,5 +1,7 @@
 'use strict';
 
+import { isComputedField } from "./formula.js";
+
 /**
  * Tree of an entity — shared by the server (which reads the records) and the
  * client (which draws them). An entity is a tree by convention; there is
@@ -39,7 +41,7 @@ export function treeFields(structure, entity) {
   const parsed = typeof structure === "string" ? safeParse(structure) : structure;
   const el = entity ? parentElement(Array.isArray(parsed) ? parsed : [], String(entity)) : null;
   if (!el) return null;
-  return { parent: el.data.name, editable: !truthy(el.data.readonly) && !truthy(el.data.read_only) && !el.data.formula };
+  return { parent: el.data.name, editable: !truthy(el.data.readonly) && !truthy(el.data.read_only) && !isComputedField(el.data) };
 }
 
 const filled = (value) => value !== null && value !== undefined && value !== "";

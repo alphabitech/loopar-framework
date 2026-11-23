@@ -11,6 +11,8 @@
  *   report            to the same records ('own' / 'portal' scope).
  *   geocode           looking up the address of a record's form reads no
  *                     record: whoever may `list` the entity may ask.
+ *   formulaRefs       the fields of linked records the entity's formulas
+ *                     read (what its list already shows): `list`.
  *   bulkUpdate,       a bulk action is its single action on each selected
  *   bulkTransition    record: the same grant, the same scope per record.
  *
@@ -24,6 +26,7 @@ export const PERMISSION_ALIASES = Object.freeze({
   tree: 'list',
   map: 'list',
   geocode: 'list',
+  formularefs: 'list',
   report: 'list',
   bulkupdate: 'update',
   bulktransition: 'transition',

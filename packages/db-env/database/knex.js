@@ -59,7 +59,9 @@ export class KnexORM extends Connector {
     // but any future shared-process mode needs listeners to be able to
     // filter by tenant — and having it now means handlers can already be
     // written tenant-aware.
-    payload = { tenant: loopar.tenantId, ...payload };
+    // `db`: the emitting instance — handlers query through it so they join
+    // its transaction (the pipeline is static, shared by every instance).
+    payload = { tenant: loopar.tenantId, db: this, ...payload };
     const document = payload?.document;
     const events = [event, document ? `${event}:${document}` : null].filter(Boolean);
 
