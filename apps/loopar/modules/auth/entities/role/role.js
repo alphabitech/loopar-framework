@@ -1,7 +1,7 @@
 
 'use strict';
 
-import {BaseDocument, loopar} from 'loopar';
+import {BaseDocument, loopar, deleteRecords} from 'loopar';
 
 export default class Role extends BaseDocument {
     constructor(props){
@@ -17,6 +17,13 @@ export default class Role extends BaseDocument {
         if (loopar.utils.trueValue(this.is_system_role) && !uninstallingOwner) {
             loopar.throw(`Role "${this.name}" is a system role and cannot be deleted. Disable it instead.`);
         }
-        return super.delete(...args);
+        // Its grants go with it: a role created later with the same name must
+        // not inherit them. Through each Permission's model, so its hooks run
+        // (PermissionManager drops its cache). Assigned users hold the delete
+        // back (User Role → Role).
+        return await loopar.db.withTransaction(async () => {
+            await deleteRecords('Permission', { relation: 'Role', relation_name: this.name }, { sofDelete: args[0]?.sofDelete });
+            return await super.delete(...args);
+        });
     }
 }

@@ -125,13 +125,16 @@ test("a rate agreement opens its Draft contract; the rates apply once it is sign
     assert.equal((await rates.staffingRates({ location: place, position: "Porter", date: "2026-11-10" })).bill_rate, 30);
     await assert.rejects(signed.delete(), /is Active/);
 
-    // Revised: the rates reopen and no longer apply until signed again.
-    await move(contract, "Revise");
+    // Superseded: the agreement follows the new version; the rates reopen and no longer apply until it is signed.
+    await move(contract, "Supersede");
+    const next = await contractOf(agreement.name);
+    assert.equal(next, `${contract}-1`);
+    assert.equal(await loopar.db.getValue("Contract", "status", contract), "Superseded");
     const draft = await loopar.getDocument("Staffing Rate Agreement", agreement.name);
     draft.lines = [{ position: "Porter", bill_rate: 32, pay_rate: 18 }];
     await draft.save();
     assert.equal((await rates.staffingRates({ location: place, position: "Porter", date: "2026-11-10" })).bill_rate, 20);
-    await move(contract, "Activate");
+    await move(next, "Activate");
     assert.equal((await rates.staffingRates({ location: place, position: "Porter", date: "2026-11-10" })).bill_rate, 32);
   });
 });

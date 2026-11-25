@@ -5,7 +5,7 @@ import { scrollMemory } from "@@tools/router/scroll-memory";
  * layout props.
  *
  * VIEW options — presentation, kept as React state (base/view-options.jsx):
- *   slots · actions · rowActions · handlers · columns · gridTemplate · summary · status · headerTabs ·
+ *   slots · actions · rowActions · handlers · columns · gridTemplate · summary · status · flow · headerTabs ·
  *   canUpdate · readOnly · hasSidebar · hasHeader · hasBreadcrumb · hasHistory ·
  *   hasSearchForm · hasSelectAll · hasSelectRow · hasListSettings · hiddenSearchFields · gridMinWidth · onlyList · onlyGrid
  *
@@ -14,7 +14,7 @@ import { scrollMemory } from "@@tools/router/scroll-memory";
  */
 export const VIEW_OPTION_KEYS = [
   "slots", "actions", "rowActions", "handlers", "columns", "gridTemplate",
-  "summary", "status", "headerTabs",
+  "summary", "status", "flow", "headerTabs",
   "canUpdate", "readOnly", "hasSidebar", "hasHeader", "hasBreadcrumb", "hasHistory",
   "hasSearchForm", "hasSelectAll", "hasSelectRow", "hasListSettings", "hiddenSearchFields", "gridMinWidth",
   "onlyList", "onlyGrid",

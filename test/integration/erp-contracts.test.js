@@ -140,25 +140,46 @@ test("the next contract of a customer that signed the master goes alone; a decli
   });
 });
 
-test("activating without a signature, revising and terminating follow the workflow", async () => {
+test("activating without a signature, superseding and terminating follow the workflow", async () => {
   await t.run(async () => {
     // A manager's moves: only the ERP Manager role (or model code) runs them.
     const wf = await loopar.db.getRow("Workflow", "Contract", ["id"]);
-    const narrowed = await q()("Workflow Transition").where({ parent_document: "Workflow", parent_id: wf.id }).whereIn("action", ["Activate", "Revise", "Terminate", "Expire"]);
+    const narrowed = await q()("Workflow Transition").where({ parent_document: "Workflow", parent_id: wf.id }).whereIn("action", ["Activate", "Supersede", "Terminate", "Expire"]);
+    assert.equal(narrowed.length, 4);
     assert.deepEqual([...new Set(narrowed.map((t) => t.allowed_roles))], ["ERP Manager"]);
+    assert.ok(!(await q()("Workflow Transition").where({ parent_document: "Workflow", parent_id: wf.id, action: "Revise" }).first()), "an active contract is not reopened");
 
     const doc = await loopar.newDocument("Contract", { title: "Paper contract", customer: other, valid_from: "2026-12-01" });
     await doc.save();
     await assert.rejects(send(doc.name), /template/);
     await applyTransition(await contract(doc.name), "Activate", {}, { system: true });
-    assert.equal(await loopar.db.getValue("Contract", "status", doc.name), "Active");
-    await applyTransition(await contract(doc.name), "Revise", {}, { system: true });
-    const draft = await contract(doc.name);
+    const active = await q()("Contract").where({ name: doc.name }).first();
+    assert.deepEqual([active.status, active.__document_status__], ["Active", 8], "activating submits it");
+
+    // Submitted: only the notes change; it is never deleted.
+    const signed = await contract(doc.name);
+    Object.assign(signed, { title: "Changed", notes: "Filed on paper." });
+    await signed.save();
+    assert.deepEqual(Object.values(await q()("Contract").where({ name: doc.name }).first("title", "notes")), ["Paper contract", "Filed on paper."]);
+    await assert.rejects((await contract(doc.name)).delete(), /submitted|Submitted/);
+
+    // Superseded: it stays as the contract that applied; the new version is a Draft to change.
+    const { navigate } = await applyTransition(await contract(doc.name), "Supersede", {}, { system: true });
+    const v1 = `${doc.name}-1`;
+    assert.match(navigate, new RegExp(encodeURIComponent(v1)));
+    const old = await q()("Contract").where({ name: doc.name }).first();
+    assert.deepEqual([old.status, old.__document_status__, old.title], ["Superseded", 8, "Paper contract"]);
+    const v1Row = await q()("Contract").where({ name: v1 }).first();
+    assert.deepEqual([v1Row.status, v1Row.supersedes, v1Row.title, v1Row.signed_at || null, v1Row.__document_status__], ["Draft", doc.name, "Paper contract", null, 3]);
+    const draft = await contract(v1);
     draft.title = "Paper contract v2";
     await draft.save();
-    await applyTransition(await contract(doc.name), "Activate", {}, { system: true });
-    await applyTransition(await contract(doc.name), "Terminate", {}, { system: true });
-    const row = await q()("Contract").where({ name: doc.name }).first();
+    await applyTransition(await contract(v1), "Activate", {}, { system: true });
+    await applyTransition(await contract(v1), "Supersede", {}, { system: true });
+    assert.equal(await loopar.db.getValue("Contract", "supersedes", `${doc.name}-2`), v1, "versions count on");
+    await applyTransition(await contract(`${doc.name}-2`), "Activate", {}, { system: true });
+    await applyTransition(await contract(`${doc.name}-2`), "Terminate", {}, { system: true });
+    const row = await q()("Contract").where({ name: `${doc.name}-2` }).first();
     assert.deepEqual([row.status, row.title], ["Terminated", "Paper contract v2"]);
   });
 });

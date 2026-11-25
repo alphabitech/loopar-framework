@@ -18,7 +18,7 @@ import { parseOptionLines } from '../global/select-options.js';
 import { resolveColumnFormat } from '../global/element-definition.js';
 import { calendarFields, isDay } from '../global/calendar.js';
 import { treeFields } from '../global/tree.js';
-import { geoFields } from '../global/geo.js';
+import { geoFields, coordinatesOf } from '../global/geo.js';
 import { workflowFor } from './workflow.js';
 import { virtualDependencies } from '../global/formula.js';
 
@@ -918,6 +918,10 @@ export default class BaseDocument extends CoreDocument {
    * `unplaced` counts the matching records without coordinates: they exist,
    * the map just can't show them.
    *
+   * Coordinates may be virtual fields (`site.latitude` of a linked record):
+   * they have no column to filter by, so the placed records are told apart
+   * once computed.
+   *
    * → { latitude, longitude, address, rows, truncated, unplaced, titleFields, state }
    */
   async mapRows({ q = null, limit = 2000 } = {}) {
@@ -938,7 +942,9 @@ export default class BaseDocument extends CoreDocument {
       if (auditable) qb = qb.whereNull("__deleted_at__");
       return qb;
     };
-    const placed = (qb) => qb.whereNotNull(geo.latitude).whereNotNull(geo.longitude);
+    const virtuals = this.virtualFieldMap();
+    const computed = geo.latitude in virtuals || geo.longitude in virtuals;
+    const placed = (qb) => (computed ? qb : qb.whereNotNull(geo.latitude).whereNotNull(geo.longitude));
 
     const titleFields = this.getFieldSelectLabels().map((f) => f.trim()).filter(Boolean);
     const read = this.#withVirtual([...new Set([
@@ -951,10 +957,11 @@ export default class BaseDocument extends CoreDocument {
       placed(base()).select(fields).orderBy("id", "desc").limit(limit + 1),
       base().count({ count: "id" }).first(),
     ]);
-    const rows = found.slice(0, limit);
+    let rows = found.slice(0, limit);
     await this.applyVirtualValues(rows, read.virtual);
+    if (computed) rows = rows.filter((row) => coordinatesOf(row[geo.latitude], row[geo.longitude]));
     await this.#attachLinkTitles(rows);
-    const onMap = found.length > limit
+    const onMap = found.length > limit && !computed
       ? Number((await placed(base()).count({ count: "id" }).first())?.count || 0)
       : rows.length;
 

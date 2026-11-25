@@ -1,6 +1,7 @@
 import { cn } from "@cn/lib/utils";
 import {Droppable} from "@droppable";
 import { useDesigner } from "@context/designer-context";
+import { usePanelDefaults } from "./panel-defaults";
 const DEFAULTS = {
   variant: "glass",
   rounded: "xl",
@@ -55,11 +56,18 @@ const colorVars = {
   border: "var(--border)",
 };
 
+/** The panel's own settings: unset ones (undefined, null, "") fall back to the defaults. */
+const stored = (data) => Object.fromEntries(
+  Object.entries(data).filter(([, value]) => value !== undefined && value !== null && value !== "")
+);
+
 export default function MetaPanel(props) {
   const data = props.data || {};
   const { designing } = useDesigner();
+  // The surface's defaults (a desk form: no hover/focus effects), below the panel's own.
+  const surface = usePanelDefaults();
 
-  const config = { ...DEFAULTS, ...data };
+  const config = { ...DEFAULTS, ...surface, ...stored(data) };
 
   const buildStyle = () => {
     const style = {};

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import loopar from "loopar";
-import { compileFormula, computeFormulas, formulaFields, formulaRefs, refKey, sameComputedValue, tableRows } from "@global/formula";
+import { compileFormula, computeFormulas, fetchIfEmptyFields, formulaFields, formulaRefs, formulasToApply, refKey, sameComputedValue, tableRows } from "@global/formula";
 
 /**
  * Live computed fields (`data.formula`). The server recomputes them on save
@@ -12,6 +12,11 @@ import { compileFormula, computeFormulas, formulaFields, formulaRefs, refKey, sa
  * (`{Entity}/formulaRefs`, only the fields the entity's formulas name) when
  * the connection changes. A formula waits for its references: until they
  * arrive it keeps the value the server sent.
+ *
+ * `fetch_if_empty` fields are editable: the formula fills them only while
+ * they are empty, and only when what it reads changed since it last filled
+ * them — a user who clears the field on purpose is not overwritten while
+ * typing (the server fills it again on save if it is still empty).
  */
 
 const set = (form, name, value) => form.setValue(name, value, { shouldDirty: false, shouldValidate: false });
@@ -95,23 +100,55 @@ function readyScope(formulas, needs, refs, known, scope) {
   return { ready, scope: { ...scope, ...extra } };
 }
 
-/** Formula fields of a flat form, computed over its live `values`. `entity`: the form's entity. */
-export function useFormulas(form, structure, values, { entity = null } = {}) {
+/** What a formula read (its fields and references) — to tell when its inputs changed. */
+function inputsOf(formula, scope) {
+  const compiled = compileFormula(formula);
+  if (compiled.error) return "";
+  return JSON.stringify([
+    compiled.fields.map((f) => scope?.[f] ?? null),
+    compiled.refs.map((r) => scope?.[refKey(r.link, r.field)] ?? null),
+  ]);
+}
+
+/**
+ * Writes the computed values of one form (or row): `prefix` is "" or
+ * "rows.<i>.". A `fetch_if_empty` field (here always empty: filled ones are
+ * left out by formulasToApply) is written once per change of its inputs.
+ */
+function writeComputed(form, computed, current, { formulas, ifEmpty, scope, filledFor, prefix = "", track = prefix }) {
+  for (const [name, value] of Object.entries(computed)) {
+    if (ifEmpty.has(name)) {
+      const key = `${track}${name}`;
+      const inputs = inputsOf(formulas[name], scope);
+      if (filledFor.current[key] === inputs) continue;
+      filledFor.current[key] = inputs;
+    }
+    if (!sameComputedValue(current?.[name], value)) set(form, `${prefix}${name}`, value);
+  }
+}
+
+/**
+ * Formula fields of a flat form, computed over its live `values`. `entity`:
+ * the form's entity — for one row of a child table edited on its own (the
+ * row form), the parent entity and `table`, its child table field.
+ */
+export function useFormulas(form, structure, values, { entity = null, table = null } = {}) {
   const formulas = useMemo(() => formulaFields(structure), [structure]);
   const refs = useMemo(() => formulaRefs(formulas), [formulas]);
   const needs = useMemo(() => linksByFormula(formulas), [formulas]);
   const links = useMemo(() => Object.keys(refs), [refs]);
+  const ifEmptyList = useMemo(() => fetchIfEmptyFields(structure), [structure]);
+  const ifEmpty = useMemo(() => new Set(ifEmptyList), [ifEmptyList]);
+  const filledFor = useRef({});
   const scopes = useMemo(() => [values || {}], [values]);
-  const known = useLinkedValues(entity, null, links, scopes);
+  const known = useLinkedValues(entity, table, links, scopes);
 
   useEffect(() => {
     if (!form || !values || !Object.keys(formulas).length) return;
-    const { ready, scope } = readyScope(formulas, needs, refs, known, values);
-    const computed = computeFormulas(ready, scope);
-    for (const [name, value] of Object.entries(computed)) {
-      if (!sameComputedValue(values[name], value)) set(form, name, value);
-    }
-  }, [form, formulas, refs, needs, known, values]);
+    const applying = formulasToApply(formulas, ifEmptyList, values);
+    const { ready, scope } = readyScope(applying, needs, refs, known, values);
+    writeComputed(form, computeFormulas(ready, scope), values, { formulas, ifEmpty, scope, filledFor });
+  }, [form, formulas, refs, needs, known, values, ifEmpty, ifEmptyList]);
 }
 
 /**
@@ -124,6 +161,9 @@ export function useRowFormulas(form, structure, rows, path = "rows", { entity = 
   const refs = useMemo(() => formulaRefs(formulas), [formulas]);
   const needs = useMemo(() => linksByFormula(formulas), [formulas]);
   const links = useMemo(() => Object.keys(refs), [refs]);
+  const ifEmptyList = useMemo(() => fetchIfEmptyFields(structure), [structure]);
+  const ifEmpty = useMemo(() => new Set(ifEmptyList), [ifEmptyList]);
+  const filledFor = useRef({});
   const scopes = useMemo(() => tableRows(rows), [rows]);
   const known = useLinkedValues(table ? entity : null, table, links, scopes);
 
@@ -131,11 +171,12 @@ export function useRowFormulas(form, structure, rows, path = "rows", { entity = 
     if (!form || !Object.keys(formulas).length) return;
     scopes.forEach((row, index) => {
       if (!row) return;
-      const { ready, scope } = readyScope(formulas, needs, refs, known, row);
-      const computed = computeFormulas(ready, scope);
-      for (const [name, value] of Object.entries(computed)) {
-        if (!sameComputedValue(row[name], value)) set(form, `${path}.${index}.${name}`, value);
-      }
+      const applying = formulasToApply(formulas, ifEmptyList, row);
+      const { ready, scope } = readyScope(applying, needs, refs, known, row);
+      // A row is tracked by its id when it has one: rows can move.
+      const prefix = `${path}.${index}.`;
+      const track = row.id ? `${path}#${row.id}.` : prefix;
+      writeComputed(form, computeFormulas(ready, scope), row, { formulas, ifEmpty, scope, filledFor, prefix, track });
     });
-  }, [form, formulas, refs, needs, known, scopes, path]);
+  }, [form, formulas, refs, needs, known, scopes, path, ifEmpty, ifEmptyList]);
 }

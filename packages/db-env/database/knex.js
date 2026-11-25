@@ -332,13 +332,27 @@ export class KnexORM extends Connector {
       ? { ...name }
       : (name ? { name } : {});
 
-    const update = { [field]: value };
+    const cb = this.buildWhereCb(condition);
+    // Every matching row goes through the before-update checks (links,
+    // submitted records), as an update of that one field; then exactly those
+    // rows are written. (No after-update events: a direct write stays quiet.)
+    let rows = this.qx()(document);
+    if (cb) rows = rows.where(cb);
+    rows = await rows.select("*");
+    if (!rows.length) return;
+    let written = value;
+    for (const before of rows) {
+      const doc = { [field]: value };
+      await this.#emitBefore("beforeUpdate", { document, name: before.name, doc, before });
+      written = doc[field];
+    }
+
+    const update = { [field]: written };
     // A direct write is a change too: a document loaded before it is stale.
     if (field !== VERSION_COLUMN && await this.#isVersioned(document)) update[VERSION_COLUMN] = this.#nextVersion();
 
-    const cb = this.buildWhereCb(condition);
     let qb = this.qx()(document).update(update);
-    if (cb) qb = qb.where(cb);
+    qb = rows.every((r) => r.id != null) ? qb.whereIn("id", rows.map((r) => r.id)) : (cb ? qb.where(cb) : qb);
     await qb;
   }
 
@@ -400,6 +414,11 @@ export class KnexORM extends Connector {
     delete data[VERSION_COLUMN];
     // Immutable after insert — never accept it on update.
     delete data[CREATED_BY_COLUMN];
+    // A record's name is its identity: references point to it. It never
+    // changes through an update (renaming is an operation of its own).
+    if (data.name != null && data.name !== "" && String(data.name) !== String(name)) {
+      loopar.throw({ code: 400, title: "Validation error", message: `The name of ${document} "${name}" can't be changed.` });
+    }
     data = await this.filterToTableColumns(document, data);
 
     const auditable = this.#isAuditable(document);
@@ -431,7 +450,7 @@ export class KnexORM extends Connector {
       this.#staleWrite(document, name);
     }
 
-    await this.#emitBefore("beforeUpdate", { document, doc: data, before });
+    await this.#emitBefore("beforeUpdate", { document, name, doc: data, before });
 
     if (versioned) data[VERSION_COLUMN] = this.#nextVersion();
     let qb = this.qx()(document).where({ name });
@@ -474,18 +493,25 @@ export class KnexORM extends Connector {
     this.#emitAfter("afterDelete", { document, doc: { name } });
   }
 
+  /**
+   * Deletes every row matching `condition`. Each row goes through the
+   * before/after delete events on its own (integrity checks, history).
+   */
   async deleteWhere(document, condition) {
-    const doc = await this.getRow(document, condition);
-    await this.#emitBefore("beforeDelete", { document, doc });
-
     const cb = this.buildWhereCb(condition);
     if (!cb) {
       throw new Error("[deleteWhere] condition is required — refusing to delete all rows");
     }
 
-    await this.qx()(document).where(cb).delete();
+    const rows = await this.qx()(document).where(cb).select("*");
+    if (!rows.length) return;
+    for (const doc of rows) await this.#emitBefore("beforeDelete", { document, doc });
 
-    this.#emitAfter("afterDelete", { document, doc });
+    // By id: exactly the rows that were checked (a row written meanwhile isn't swept along).
+    if (rows.every((r) => r.id != null)) await this.qx()(document).whereIn("id", rows.map((r) => r.id)).delete();
+    else await this.qx()(document).where(cb).delete();
+
+    for (const doc of rows) this.#emitAfter("afterDelete", { document, doc });
   }
 
   async getValue(...args) {

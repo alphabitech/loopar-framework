@@ -17,8 +17,8 @@
  *      on both sides.
  *
  * Records are copied after the whole structure exists, not while each table
- * is created: the framework declares no foreign keys, so the order of the
- * data doesn't matter.
+ * is created, and the foreign keys are added once every record is in: the
+ * order of the data doesn't matter.
  *
  * Runs inside the tenant's request context (`loopar` is the tenant). The
  * source database is never written. On failure, or in a test run, whatever
@@ -30,6 +30,7 @@ import { KnexORM } from 'db-env';
 import { loopar } from '../loopar.js';
 import { fileManage } from '../file-manage.js';
 import { coerceDocStatus } from '../global/audit.js';
+import { syncForeignKeys, dropForeignKeys } from '../document/foreign-keys.js';
 
 /** Engines a tenant can be moved to. */
 export const MIGRATION_TARGETS = ['postgres', 'mysql', 'mariadb'];
@@ -450,6 +451,7 @@ export async function migrateDatabase({ target: targetCfg, test = false, onStep 
         target.knex = null;
         await target.dropSchema(cfg.database);
       } else {
+        await dropForeignKeys(target).catch(() => {});
         for (const table of createdTables.reverse()) await target.knex.schema.dropTableIfExists(table);
       }
     } catch (e) {
@@ -500,6 +502,11 @@ export async function migrateDatabase({ target: targetCfg, test = false, onStep 
       if (n !== expected) throw migrationError(`${table}: ${n} records on the target, ${expected} in the source.`);
     }
 
+    // 4. Foreign keys, once every record is in (core/document/foreign-keys.js).
+    onStep('foreign keys');
+    const keys = await syncForeignKeys(target);
+    for (const issue of keys.issues) warn(`Foreign key ${issue.name} not created: ${issue.problem}`);
+
     const result = {
       test,
       from: sourceCfg.dialect,
@@ -507,6 +514,7 @@ export async function migrateDatabase({ target: targetCfg, test = false, onStep 
       database: cfg.database,
       tables: tables.length,
       records: counts.reduce((n, c) => n + c.rows, 0),
+      foreignKeys: keys.created.length,
       rebuiltFromSource: generic,
       warnings,
     };

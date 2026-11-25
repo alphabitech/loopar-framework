@@ -436,6 +436,10 @@ export default class Entity extends BaseDocument {
         const issue = virtualFormulaIssue(formula);
         if (issue) loopar.throw(`Field ${field.data.name}: ${issue}.`);
       }
+      // "Fetch if empty" fills a stored, editable field: nothing to fill on a virtual one.
+      if (loopar.utils.trueValue(field.data?.fetch_if_empty) && (!formula || isVirtualField(field.data))) {
+        loopar.throw(`Field ${field.data.name}: "Fetch if empty" needs a formula and a stored (not virtual) field.`);
+      }
     }
 
     // References to linked records (`link.field`) in formulas.
@@ -465,6 +469,9 @@ export default class Entity extends BaseDocument {
 
     if (next.is_child && next.is_single) loopar.throw("A child entity can not be single.");
     if (next.is_child && next.is_virtual) loopar.throw("A child entity can not be virtual: its rows are stored in its own table.");
+    if (flag(this.is_submittable) && (next.is_child || next.is_single || next.is_virtual || flag(this.is_static) || this.is_audited === false)) {
+      loopar.throw("Only a regular entity can be submittable: not child, single, virtual, static nor without audit columns (its child tables follow the parent's lock).");
+    }
 
     if (this.__IS_NEW__) return;
 

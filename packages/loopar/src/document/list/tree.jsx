@@ -251,7 +251,12 @@ export function TreeView({ ctrl }) {
     return flattenTree(built, { expanded });
   }, [built, visible, foldedSet]);
 
-  const totals = useMemo(() => branchTotals(built, Object.keys(sums), visible), [built, sums, visible]);
+  // A `no_rollup` column already holds branch totals (the model computes them): shown as it is.
+  const rollups = useMemo(
+    () => Object.keys(sums).filter((name) => !truthy(sums[name].data?.no_rollup)),
+    [sums]
+  );
+  const totals = useMemo(() => branchTotals(built, rollups, visible), [built, rollups, visible]);
 
   const toggle = useCallback((name) => {
     const next = new Set(foldedSet);

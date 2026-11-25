@@ -58,6 +58,33 @@ test("a stored formula copies the linked value on save and keeps it", async () =
   });
 });
 
+test("fetch_if_empty: fills an empty field on save, keeps what was written", async () => {
+  await t.run(async () => {
+    await loopar.db.qx()("App").where({ name: "loopar" }).update({ description: "Default text" });
+    const ref = loopar.getRef("Module");
+    const saved = { formulas: ref.__FORMULAS__, ifEmpty: ref.__FETCH_IF_EMPTY__ };
+    ref.__FORMULAS__ = { ...saved.formulas, description: "app_name.description" };
+    ref.__FETCH_IF_EMPTY__ = ["description"];
+    try {
+      await (await loopar.newDocument("Module", { name: "fie_empty", app_name: "loopar" })).save();
+      assert.equal(await loopar.db.getValue("Module", "description", "fie_empty"), "Default text");
+
+      await (await loopar.newDocument("Module", { name: "fie_written", app_name: "loopar", description: "Mine" })).save();
+      assert.equal(await loopar.db.getValue("Module", "description", "fie_written"), "Mine");
+
+      const cleared = await loopar.getDocument("Module", "fie_written");
+      // A loaded document carries its own copy of the ref: patch it too.
+      Object.assign(cleared.__ENTITY__.__REF__, { __FORMULAS__: ref.__FORMULAS__, __FETCH_IF_EMPTY__: ["description"] });
+      cleared.description = "";
+      await cleared.save();
+      assert.equal(await loopar.db.getValue("Module", "description", "fie_written"), "Default text", "left empty: filled again");
+    } finally {
+      ref.__FORMULAS__ = saved.formulas;
+      ref.__FETCH_IF_EMPTY__ = saved.ifEmpty;
+    }
+  });
+});
+
 test("formulaRefIssues: connection, single, existing stored field, no passwords", async () => {
   await t.run(async () => {
     const f = (element, data) => ({ element, data });

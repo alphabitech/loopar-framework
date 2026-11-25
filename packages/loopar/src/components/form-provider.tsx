@@ -11,6 +11,7 @@ import React, {
   useEffect,
   useMemo,
   useCallback,
+  useRef,
 } from "react";
 import { dataInterface } from "@global/element-definition";
 import { useFormulas } from "@@tools/use-formulas";
@@ -202,6 +203,13 @@ const buildFormFields = (
   return acc;
 };
 
+/**
+ * Where the formulas' references (`link.field`) are resolved when the form is
+ * not a document's own: a child table row edited on its own resolves them
+ * through the parent `entity` and its child `table` field.
+ */
+export type FormulaScope = { entity?: string | null; table?: string | null };
+
 export type FormProviderProps = {
   children: React.ReactNode;
   values?: FieldValues;
@@ -209,6 +217,7 @@ export type FormProviderProps = {
   formRef?: React.MutableRefObject<LooparFormImperativeApi | null> | null;
   STRUCTURE?: FormStructureElement[];
   onChange?: (values: FieldValues | undefined) => void;
+  formulaScope?: FormulaScope | null;
 };
 
 export const FormProvider = ({
@@ -218,6 +227,7 @@ export const FormProvider = ({
   formRef,
   STRUCTURE,
   onChange,
+  formulaScope,
 }: FormProviderProps) => {
   const FormSchema = useMemo(
     () => z.object(buildFormFields(STRUCTURE)),
@@ -231,13 +241,21 @@ export const FormProvider = ({
 
   const watchedValues = useWatch({ control: form.control });
 
+  // Called when the values change, not when the callback does: callers pass
+  // it inline (a new function every render), and a call with unchanged values
+  // would hand back stale ones over what was set meanwhile.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   useEffect(() => {
-    onChange?.(watchedValues);
-  }, [watchedValues, onChange]);
+    onChangeRef.current?.(watchedValues);
+  }, [watchedValues]);
 
-  // References of formulas (`link.field`) are resolved through the form's entity.
-  const formulaEntity = (docRef as { Document?: { Entity?: { name?: string } } } | null | undefined)?.Document?.Entity?.name ?? null;
-  useFormulas(form, STRUCTURE, watchedValues, { entity: formulaEntity });
+  // References of formulas (`link.field`) are resolved through the form's entity
+  // (or the scope given for a form that is not a document's own).
+  const formulaEntity = formulaScope?.entity
+    ?? (docRef as { Document?: { Entity?: { name?: string } } } | null | undefined)?.Document?.Entity?.name
+    ?? null;
+  useFormulas(form, STRUCTURE, watchedValues, { entity: formulaEntity, table: formulaScope?.table ?? null });
 
   // Unsaved work survives reloads (new deploy, crash, closed tab): autosaved
   // per user + document and offered back on the next mount.
@@ -381,6 +399,7 @@ export type FormWrapperProps = {
   formRef?: React.MutableRefObject<LooparFormImperativeApi | null> | null;
   STRUCTURE?: FormStructureElement[];
   onChange?: (values: FieldValues | undefined) => void;
+  formulaScope?: FormulaScope | null;
 };
 
 export function FormWrapper({
@@ -390,6 +409,7 @@ export function FormWrapper({
   formRef,
   STRUCTURE,
   onChange,
+  formulaScope,
 }: FormWrapperProps) {
   return (
     <FormProvider
@@ -398,6 +418,7 @@ export function FormWrapper({
       formRef={formRef}
       STRUCTURE={STRUCTURE}
       onChange={onChange}
+      formulaScope={formulaScope}
     >
       {children}
     </FormProvider>

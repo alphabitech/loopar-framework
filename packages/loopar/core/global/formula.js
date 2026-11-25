@@ -339,7 +339,7 @@ export function computeFormulas(formulas = {}, values = {}) {
  *   formula, stored   computed on save, kept in its column (filterable)
  *   formula, virtual  the formula is evaluated on read over the record's own
  *                     fields (no child-table aggregates: lists read many rows)
- *   virtual, no formula  filled by the model: `Document.virtualValues(rows)`
+ *   virtual, no formula  filled by the model: `static get<Field>(rows)`
  */
 
 const flagOn = (v) => [1, "1", true, "true"].includes(v);
@@ -347,8 +347,44 @@ const flagOn = (v) => [1, "1", true, "true"].includes(v);
 /** A virtual (never stored) field. */
 export const isVirtualField = (data) => flagOn(data?.virtual);
 
-/** A field whose value is computed (formula or virtual): read-only from input. */
-export const isComputedField = (data) => isVirtualField(data) || !!String(data?.formula ?? "").trim();
+const hasFormula = (data) => !!String(data?.formula ?? "").trim();
+
+/**
+ * A stored formula that only fills the field while it is empty
+ * (`fetch_if_empty`, as in Frappe): the field stays editable, the formula
+ * gives its starting value and fills it again when it is left empty.
+ */
+export const isFetchIfEmpty = (data) => flagOn(data?.fetch_if_empty) && hasFormula(data) && !isVirtualField(data);
+
+/** A field whose value is computed (virtual, or a formula that always applies): read-only from input. */
+export const isComputedField = (data) => isVirtualField(data) || (hasFormula(data) && !flagOn(data?.fetch_if_empty));
+
+/** Names of the `fetch_if_empty` formula fields of a doc structure. Walks nested elements. */
+export function fetchIfEmptyFields(structure = []) {
+  const out = [];
+  const walk = (nodes) => {
+    for (const el of nodes || []) {
+      if (el?.data?.name && isFetchIfEmpty(el.data)) out.push(el.data.name);
+      walk(el?.elements);
+    }
+  };
+  walk(Array.isArray(structure) ? structure : []);
+  return out;
+}
+
+/**
+ * The formulas that apply over `values`: a `fetch_if_empty` field someone
+ * filled is a plain value (formulas reading it see what was written).
+ */
+export function formulasToApply(formulas = {}, ifEmpty = [], values = {}) {
+  if (!ifEmpty.length) return formulas;
+  const skip = new Set(ifEmpty.filter((name) => {
+    const v = values?.[name];
+    return v !== null && v !== undefined && v !== "";
+  }));
+  if (!skip.size) return formulas;
+  return Object.fromEntries(Object.entries(formulas).filter(([name]) => !skip.has(name)));
+}
 
 /**
  * Virtual fields of a doc structure: `{ fieldName: formula | null }`

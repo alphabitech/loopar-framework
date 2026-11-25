@@ -367,6 +367,69 @@ export async function adminReset(tenantName, email) {
   process.exit(0);
 }
 
+/**
+ * `yarn integrity <tenant> [--fix-empty] [--sync] [--json]` → what in the
+ * tenant's data breaks referential integrity (read only): connections to
+ * missing records, orphan child rows, '' connections, duplicate names.
+ *   --fix-empty  store '' connections as NULL
+ *   --sync       reconcile the database foreign keys (PostgreSQL/MySQL)
+ */
+export async function integrity(tenantName, argv = []) {
+  const flags = new Set(argv.filter((a) => a.startsWith('--')));
+  if (!tenantName || tenantName.startsWith('--')) {
+    log(red('\nUsage: yarn integrity <tenant> [--fix-empty] [--sync] [--json]\n'));
+    process.exit(1);
+  }
+
+  const { tenants } = await import('loopar/bin/tenant/tenant-builder.js');
+  if (!tenants().some(t => t.name === tenantName)) {
+    log(red(`\n❌ Unknown tenant: ${tenantName}\n`));
+    process.exit(1);
+  }
+
+  const { loopar, getOrCreateTenantInstance, requestContext, integrityMode } = await import('loopar');
+  const { integrityReport, fixEmptyConnections } = await import('../../packages/loopar/core/document/integrity-report.js');
+  const { syncForeignKeys, supportsForeignKeys } = await import('../../packages/loopar/core/document/foreign-keys.js');
+
+  await getOrCreateTenantInstance(tenantName);
+  const out = await requestContext.run({ tenant: { name: tenantName } }, async () => {
+    const fixed = flags.has('--fix-empty') ? await fixEmptyConnections() : null;
+    const report = await integrityReport();
+    const keys = flags.has('--sync') ? await syncForeignKeys(loopar.db) : null;
+    return { mode: integrityMode(tenantName), dialect: loopar.db.dialect, foreignKeys: supportsForeignKeys(loopar.db), fixed, report, keys };
+  });
+
+  if (flags.has('--json')) {
+    log(JSON.stringify(out, null, 2));
+    process.exit(out.report.total ? 2 : 0);
+  }
+
+  const { report } = out;
+  log(cyan(`\nIntegrity of "${tenantName}"`) + gray(`  (${out.dialect}, mode ${out.mode}${out.foreignKeys ? '' : ', no database foreign keys on this engine'})`));
+  if (out.fixed !== null) log(green(`  ${out.fixed} empty connection(s) stored as NULL`));
+
+  const section = (title, items, line) => {
+    if (!items.length) return;
+    log(yellow(`\n${title}`));
+    for (const item of items) log('  ' + line(item));
+  };
+  section('Connections to missing records', report.orphans, (o) =>
+    `${o.entity}.${o.field} → ${o.target}: ${o.count}${o.softDeleted ? ` (${o.softDeleted} to deleted records)` : ''}` +
+    gray(`  e.g. ${o.sample.slice(0, 3).map((s) => `${s.name}=${s.value}`).join(', ')}`));
+  section('Child rows without parent', report.children, (c) => `${c.child} (in ${c.parent}): ${c.count}` + gray(`  e.g. ${c.sample.slice(0, 3).join(', ')}`));
+  section("Connections stored as '' (fix with --fix-empty)", report.empty, (e) => `${e.entity}.${e.field}: ${e.count}`);
+  section('Duplicate names (no UNIQUE(name) possible)', report.duplicates, (d) => `${d.entity}: ${d.count}` + gray(`  e.g. ${d.sample.slice(0, 3).join(', ')}`));
+
+  if (out.keys) {
+    const k = out.keys;
+    log(cyan(`\nForeign keys`) + gray(k.skipped ? '  (not supported on this engine)' : `  ${k.created.length} created, ${k.dropped.length} dropped, ${k.kept.length} kept`));
+    for (const i of k.issues) log(red(`  ✗ ${i.name}: ${i.problem}`));
+  }
+
+  log(report.total ? yellow(`\n${report.total} issue(s).\n`) : green('\n✅ No integrity issues.\n'));
+  process.exit(report.total ? 2 : 0);
+}
+
 export function help() {
   log(cyan('\nLoopar CLI\n'));
   log(white('Usage: ') + cyan('yarn <command> [siteName]') + gray('  (or: node bin/cli/index.js <command>)\n'));
@@ -391,6 +454,7 @@ export function help() {
   log(cyan('  mfa-reset <tenant> <user>') + gray('  Turn 2FA off for a user who lost the phone and recovery codes'));
   log(cyan('  admin-reset <tenant> [email]') + gray('  Create the Administrator or give it a new temporary password'));
   log(cyan('  backup [create|list|restore|delete]') + gray('  Tenant backups (yarn backup for details)'));
+  log(cyan('  integrity <tenant> [--fix-empty] [--sync]') + gray('  Data integrity report; fix empty links; sync foreign keys'));
   log(cyan('  help              ') + gray('Show this message'));
   log();
   log(gray('dev/prod is a GLOBAL core switch (config/core.json → nodeEnv), toggled from'));

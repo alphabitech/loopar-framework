@@ -13,7 +13,8 @@ import { documentManage } from './document-manage.js';
 import { isHashedSecret } from '../global/secrets.js';
 import { nextSeriesName } from './naming-series.js';
 import { guardWorkflowState, workflowFor, describeWorkflow } from './workflow.js';
-import { computeFormulas, tableRows, applyVirtualFormulas } from '../global/formula.js';
+import { isSubmittable, describeLifecycle, lockedFieldNames, submitDocument, cancelDocument, amendDocument, assertChildRowsWritable, LIFECYCLE } from './document-lifecycle.js';
+import { computeFormulas, tableRows, applyVirtualFormulas, formulasToApply, virtualDependencies } from '../global/formula.js';
 import { formulaRefValues } from './formula-refs.js';
 import { acceptsFile } from '../global/file-accept.js';
 import { purgePrivateFiles } from '../global/private-files.js';
@@ -324,28 +325,74 @@ export default class CoreDocument {
   }
 
   /**
-   * Model hook for virtual fields without a formula: fill `fields` on each
-   * row, in place. `rows` are plain records (a page of a list, the whole
-   * tree, or the one record a form shows) — compute them in bulk, one query
-   * for all the rows, never one per row. Default: nothing.
+   * The static method that computes the virtual field `name` (no formula):
+   * `get<FieldCamelCase>` on the model class — `hours_logged` →
+   * `static async getHoursLogged(rows)`. Static, so it never meets the
+   * instance accessor `get<Field>` that every field gets (its DynamicField).
    */
-  async virtualValues(rows, { fields = [] } = {}) {}
+  static virtualGetter(name) {
+    return `get${loopar.utils.Capitalize(String(name).replaceAll(/_./g, (m) => m.charAt(1).toUpperCase()))}`;
+  }
 
   /**
-   * Computes the virtual fields of `rows`, in place: the model's
-   * (virtualValues) first, then the virtual formulas, which may read them.
-   * `fields`: the virtual fields wanted (default: all of them).
+   * Fields of the model computed by its static getters, in place:
+   * `static get<Field>(rows, self)`, called ONCE with every row that has a
+   * `name`.
+   *
+   *   lists (self undefined)  rows = plain rows   → `{ [name]: value }`
+   *   a form (self = the document)  rows = [self] → the value itself, or
+   *                                                 the same `{ [name]: value }`
+   *
+   * With `self`, a plain value (number, text, boolean, null) is the record's
+   * value and an object is the `{ name: value }` map. No getter, or a name
+   * the map doesn't answer: null.
+   */
+  async #modelVirtuals(rows, names, self = undefined) {
+    const Model = this.constructor;
+    const selves = rows.filter((row) => row && row.name !== null && row.name !== undefined && row.name !== "");
+    const isMap = (v) => v !== null && typeof v === "object" && !Array.isArray(v) && !(v instanceof Date);
+    for (const field of names) {
+      const getter = Model[CoreDocument.virtualGetter(field)];
+      const answer = typeof getter === "function" && selves.length ? await getter.call(Model, selves, self) : null;
+      const values = isMap(answer) ? answer : (self && selves.length ? { [self.name]: answer } : {});
+      for (const row of rows) {
+        if (row) row[field] = values[row.name] ?? null;
+      }
+    }
+  }
+
+  /**
+   * Computes the virtual fields of `rows`, in place: the model's static
+   * getters first (in the order the fields are declared), then the virtual
+   * formulas, which may read them. `fields`: the virtual fields wanted
+   * (default: all); a model field a wanted formula reads is computed too.
    */
   async applyVirtualValues(rows, fields = null) {
-    const virtuals = this.virtualFieldMap();
-    const names = (fields || Object.keys(virtuals)).filter((name) => name in virtuals);
-    if (!names.length || !Array.isArray(rows) || !rows.length) return rows;
+    return await this.#applyVirtual(rows, fields);
+  }
 
-    const byModel = names.filter((name) => !virtuals[name]);
-    if (byModel.length) await this.virtualValues(rows, { fields: byModel });
+  async #applyVirtual(rows, fields = null, { model = true } = {}) {
+    const virtuals = this.virtualFieldMap();
+    const wanted = new Set((fields || Object.keys(virtuals)).filter((name) => name in virtuals));
+    if (!wanted.size || !Array.isArray(rows) || !rows.length) return rows;
 
     const formulas = Object.fromEntries(Object.entries(virtuals).filter(([, formula]) => formula));
-    if (Object.keys(formulas).length) {
+    // What the wanted formulas read, through other virtual formulas too.
+    const pending = [...wanted].filter((name) => formulas[name]);
+    while (pending.length) {
+      const name = pending.pop();
+      for (const dep of virtualDependencies({ [name]: formulas[name] })) {
+        if (dep in virtuals && !wanted.has(dep)) {
+          wanted.add(dep);
+          if (formulas[dep]) pending.push(dep);
+        }
+      }
+    }
+
+    const byModel = Object.keys(virtuals).filter((name) => wanted.has(name) && !virtuals[name]);
+    if (model && byModel.length) await this.#modelVirtuals(rows, byModel);
+
+    if ([...wanted].some((name) => formulas[name])) {
       // Fields of linked records (`link.field`): one query per connection for all the rows.
       const refsOf = await formulaRefValues(this.__ENTITY__.name, formulas, rows);
       applyVirtualFormulas(formulas, rows, refsOf);
@@ -353,7 +400,10 @@ export default class CoreDocument {
     return rows;
   }
 
-  /** The record's virtual fields, computed once per document instance. */
+  /**
+   * The record's virtual fields, computed once per document instance. The
+   * static getters receive the document itself as its "self".
+   */
   async #fillVirtualFields() {
     if (this.#virtualFilled) return;
     this.#virtualFilled = true;
@@ -365,7 +415,13 @@ export default class CoreDocument {
     for (const field of Object.values(this.#fields)) {
       if (field.element !== FORM_TABLE) row[field.name] = field.value;
     }
-    await this.applyVirtualValues([row], names);
+    // The model's getters see the document; formulas see its values.
+    const model = names.filter((name) => !this.virtualFieldMap()[name]);
+    if (model.length) {
+      await this.#modelVirtuals([this], model, this);
+      for (const name of model) row[name] = this.#fields[name].value;
+    }
+    await this.#applyVirtual([row], names.filter((name) => this.virtualFieldMap()[name]), { model: false });
     for (const name of names) this.#fields[name].value = row[name] ?? null;
   }
 
@@ -466,7 +522,11 @@ export default class CoreDocument {
       }
 
       const removed = [...existing.keys()].filter(name => !sent.has(name));
-      if (removed.length) await this.#childRows(entity, parentId).whereIn("name", removed).delete();
+      if (removed.length) {
+        // Removed rows skip the ORM: a submitted parent's rows stay as they are.
+        await assertChildRowsWritable(this.__ENTITY__.name, this.__DOCUMENT_NAME__, entity);
+        await this.#childRows(entity, parentId).whereIn("name", removed).delete();
+      }
 
       let nextId = null;
       for (const { name, data, original } of writes) {
@@ -488,7 +548,8 @@ export default class CoreDocument {
   async #locate() {
     if (loopar.installing || this.__ENTITY__.is_single) return;
     const geo = geoFields(this.__ENTITY__.doc_structure);
-    if (!geo?.address.length) return;
+    // Computed coordinates (a formula, a linked record's) are not ours to set.
+    if (!geo?.address.length || !geo.editable) return;
 
     const latitude = this.#fields[geo.latitude], longitude = this.#fields[geo.longitude];
     const address = addressText(Object.fromEntries(geo.address.map((name) => [name, this.#fields[name]?.value])), geo.address);
@@ -1063,6 +1124,26 @@ export default class CoreDocument {
       __ENTITY__.doc_structure = JSON.stringify(pin(loopar.utils.JSONparse(__ENTITY__.doc_structure, [])));
     }
 
+    // Submittable records: a submitted one shows only its "Editable after
+    // submit" fields editable, a cancelled one nothing (the ORM enforces it).
+    const lifecycle = !__ENTITY__.is_single && isSubmittable(__ENTITY__.name)
+      ? await describeLifecycle(this, { workflow })
+      : null;
+    let lockedRecord = false;
+    if (lifecycle) {
+      const locked = new Set(lockedFieldNames(__ENTITY__.name, lifecycle.status) || []);
+      if (locked.size) {
+        const writable = Object.keys(__REF__.__FIELD_META__ || {});
+        lockedRecord = writable.every((name) => locked.has(name));
+        const pin = (nodes = []) => nodes.map(el => ({
+          ...el,
+          ...(locked.has(el.data?.name) ? { data: { ...el.data, readonly: 1 } } : {}),
+          ...(el.elements ? { elements: pin(el.elements) } : {}),
+        }));
+        __ENTITY__.doc_structure = JSON.stringify(pin(loopar.utils.JSONparse(__ENTITY__.doc_structure, [])));
+      }
+    }
+
     // Field write policy: fields this actor can't write render read-only
     // (protected ones with the verified "Change" flow). A form (Form Builder)
     // edits an existing record even without a name — it is never "new".
@@ -1095,13 +1176,37 @@ export default class CoreDocument {
         require_login_to_comment: loopar.utils.trueToBinary(__REF__.require_login_to_comment),
         // Same source the server enforces (AuthController): no New / Edit / Save.
         // App source in production (source-lock.js) shows the same way.
-        read_only: (loopar.utils.trueToBinary(__REF__.read_only) || isSourceLocked(__ENTITY__.name)) ? 1 : 0,
+        read_only: (loopar.utils.trueToBinary(__REF__.read_only) || isSourceLocked(__ENTITY__.name) || lockedRecord) ? 1 : 0,
+        ...(lifecycle ? { is_submittable: 1 } : {}),
       },
       ...(withData || 1==1 ? { data: { ...await this.rawValues(), ...this.versionStamp() } } : {}),
-      ...(workflow ? { workflow: await describeWorkflow(this, workflow) } : {}),
+      ...(workflow
+        ? { workflow: await this.#workflowWithLifecycle(workflow, lifecycle) }
+        : (lifecycle ? { workflow: lifecycle } : {})),
       spacing: this.__SPACING__
     }
   }
+
+  /** The workflow bar of a submittable record with a workflow: its lifecycle status and Amend. */
+  async #workflowWithLifecycle(workflow, lifecycle) {
+    const described = await describeWorkflow(this, workflow);
+    if (!lifecycle) return described;
+    return {
+      ...described,
+      lifecycle: lifecycle.status,
+      // A locked record runs transitions, not its own Submit/Cancel.
+      transitions: [...(lifecycle.status === LIFECYCLE.CANCELLED ? [] : described.transitions), ...lifecycle.transitions],
+    };
+  }
+
+  /** Submittable entities (document-lifecycle.js): Draft → Submitted. `options` reach beforeSubmit/afterSubmit. */
+  async submit(options = {}) { return await submitDocument(this, options); }
+
+  /** Submittable entities: Submitted → Cancelled. `options` (e.g. `{ reason }`) reach beforeCancel/afterCancel. */
+  async cancel(options = {}) { return await cancelDocument(this, options); }
+
+  /** Submittable entities: a cancelled record → a new Draft copy. */
+  async amend(options = {}) { return await amendDocument(this, options); }
 
   async values(raw=false) {
     await this.#fillVirtualFields();
@@ -1195,10 +1300,12 @@ export default class CoreDocument {
       const hasRows = Array.isArray(sent) || (typeof sent === "string" && sent.trim().startsWith("["));
       let rows = hasRows ? tableRows(sent) : null;
 
-      const rowFormulas = loopar.getRef(field.options)?.__FORMULAS__ || {};
+      const childRef = loopar.getRef(field.options) || {};
+      const rowFormulas = childRef.__FORMULAS__ || {};
       if (rows && Object.keys(rowFormulas).length) {
         const refsOf = await formulaRefValues(field.options, rowFormulas, rows);
-        rows = rows.map(row => ({ ...row, ...computeFormulas(rowFormulas, { ...row, ...refsOf(row) }) }));
+        const ifEmpty = childRef.__FETCH_IF_EMPTY__ || [];
+        rows = rows.map(row => ({ ...row, ...computeFormulas(formulasToApply(rowFormulas, ifEmpty, row), { ...row, ...refsOf(row) }) }));
         field.value = rows;
       }
 
@@ -1212,9 +1319,12 @@ export default class CoreDocument {
       if (field.element !== FORM_TABLE) scope[field.name] = field.value;
     }
 
+    // A `fetch_if_empty` field someone filled keeps its value.
+    const applying = formulasToApply(formulas, ref.__FETCH_IF_EMPTY__ || [], scope);
+
     // Fields of linked records (`link.field`), read now: a stored formula keeps them as they were.
-    const refsOf = await formulaRefValues(this.__ENTITY__.name, formulas, [scope]);
-    for (const [name, value] of Object.entries(computeFormulas(formulas, { ...scope, ...refsOf(scope) }))) {
+    const refsOf = await formulaRefValues(this.__ENTITY__.name, applying, [scope]);
+    for (const [name, value] of Object.entries(computeFormulas(applying, { ...scope, ...refsOf(scope) }))) {
       if (this.#fields[name]) this.#fields[name].value = value;
     }
   }

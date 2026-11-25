@@ -103,6 +103,8 @@ function normalize(name, c = {}) {
     restoredAt: c.restoredAt || null,
     // Caps of the workspace ({ users, domain_suffix }): see core/auth/tenant-limits.js.
     limits: normalizeLimits(c.limits),
+    // Data integrity: "strict" (default) or "warn" — see core/global/integrity-mode.js.
+    integrity: normalizeIntegrity(c.integrity),
   };
 }
 
@@ -234,6 +236,11 @@ export function controlPlaneTenants() {
 const truthy = (v) => v === true || v === 1 || v === '1' || v === 'true';
 
 /** Translate an incoming patch (legacy UPPERCASE or lowercase) to config keys. */
+/** "warn" or "strict" (anything else). */
+function normalizeIntegrity(v) {
+  return String(v || '').toLowerCase() === 'warn' ? 'warn' : 'strict';
+}
+
 function translatePatch(data) {
   const out = {};
   const domain = data.domain ?? data.DOMAIN;
@@ -257,6 +264,7 @@ function translatePatch(data) {
   if (th !== undefined && th !== null && th !== '') out.templateHost = truthy(th);
   const ra = data.restoredAt ?? data.RESTORED_AT;
   if (ra !== undefined) out.restoredAt = ra;
+  if (data.integrity !== undefined) out.integrity = normalizeIntegrity(data.integrity);
 
   const cloud = {};
   const ce = data.customerEmail ?? data.CUSTOMER_EMAIL;
@@ -301,6 +309,7 @@ export async function saveTenant(data = {}) {
     sites: patch.sites ?? current.sites ?? {},
     redirects: patch.redirects ?? current.redirects ?? {},
     limits: patch.limits ?? current.limits ?? {},
+    integrity: patch.integrity ?? current.integrity ?? 'strict',
     installToken: patch.installToken ?? current.installToken ?? null,
     // Re-init marker: a core holding the old instance drops it when this
     // changes (backup restore, reset). Kept across saves so a plain save
@@ -316,6 +325,7 @@ export async function saveTenant(data = {}) {
   if (!Object.keys(next.sites).length) delete next.sites;
   if (!Object.keys(next.redirects).length) delete next.redirects;
   if (!Object.keys(next.limits).length) delete next.limits;
+  if (next.integrity !== 'warn') delete next.integrity;   // strict is the default
   if (!next.installToken) delete next.installToken;   // empty → scrubbed
   if (!next.restoredAt) delete next.restoredAt;
   // Drop empty cloud fields, then the object if nothing's left.

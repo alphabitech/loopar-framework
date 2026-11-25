@@ -4,7 +4,7 @@ import {
   isVirtualField, isComputedField, virtualFields, virtualFormulaIssue,
   virtualDependencies, applyVirtualFormulas, formulaFields,
 } from "../../packages/loopar/core/global/formula.js";
-import { compileFormula, computeFormulas, formulaRefs, refKey } from "../../packages/loopar/core/global/formula.js";
+import { compileFormula, computeFormulas, formulaRefs, refKey, isFetchIfEmpty, fetchIfEmptyFields, formulasToApply } from "../../packages/loopar/core/global/formula.js";
 import { treeFields } from "../../packages/loopar/core/global/tree.js";
 import { isImportableField } from "../../packages/loopar/core/global/list-import.js";
 
@@ -98,4 +98,26 @@ test("virtual formulas may read linked records; references never land on the row
   const linked = { erp: "Customers and billing", crm: null };
   applyVirtualFormulas({ app_description: "app_name.description" }, rows, (row) => ({ [refKey("app_name", "description")]: linked[row.app_name] }));
   assert.deepEqual(rows, [{ app_name: "erp", app_description: "Customers and billing" }, { app_name: "crm", app_description: null }]);
+});
+
+/* ------------------------------------------------------- fetch_if_empty */
+
+test("fetch_if_empty: a stored formula that leaves the field editable", () => {
+  assert.equal(isFetchIfEmpty({ formula: "customer.email", fetch_if_empty: 1 }), true);
+  assert.equal(isFetchIfEmpty({ fetch_if_empty: 1 }), false, "needs a formula");
+  assert.equal(isFetchIfEmpty({ formula: "a", fetch_if_empty: 1, virtual: 1 }), false, "never virtual");
+  assert.equal(isComputedField({ formula: "customer.email", fetch_if_empty: 1 }), false, "editable");
+  assert.equal(isImportableField(input("email", { formula: "customer.email", fetch_if_empty: 1 })), true);
+  assert.deepEqual(fetchIfEmptyFields([{ element: "row", elements: [
+    input("email", { formula: "customer.email", fetch_if_empty: 1 }),
+    input("total", { formula: "qty * rate" }),
+  ] }]), ["email"]);
+});
+
+test("formulasToApply: a filled fetch_if_empty field is a plain value for every formula", () => {
+  const formulas = { email: "customer.email", greeting: "coalesce(email, 'nobody')" };
+  assert.deepEqual(Object.keys(formulasToApply(formulas, ["email"], { email: "" })), ["email", "greeting"]);
+  const kept = formulasToApply(formulas, ["email"], { email: "me@mine.test" });
+  assert.deepEqual(Object.keys(kept), ["greeting"]);
+  assert.deepEqual(computeFormulas(kept, { email: "me@mine.test", "customer.email": "them@co.test" }), { greeting: "me@mine.test" });
 });

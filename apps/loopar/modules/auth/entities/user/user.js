@@ -2,7 +2,7 @@
 
 import { assertUserLimit } from 'loopar/core/auth/tenant-limits.js';
 import { systemPolicy, passwordProblem } from 'loopar/core/global/system-policy.js';
-import { BaseDocument, loopar, Op, setLanguageCookie } from "loopar";
+import { BaseDocument, loopar, Op, setLanguageCookie, deleteRecords } from "loopar";
 import { requestEmailChange, adminSetEmail } from "../../controllers/auth/email-change.js";
 
 export default class User extends BaseDocument {
@@ -116,12 +116,29 @@ export default class User extends BaseDocument {
     return null;
   }
 
-  async delete() {
+  async delete(options = {}) {
     if (this.name === 'Administrator') {
       loopar.throw('The "Administrator" user cannot be deleted.');
       return;
     }
 
-    await super.delete();
+    // What belongs to the user goes with it, each through its own model:
+    // roles, grants and personal desk settings. Notifications it sent keep
+    // existing for their recipients, without the sender.
+    const same = { sofDelete: options.sofDelete };
+    await loopar.db.withTransaction(async () => {
+      await deleteRecords('User Role', { user: this.name }, same);
+      await deleteRecords('Permission', { relation: 'User', relation_name: this.name }, same);
+      for (const entity of ['Desk Pin', 'List View Setting', 'Saved View']) {
+        await deleteRecords(entity, { owner_user: this.name }, same);
+      }
+      await deleteRecords('Notification', { user: this.name }, same);
+      if (loopar.getRef('Notification', false)) {
+        for (const row of await loopar.db.getAll('Notification', ['name'], { from_user: this.name })) {
+          await loopar.db.updateRow('Notification', row.name, { from_user: null });
+        }
+      }
+      await super.delete(options);
+    });
   }
 }

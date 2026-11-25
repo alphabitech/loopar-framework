@@ -22,6 +22,7 @@ import { RealtimeManager } from './realtime/RealtimeManager.js';
 import { HookManager } from "./HookManager.js";
 import { setupDocumentHistory } from "./document/document-history.js";
 import { setupReferentialIntegrity } from "./document/referential-integrity.js";
+import { setupDocumentLifecycle } from "./document/document-lifecycle.js";
 import { setupComments } from "./document/comment.js";
 import { setupNotifications } from "./global/notifications.js";
 import { StorageManager } from "./global/storage/index.js";
@@ -54,6 +55,8 @@ export class Loopar extends Document {
     this.storage = new StorageManager();
 
     setupDocumentHistory(this, KnexORM);
+    // Lifecycle first: a locked record is refused before its references are read.
+    setupDocumentLifecycle(KnexORM);
     setupReferentialIntegrity(KnexORM);
     setupComments(this);
     setupNotifications(this);

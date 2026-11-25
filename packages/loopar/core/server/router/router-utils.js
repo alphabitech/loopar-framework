@@ -101,12 +101,19 @@ export function prepareFileData(body, files) {
 }
 
 
+/**
+ * Only plain decimal numbers become numbers: a value with leading zeros
+ * ("0002", a record name or code), an exponent ("1e3"), hex ("0x10") or
+ * spaces stays the string it was, or `name=0002` would look up record 2.
+ */
+const PLAIN_NUMBER = /^-?(0|[1-9]\d*)(\.\d+)?$/;
+
 function parseQueryValue(value) {
   if (value === 'true') return true;
   if (value === 'false') return false;
   if (value === 'null') return null;
   if (value === 'undefined') return undefined;
-  if (value !== '' && !isNaN(Number(value))) return Number(value);
+  if (typeof value === 'string' && PLAIN_NUMBER.test(value)) return Number(value);
   return value;
 }
 

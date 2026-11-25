@@ -2,10 +2,11 @@ import loopar from "loopar";
 import BaseInput from "@base-input"
 import {MetaComponent} from "@meta-component";
 import { isEqual } from "es-toolkit/predicate";
+import { cloneDeep } from "es-toolkit/object";
 
 import { useFieldArray, useWatch } from 'react-hook-form';
 import { useRowFormulas } from "@@tools/use-formulas";
-import { useFormContext, BaseFormContext } from "@form-context";
+import { useFormContext, useFormValues, BaseFormContext } from "@form-context";
 import {useRef, useMemo, useCallback, useEffect, memo, useState, useContext } from "react";
 
 import { FormWrapper } from "@form-provider";
@@ -41,6 +42,7 @@ import {
 } from '@dnd-kit/sortable';
 import { __ } from "@global/i18n";
 import { entityPicker } from "./base/entity-pickers.js";
+import { useDocument } from "@loopar/document";
 
 /** Form values seen from one row: its own cells, as a form of their own. */
 function RowValues({ index, children }) {
@@ -129,6 +131,24 @@ function requiredOutsideGrid(structure) {
   return out;
 }
 
+/**
+ * A new row holding every field of the child (its default, else empty). A
+ * key missing from the form values makes react-hook-form fall back to the
+ * defaultValues row at the same index — a row deleted before, which would
+ * show up again in the new one.
+ */
+function blankRow(structure) {
+  const row = {};
+  const walk = (nodes = []) => nodes.forEach((el) => {
+    if (el.data?.name && fieldIsWritable(el)) {
+      row[el.data.name] = el.element === FORM_TABLE ? [] : (el.data.default_value ?? "");
+    }
+    walk(el.elements);
+  });
+  walk(structure);
+  return row;
+}
+
 /** Opens the row form; turns red while a required field outside the grid is empty. */
 function EditRowButton({ index, required, onEdit }) {
   const { control } = useFormContext();
@@ -153,31 +173,71 @@ function EditRowButton({ index, required, onEdit }) {
 
 /**
  * The child entity's full form for one row (also the fields the grid hides).
- * Works on a copy of the row: Apply validates it with the child's schema and
- * hands the values back; Cancel leaves the row untouched.
+ * It edits the row live, like the grid: every change reaches the row at once
+ * (only the fields that changed), so the document reacts as it does to the
+ * grid — formulas, live pricing filling description, rate, tax… — and what
+ * the document fills in the row comes back into this form field by field,
+ * keeping what is being typed. Apply validates with the child's schema and
+ * closes; Cancel (or closing) puts the row back as it was when opened.
  */
-function RowEditDialog({ structure, index, count, getRow, onApply, onNavigate, onClose }) {
+function RowEditDialog({ structure, index, count, form, onApply, onNavigate, onClose, formulaScope }) {
   const formRef = useRef(null);
+  // The row as it was when this row's form opened (what Cancel restores), and
+  // the row as this form last saw or wrote it (tells its own echo from outside
+  // changes). Taken once per row: the table's form object changes on every edit.
+  const opened = useRef({ index: null, row: null });
+  const known = useRef(null);
+  if (opened.current.index !== index) {
+    opened.current = { index, row: cloneDeep(form.getValues(`rows.${index}`) || {}) };
+    known.current = opened.current.row;
+  }
+  const snapshot = opened.current.row;
 
-  const commit = async () => {
+  const row = useWatch({ control: form.control, name: `rows.${index}` });
+  // The same row object comes back changed in place: follow its content.
+  const rowContent = JSON.stringify(row ?? null);
+
+  // This form → the row.
+  const writeThrough = useCallback((values) => {
+    if (!values) return;
+    known.current = { ...known.current, ...cloneDeep(values) };
+    onApply(index, values);
+  }, [index, onApply]);
+
+  // The row → this form: only what changed outside since this form last saw it.
+  useEffect(() => {
+    const inner = formRef.current?.form;
+    if (!inner || !row) return;
+    const current = inner.getValues();
+    for (const [key, value] of Object.entries(row)) {
+      if (key === "id" || isEqual(value, known.current?.[key]) || isEqual(value, current[key])) continue;
+      inner.setValue(key, value, { shouldDirty: true });
+    }
+    known.current = { ...known.current, ...cloneDeep(row) };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowContent]);
+
+  const validate = async () => {
     const api = formRef.current;
     if (!api || !(await api.submit())) return false;   // errors are shown in the form
     // Raw values: the zod output drops keys outside the schema (nested tables, hidden fields).
-    onApply(index, api.getValues());
+    writeThrough(api.getValues());
     return true;
   };
 
-  const apply = async () => { if (await commit()) onClose(); };
-  const go = async (delta) => { if (await commit()) onNavigate(index + delta); };
+  const apply = async () => { if (await validate()) onClose(); };
+  const go = async (delta) => { if (await validate()) onNavigate(index + delta); };
+  const cancel = () => { onApply(index, snapshot); onClose(); };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && cancel()}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{__("Editing row #{0}", [index + 1])}</DialogTitle>
           <DialogDescription>{__("Changes apply to the row; save the document to store them.")}</DialogDescription>
         </DialogHeader>
-        <FormWrapper key={index} __DATA__={getRow(index)} STRUCTURE={structure} formRef={formRef}>
+        {/* Same formulas as the grid: references resolve through the parent entity and this table. */}
+        <FormWrapper key={index} __DATA__={snapshot} STRUCTURE={structure} formRef={formRef} formulaScope={formulaScope} onChange={writeThrough}>
           <div className="flex flex-col gap-2">
             {structure.map((el, idx) =>
               !el.element || !el.data || isTrue(el.data.hidden) ? null : (
@@ -196,7 +256,7 @@ function RowEditDialog({ structure, index, count, getRow, onApply, onNavigate, o
             </Button>
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={onClose}>{__("Cancel")}</Button>
+            <Button type="button" variant="secondary" onClick={cancel}>{__("Cancel")}</Button>
             <Button type="button" variant="primary" onClick={apply}>{__("Apply")}</Button>
           </div>
         </DialogFooter>
@@ -206,17 +266,17 @@ function RowEditDialog({ structure, index, count, getRow, onApply, onNavigate, o
 }
 
 const FormTable = (props) => {
-  const { selectedRows, bulkRemove, baseColumns, selectorCol, rows } = useTable();
-  const { register, move, remove, append, form, structure } = props;
+  const { selectedRows, setSelectedRows, baseColumns, selectorCol, rows } = useTable();
+  const { register, move, remove, append, form, structure, formulaScope } = props;
   const [editing, setEditing] = useState(null);
 
   const required = useMemo(() => requiredOutsideGrid(structure), [structure]);
 
-  const getRow = useCallback((index) => form.getValues(`rows.${index}`) || {}, [form]);
-
+  // Only the fields that differ: the row form writes through on every change.
   const applyRow = useCallback((index, values) => {
+    const current = form.getValues(`rows.${index}`) || {};
     for (const [key, value] of Object.entries(values || {})) {
-      if (key === "id") continue;   // dnd-kit identity of the row
+      if (key === "id" || isEqual(value, current[key])) continue;   // id: dnd-kit identity of the row
       form.setValue(`rows.${index}.${key}`, value, { shouldDirty: true });
     }
   }, [form]);
@@ -238,12 +298,21 @@ const FormTable = (props) => {
   }, [rows, move]);
 
   const handleAppend = useCallback(() => {
-    append({ id: Date.now(), name: Date.now() });
-  }, [append, rows]);
+    const id = Date.now();
+    append({ ...blankRow(structure), id, name: id });
+  }, [append, structure]);
 
   const handleRemove = useCallback((index) => {
     remove(index);
-  }, [remove, rows]);
+  }, [remove]);
+
+  // The rows live in the form: removing them from the table's own state alone
+  // would bring them back with the next render of the form.
+  const removeSelected = useCallback(() => {
+    const indexes = rows.reduce((acc, row, index) => (selectedRows.includes(row.name) ? [...acc, index] : acc), []);
+    if (indexes.length) remove(indexes);
+    setSelectedRows([]);
+  }, [rows, selectedRows, remove, setSelectedRows]);
 
   const mappedColumns = useMemo(() => {
     const baseCols = baseColumns()
@@ -252,7 +321,8 @@ const FormTable = (props) => {
         const newCol = { ...col };
         
         if(newCol.data.name === "name") {
-          newCol.data.label = null;
+          // No title, but a header cell all the same: the columns stay aligned.
+          newCol.data = { ...newCol.data, label: () => null };
           newCol.cellProps = {
             className: "min-w-40 p-2",
           };
@@ -264,7 +334,8 @@ const FormTable = (props) => {
             <MemoizedTableInput 
               component={newCol.element}
               cellName={cellName}
-              data={{ ...newCol.data, name: cellName, label: newCol.data.label }}
+              // No help text in the grid (it makes every row tall): the row form shows it.
+              data={{ ...newCol.data, name: cellName, label: typeof newCol.data.label === "function" ? null : newCol.data.label, description: "" }}
               register={register}
             />
           );
@@ -276,12 +347,10 @@ const FormTable = (props) => {
       });
 
     return [
-      selectorCol({
-        colSpan: 3,
-        deleteOnServer: false
-      }),
+      selectorCol({ header: "checkbox", deleteOnServer: false }),
       {
-        data: { name: "index" },
+        data: { name: "index", label: "#" },
+        headProps: { className: "min-w-15 max-w-15 p-2 text-center" },
         draggable: true,
         cellProps: {
           className: "min-w-15 max-w-15 p-2 text-center",
@@ -353,7 +422,7 @@ const FormTable = (props) => {
             variant="destructive"
             onClick={e => {
               e.preventDefault();
-              bulkRemove(false);
+              removeSelected();
             }}
           >
             <Trash2Icon className="mr-1" size={16} />
@@ -374,10 +443,11 @@ const FormTable = (props) => {
           structure={structure}
           index={editing}
           count={rows.length}
-          getRow={getRow}
+          form={form}
           onApply={applyRow}
           onNavigate={setEditing}
           onClose={() => setEditing(null)}
+          formulaScope={formulaScope}
         />
       )}
     </div>
@@ -398,7 +468,9 @@ const FormTableControl = ({Document, docRef, table}) => {
   );
   const watchedRows = useWatch({ control, name: 'rows' });
   // References in the rows' formulas are resolved through the parent entity and this table.
-  useRowFormulas(form, rowStructure, watchedRows, "rows", { entity: docRef?.Document?.Entity?.name ?? null, table });
+  const parentEntity = docRef?.Document?.Entity?.name ?? null;
+  useRowFormulas(form, rowStructure, watchedRows, "rows", { entity: parentEntity, table });
+  const formulaScope = useMemo(() => (parentEntity && table ? { entity: parentEntity, table } : null), [parentEntity, table]);
 
   return (
     <TableProvider
@@ -413,36 +485,88 @@ const FormTableControl = ({Document, docRef, table}) => {
         append={append}
         form={form}
         structure={rowStructure}
+        formulaScope={formulaScope}
       />
     </TableProvider>
   );
 };
 
+/** A row's identity across the parent and the inner form. */
+const rowKey = (row) => String(row?.name ?? row?.id ?? "");
+
+/**
+ * Holds the rows in a form of their own and hands them to the parent field
+ * (debounced). Changes that come from outside (the document's live pricing
+ * filling a description, a rate…) reach the inner form field by field, so
+ * what the user is typing in other cells is kept. Only a change of the rows
+ * themselves (other rows, the record reloaded, a draft restored) remounts
+ * the inner form with the parent's rows.
+ */
 const FormTableMiddleware = memo(function FormTableMiddleware(props) {
   const { rows, onChange, meta, docRef, table } = props;
-  const [changes, setChanges] = useState(false);
-  const debounceTimer = useRef(null);
-  const prevRows = useRef(rows);
+  const [version, setVersion] = useState(0);
+  const formRef = useRef(null);
+  // The rows the parent holds (or is about to). A copy: react-hook-form
+  // changes its values in place, which would make every change look known.
+  const sent = useRef(cloneDeep(rows));
+  const pending = useRef(null);     // { timer, rows } while a change waits for the debounce
 
-  const saveData = useCallback((newRows) => {
-    if (!newRows) return;
-    newRows.rows = newRows.rows.filter(row => row.id);
+  const cancelPending = () => {
+    if (!pending.current) return;
+    clearTimeout(pending.current.timer);
+    pending.current = null;
+  };
 
-    if (!isEqual(newRows.rows, prevRows.current)) {
-      prevRows.current = newRows.rows;
-      clearTimeout(debounceTimer.current);
-      debounceTimer.current = setTimeout(() => onChange(newRows.rows), 300);
+  const flush = useCallback(() => {
+    if (!pending.current) return;
+    const next = pending.current.rows;
+    cancelPending();
+    onChange(next);
+  }, [onChange]);
+
+  const saveData = useCallback((values) => {
+    const next = (values?.rows || []).filter((row) => row?.id);
+    if (isEqual(next, sent.current)) {
+      // Back to what the parent holds (an outside change applied here): an
+      // older change still waiting would overwrite it.
+      cancelPending();
+      return;
     }
-  }, [onChange, rows, prevRows]);
+    sent.current = cloneDeep(next);
+    if (pending.current) clearTimeout(pending.current.timer);
+    pending.current = { rows: next, timer: setTimeout(flush, 300) };
+  }, [flush]);
 
-  useEffect(() => () => clearTimeout(debounceTimer.current), []);
+  // A change still in the debounce reaches the parent even if the table goes away.
+  useEffect(() => () => flush(), [flush]);
 
   useEffect(() => {
-    setChanges(changes+1)
-  }, [prevRows.current.length]);
+    if (isEqual(rows, sent.current)) return;
+    const before = sent.current || [];
+    const inner = formRef.current?.form;
+    const current = inner?.getValues("rows") || [];
+    const sameRows = !!inner && rows.length === current.length
+      && rows.every((row, i) => rowKey(row) === rowKey(current[i]));
+
+    if (sameRows) {
+      // Only what changed outside goes in: the cells being edited keep their value.
+      rows.forEach((row, i) => {
+        for (const [key, value] of Object.entries(row || {})) {
+          if (key === "id" || isEqual(value, before[i]?.[key]) || isEqual(value, current[i]?.[key])) continue;
+          inner.setValue(`rows.${i}.${key}`, value, { shouldDirty: true });
+        }
+      });
+      sent.current = cloneDeep(rows);
+      return;
+    }
+
+    cancelPending();
+    sent.current = cloneDeep(rows);
+    setVersion((v) => v + 1);
+  }, [rows]);
 
   return (
-    <FormWrapper __DATA__={{ rows }} onChange={saveData} key={`form-wrapper-${changes}`}>
+    <FormWrapper __DATA__={{ rows }} onChange={saveData} formRef={formRef} key={`form-wrapper-${version}`}>
       <FormTableControl Document={meta} docRef={docRef} table={table}/>
     </FormWrapper>
   );
@@ -451,7 +575,9 @@ const FormTableMiddleware = memo(function FormTableMiddleware(props) {
 export default function FormTableInput(props) {
   const { renderInput } = BaseInput(props);
   const meta = useMemo(() => props.__META__, [props.__META__]);
-  const docRef = props.docRef;
+  // The document this table belongs to: MetaRender does not hand docRef to
+  // components, and the rows resolve their formula references through it.
+  const { docRef } = useDocument() || {};
   // The render callback runs inside the field's Controller, and a read-only
   // record renders the table as a value without calling it: it must not call
   // hooks (the Controller would render fewer hooks). The handler lives here.
@@ -460,9 +586,19 @@ export default function FormTableInput(props) {
     fieldRef.current?.onChange({ target: { value: newRows } });
   }, []);
 
+  // The parent form's live value: the field's Controller only follows changes
+  // of the whole array, not one cell set from outside (`lines.2.description`
+  // filled by live pricing), which the table must see too.
+  const live = useFormValues()?.[props.data?.name];
+  // react-hook-form changes its values in place: the same array comes back
+  // with other cells. A copy per content, so the table sees every change.
+  const liveKey = Array.isArray(live) ? JSON.stringify(live) : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const liveRows = useMemo(() => (liveKey === null ? null : cloneDeep(live)), [liveKey]);
+
   return (
     renderInput(field => {
-      const rows = field.value || [];
+      const rows = (Array.isArray(liveRows) ? liveRows : field.value) || [];
       fieldRef.current = field;
 
       return (

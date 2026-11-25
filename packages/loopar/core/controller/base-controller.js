@@ -8,6 +8,7 @@ import { printPayload } from '../document/print-format.js';
 import { renameEntity } from '../document/entity-rename.js';
 import { readRuntimeMode } from '../server/runtime-mode.js';
 import { applyTransition, workflowFor } from '../document/workflow.js';
+import { applyLifecycle } from '../document/document-lifecycle.js';
 import { policyMapOf, currentActor } from '../auth/field-access.js';
 import { hasFreshStepUp, clearStepUp, STEP_UP_REQUIRED_CODE } from '../auth/step-up.js';
 import { canWriteFromInput, WRITE_POLICY } from '../global/field-policy.js';
@@ -351,6 +352,18 @@ export default class BaseController extends CoreController {
     return await applyTransition(document, data.action, values);
   }
 
+  /**
+   * Submit / Cancel / Amend a record of a submittable entity
+   * (core/document/document-lifecycle.js): `{Entity}/lifecycle?name=…` with
+   * `{ action }`. Authorized by the `lifecycle` grant.
+   */
+  async actionLifecycle() {
+    const document = await loopar.getDocument(this.document, this.query.name);
+    // Data endpoint: no `message` key, so the client keeps the payload.
+    const { action, ...options } = { ...(this.data || {}), ...(this.body || {}) };
+    return await applyLifecycle(document, action, options);
+  }
+
   async actionUpdate(document) {
     // Field write policy, layer A: getDocument filters the request input itself
     // (protected/system/readonly/create_only fields keep their stored value).
@@ -370,7 +383,8 @@ export default class BaseController extends CoreController {
         // with this URL. Meta that depends on the record travels with the
         // data: the workflow (state + available transitions) and, for
         // records whose fields lock per record (contact forms), the structure.
-        const recordMeta = (await workflowFor(this.document)) || typeof document.lockedFields === 'function'
+        const submittable = !!loopar.getRef(this.document, false)?.is_submittable;
+        const recordMeta = (await workflowFor(this.document)) || typeof document.lockedFields === 'function' || submittable
           ? await document.__meta__()
           : null;
         return {
@@ -383,7 +397,7 @@ export default class BaseController extends CoreController {
           data: { ...await document.values(), ...document.versionStamp() },
           linkTitles: await document.linkTitles(),
           ...(recordMeta?.workflow ? { workflow: recordMeta.workflow } : {}),
-          ...(recordMeta && typeof document.lockedFields === 'function' ? { Entity: recordMeta.Entity } : {}),
+          ...(recordMeta && (typeof document.lockedFields === 'function' || submittable) ? { Entity: recordMeta.Entity } : {}),
         }
       }
       // linkTitles: selects show the linked record's title (not its code) before opening.

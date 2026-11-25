@@ -43,6 +43,7 @@ const registry = {
   logs:    () => c.logs(siteName, extraArg),
   'mfa-reset': () => c.mfaReset(siteName, extraArg), // <tenant> <user>
   'admin-reset': () => c.adminReset(siteName, extraArg), // <tenant> [email]
+  integrity: () => c.integrity(siteName, process.argv.slice(4)), // <tenant> [--fix-empty] [--sync] [--json]
   backup:  async () => (await import('./backup.js')).backupCmd(process.argv.slice(3)),
   help:    () => c.help(),
 };

@@ -105,13 +105,27 @@ Input.metaFields = () => {
             element: SWITCH,
             data: {
               label: "Virtual",
-              description: "Never stored: computed every time the record is read, from the formula (own fields only) or by the model (virtualValues). Shown read-only; cannot be filtered or sorted.",
+              description: "Never stored: computed every time the record is read, from the formula (own fields only) or by the model (static get<Field>(rows) in its class). Shown read-only; cannot be filtered or sorted.",
             },
           },
           formula: {
             element: TEXTAREA,
             data: {
-              description: "Computed field (read-only), recalculated as you type and on save. E.g. abs(qty) * unit_cost · round(subtotal * 0.15, 2) · if(type = 'Return', -qty, qty) · sum(lines.total) / count(lines) for a child table.",
+              description: "Computed field (read-only), recalculated as you type and on save. E.g. abs(qty) * unit_cost · round(subtotal * 0.15, 2) · if(type = 'Return', -qty, qty) · sum(lines.total) / count(lines) for a child table · customer.email (a field of the record a connection points to).",
+            },
+          },
+          no_rollup: {
+            element: SWITCH,
+            data: {
+              label: "No roll-up in tree",
+              description: "The value already includes the records below it (the model totals it): the Tree view shows it as it is instead of adding up the branch.",
+            },
+          },
+          fetch_if_empty: {
+            element: SWITCH,
+            data: {
+              label: "Fetch if empty",
+              description: "The formula only fills the field while it is empty: the field stays editable and keeps what the user writes. Not for virtual fields.",
             },
           },
         }

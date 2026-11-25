@@ -6,7 +6,7 @@ import * as simpleIcons from 'simple-icons';
 
 import { fileManage } from "../file-manage.js";
 import { elementsDict, elementsDefinition } from "../global/element-definition.js";
-import { formulaFields, virtualFields, isVirtualField } from "../global/formula.js";
+import { formulaFields, virtualFields, isVirtualField, fetchIfEmptyFields } from "../global/formula.js";
 import { calendarFields } from "../global/calendar.js";
 import { treeFields } from "../global/tree.js";
 import { writePolicyMap } from "../global/field-policy.js";
@@ -22,6 +22,7 @@ import inflection from "inflection";
 import { shouldRunJobs } from "../config/core-config.js";
 import { tenant } from "../../bin/tenant/tenant-builder.js";
 import { pickWebApp } from '../global/web-app-pick.js';
+import { syncForeignKeys } from '../document/foreign-keys.js';
 
 export class Builder {
   async buildRefs() {
@@ -83,6 +84,9 @@ export class Builder {
           ...([CONNECTION, FORM_TABLE].includes(field.element) && firstLine ? { options: firstLine } : {}),
           ...(this.utils.trueValue(data.multiple) ? { multiple: 1 } : {}),
           ...(data.parent ? { parent: data.parent } : {}),
+          ...(this.utils.trueValue(data.required) ? { required: 1 } : {}),
+          // Submittable entities: may still change once the record is submitted.
+          ...(this.utils.trueValue(data.allow_on_submit) ? { allow_on_submit: 1 } : {}),
         };
       }
       return out;
@@ -145,6 +149,8 @@ export class Builder {
         // actions): the desk never creates or edits them by hand.
         read_only: this.utils.trueToBinary(doc.read_only),
         is_audited: auditable ? 1 : 0,
+        // Draft → Submitted → Cancelled lifecycle (core/document/document-lifecycle.js).
+        is_submittable: auditable && this.utils.trueValue(doc.is_submittable) ? 1 : 0,
         enable_history: this.utils.trueToBinary(doc.enable_history),
         enable_comments: this.utils.trueToBinary(doc.enable_comments),
         require_login_to_comment: this.utils.trueToBinary(doc.require_login_to_comment),
@@ -157,8 +163,10 @@ export class Builder {
         // Stored computed fields: { fieldName: formula }, recomputed on every save.
         __FORMULAS__: Object.fromEntries(Object.entries(formulaFields(fields)).filter(([name]) => !(name in virtuals))),
         // Virtual fields: { fieldName: formula | null }, computed on every
-        // read and never stored (global/formula.js, Document.virtualValues).
+        // read and never stored (global/formula.js; model ones: static get<Field>(rows)).
         __VIRTUAL__: virtuals,
+        // Stored formulas that only fill their field while it is empty (editable).
+        __FETCH_IF_EMPTY__: fetchIfEmptyFields(fields),
         // Date fields the calendar draws this entity by (global/calendar.js), or null.
         __CALENDAR__: calendarFields(fields),
         // Parent field the tree nests this entity by (global/tree.js), or null.
@@ -478,6 +486,8 @@ export class Builder {
       await migrateChildPositions(this);
       // Stored page trees must not reference removed/renamed elements.
       await migrateElementsInDatabase(this, { fs, path });
+      // Database foreign keys follow the refs (PostgreSQL/MySQL). Never throws.
+      await syncForeignKeys(this.db);
 
       const loadWebApp = async (appName) => {
         const webApp = appName ? await this.db.getParseDoc('App', appName) : null;

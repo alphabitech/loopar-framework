@@ -1,7 +1,7 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.6.6"
+    "version": "7.7.0"
   },
   "documents": {
     "Entity:Module": {
@@ -20,7 +20,7 @@
     "App:loopar": {
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.6.6",
+      "version": "7.7.0",
       "autor": "Administrator",
       "icon": "SiInfinityfree",
       "is_template": 0,
@@ -333,9 +333,6 @@
     "Entity:Permission": {
       "__root__": "/apps/loopar/modules/auth/entities/permission"
     },
-    "Entity:Role Permission": {
-      "__root__": "/apps/loopar/modules/auth/entities/role-permission"
-    },
     "Entity:User Role": {
       "__root__": "/apps/loopar/modules/auth/entities/user-role"
     },
@@ -544,7 +541,6 @@
     "Entity:Contact Message": "link",
     "Entity:Role": "link",
     "Entity:Permission": "link",
-    "Entity:Role Permission": "link",
     "Entity:User Role": "link",
     "Entity:Review": "link",
     "Entity:Side Menu": "link",

@@ -17,6 +17,7 @@ import { useWorkspace } from "@workspace/workspace-provider";
 import { LIST_SETTING_ENTITY, normalizeListSettings, formatSort, resolveListColumns } from "@global/list-settings";
 import { REPORT_PARAMS } from "@global/list-report";
 import { downloadText } from "./list-url";
+import { __ } from "@global/i18n";
 
 const TableContext = createContext();
 
@@ -293,18 +294,33 @@ export const TableProvider = ({
    * Row checkbox column. Its header holds the select-all menu and may span the
    * next columns (`colSpan`, for columns without a title). `header: false`
    * leaves the header empty: the view shows the menu elsewhere (its toolbar).
+   * `header: "checkbox"` holds only the select-all checkbox, over its own
+   * column: nothing in it grows with the selection (child tables, whose
+   * actions live under the table).
    */
   const selectorCol = ({ colSpan, deleteOnServer, header = true }={}) => {
+    const checkboxOnly = header === "checkbox";
     return {
       data: {
         name: "selector",
-        label: () => header
-          ? <DropdownListGridActions deleteOnServer={deleteOnServer}/>
-          : null,
+        label: () => {
+          if (checkboxOnly) {
+            return (
+              <div className="flex items-center justify-center">
+                <Checkbox
+                  aria-label={__("Select all rows")}
+                  checked={selectorAllStatus}
+                  onCheckedChange={(checked) => selectAllVisibleRows(checked === true)}
+                />
+              </div>
+            );
+          }
+          return header ? <DropdownListGridActions deleteOnServer={deleteOnServer}/> : null;
+        },
       },
       headProps: {
-        className: "w-10 p-2",
-        colSpan: colSpan || 2
+        className: checkboxOnly ? "w-10 !px-2 py-2" : "w-10 p-2",
+        colSpan: checkboxOnly ? 1 : (colSpan || 2)
       },
       // `!px-2`: the base TableCell drops the right padding of a cell holding a
       // checkbox, which pushes it off-center.

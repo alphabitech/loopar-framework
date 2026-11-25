@@ -33,7 +33,7 @@ test("a second meta record with the same name is refused, even in another module
   await t.run(async () => {
     await loopar.db.insertRow("Page Builder", { name: "Solo Page", module: "core", doc_structure: "[]" });
     await assert.rejects(
-      loopar.db.insertRow("Page Builder", { name: "Solo Page", module: "zz-foreign", doc_structure: "[]" }),
+      loopar.db.insertRow("Page Builder", { name: "Solo Page", module: "auth", doc_structure: "[]" }),
       /unique/i,
     );
   });

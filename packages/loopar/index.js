@@ -20,7 +20,7 @@ import fileManager from "./core/global/file-manager.js";
 import ContactFormBase from "./core/document/contact-form-base.js";
 import { namingSeriesError } from "./core/document/naming-series.js";
 import { invalidateWorkflows, workflowFor, applyTransition, backfillInitialState } from "./core/document/workflow.js";
-import { grantWorkflowRoles, restrictWorkflowRoles } from "./core/document/workflow-roles.js";
+import { grantWorkflowRoles, restrictWorkflowRoles, shapeWorkflow } from "./core/document/workflow-roles.js";
 import BaseContactFormController from "./core/controller/base-contact-form-controller.js";
 import BaseController from "./core/controller/base-controller.js";
 import { readListSettings, writeListSettings } from "./core/document/list-settings.js";
@@ -71,6 +71,10 @@ export {
   isPortalRecord,
 } from "./core/auth/portal-scope.js";
 export { SCOPE, normalizeScope } from "./core/auth/PermissionManager.js";
+export { deleteRecords, withoutReferenceChecks, connectedDocuments } from "./core/document/referential-integrity.js";
+export { integrityMode, INTEGRITY } from "./core/global/integrity-mode.js";
+export { LIFECYCLE, isSubmittable, lifecycleStatus, withLifecycle, submitDocument, cancelDocument, amendDocument, copyDocument, versionName, syncLifecycleStatus } from "./core/document/document-lifecycle.js";
+export { syncForeignKeys, dropForeignKeys } from "./core/document/foreign-keys.js";
 export { userLimit, deskUserCount, assertUserLimit, tenantUserUsage } from "./core/auth/tenant-limits.js";
 export { sanitizeInput, trustedInput, isTrustedInput, policyMapOf, currentActor, lockStructure } from "./core/auth/field-access.js";
 export { WRITE_POLICY, writePolicyMap, filterInput } from "./core/global/field-policy.js";
@@ -148,6 +152,7 @@ import {
   orderChildRows,
   CREATED_BY_LENGTH,
   VERSION_COLUMN,
+  AMENDED_FROM_COLUMN,
   FRAMEWORK_OWNED_COLUMN_NAMES,
   FRAMEWORK_OWNED_COLUMN_SET,
   coerceDocStatus,
@@ -183,6 +188,7 @@ export {
   backfillInitialState,
   grantWorkflowRoles,
   restrictWorkflowRoles,
+  shapeWorkflow,
   BaseContactFormController,
   StorageDriver,
   LocalDriver,
@@ -260,6 +266,7 @@ export {
   orderChildRows,
   CREATED_BY_LENGTH,
   VERSION_COLUMN,
+  AMENDED_FROM_COLUMN,
   FRAMEWORK_OWNED_COLUMN_NAMES,
   FRAMEWORK_OWNED_COLUMN_SET,
   coerceDocStatus,

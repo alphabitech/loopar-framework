@@ -226,7 +226,7 @@ export async function applyRenameToDatabase({ type, from, to, name_reused = fals
   }
 
   // Permission names embed the document: "Role-<role>-<document>-<action>".
-  for (const table of ["Permission", "Role Permission"]) {
+  for (const table of ["Permission"]) {
     if (!(await hasTable(table)) || !(await hasColumn(table, "document"))) continue;
     for (const row of await q()(table).select("id", "name").where({ document: to })) {
       const name = String(row.name || "");

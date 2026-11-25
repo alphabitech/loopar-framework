@@ -4,6 +4,7 @@ import { loopar } from '../loopar.js';
 import { PermissionManager } from '../auth/PermissionManager.js';
 import { Op } from 'db-env';
 import { orderChildRows } from '../global/audit.js';
+import { isSubmittable, submitDocument, cancelDocument, withLifecycle } from './document-lifecycle.js';
 
 /**
  * Workflows: an entity's lifecycle as data (core entities Workflow,
@@ -55,6 +56,8 @@ async function load(entityName) {
     is_final: isTrue(s.is_final),
     public_label: s.public_label || null,
     show_on_board: s.show_on_board == null ? true : isTrue(s.show_on_board),
+    // Submittable entities: entering the state submits / cancels the record.
+    doc_status: ['Submitted', 'Cancelled'].includes(s.doc_status) ? s.doc_status : null,
   }));
 
   const transitions = (await childRows('Workflow Transition', row.id)).map(t => ({
@@ -275,7 +278,13 @@ export async function applyTransition(doc, action, values = {}, { system = false
     }
 
     doc[wf.field] = t.to;
-    await doc.save();
+    // Submittable records: a state can submit or cancel the record; any other
+    // transition on a submitted one may change only the state field, the
+    // transition's required fields and the "Editable after submit" ones.
+    const docStatus = isSubmittable(doc.__ENTITY__.name) ? wf.states.find(s => s.state === t.to)?.doc_status : null;
+    if (docStatus === 'Submitted') await submitDocument(doc, { transition: t });
+    else if (docStatus === 'Cancelled') await cancelDocument(doc, { save: true, transition: t });
+    else await withLifecycle(() => doc.save(), { fields: [wf.field, ...t.required_fields] });
 
     // After the new state is saved (e.g. tell a related record); never undoes it.
     if (typeof doc.afterTransition === 'function') {

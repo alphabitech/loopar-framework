@@ -10,6 +10,7 @@ import {
   CREATED_BY_COLUMN,
   CREATED_BY_LENGTH,
   VERSION_COLUMN,
+  AMENDED_FROM_COLUMN,
   CHILD_POSITION_COLUMN,
   isAuditableEntity,
   addAuditColumns,
@@ -41,6 +42,10 @@ function resolveColumnFormatKey(field) {
   const fmt = resolveColumnFormat(field);
   if (fmt && COLUMN_FORMATS[fmt]) return fmt;
 
+  // A simple connection holds one record name: VARCHAR like the `name` it
+  // points to (a foreign key needs the same type). Multiple ones hold JSON.
+  if (field?.element === "connection" && !isTrueFlag(field?.data?.multiple)) return "data";
+
   const tag = elementsDict[field?.element]?.def?.type;
   if (tag && LEGACY_TAG_TO_FORMAT.has(tag)) {
     const key = LEGACY_TAG_TO_FORMAT.get(tag);
@@ -50,6 +55,7 @@ function resolveColumnFormatKey(field) {
 }
 
 const TEXT_FORMATS = new Set(["text", "mediumtext", "longtext"]);
+const isTrueFlag = (v) => [1, "1", true, "true"].includes(v);
 
 /**
  * TEXT columns can't carry a UNIQUE/INDEX key without a prefix length on
@@ -65,6 +71,50 @@ export function resolveColumnSqlBuilder(field) {
   if (TEXT_FORMATS.has(key) && isKeyed(field)) return COLUMN_FORMATS.data.sql;
   return COLUMN_FORMATS[key].sql;
 }
+
+/** Type family of each Knex column builder method (the one a format's `sql` calls). */
+const BUILDER_FAMILY = {
+  string: "string", text: "string",
+  integer: "int", bigInteger: "int", increments: "int", bigIncrements: "int",
+  float: "float", double: "double", decimal: "decimal",
+  date: "date", datetime: "datetime", timestamp: "datetime", time: "time",
+  boolean: "bool", json: "json", jsonb: "json", uuid: "uuid", binary: "blob",
+};
+
+/**
+ * The type family a field's column is declared as: what its format's `sql`
+ * builds, read by running it against a recording table. Every format counts
+ * (also those added with registerColumnFormat), with nothing to keep in sync.
+ */
+function declaredColumnFamily(field) {
+  let method = null;
+  const chain = new Proxy(() => {}, { get: () => () => chain });
+  const recorder = new Proxy({}, { get: (_, m) => () => { method ??= String(m); return chain; } });
+  try {
+    resolveColumnSqlBuilder(field)(recorder, field?.data?.name || "_", field?.data || {});
+  } catch { /* a builder that needs the real Knex table: treat as text */ }
+  return BUILDER_FAMILY[method] || "string";
+}
+
+/**
+ * Text a column of the `family` type can take: how a value already stored
+ * as text must look to survive the change of type (trimmed first).
+ */
+const NUMBER_TEXT = /^[-+]?(\d+\.?\d*|\.\d+)$/;
+const CONVERTIBLE_TEXT = {
+  int: (v) => /^[-+]?\d+$/.test(v),
+  decimal: (v) => NUMBER_TEXT.test(v),
+  float: (v) => NUMBER_TEXT.test(v) || /^[-+]?(\d+\.?\d*|\.\d+)e[-+]?\d+$/i.test(v),
+  double: (v) => NUMBER_TEXT.test(v) || /^[-+]?(\d+\.?\d*|\.\d+)e[-+]?\d+$/i.test(v),
+  bool: (v) => /^(0|1|true|false)$/i.test(v),
+  date: (v) => /^\d{4}-\d{2}-\d{2}$/.test(v),
+  datetime: (v) => /^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?)?(Z|[+-]\d{2}:?\d{2})?$/i.test(v),
+  time: (v) => /^\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(v),
+  uuid: (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v),
+  json: (v) => { try { JSON.parse(v); return true; } catch { return false; } },
+};
+/** Distinct values read to check a change of type (a sample on bigger columns: the engine checks the rest). */
+const RETYPE_SAMPLE = 50000;
 
 function escapeId(identifier, dialect) {
   if (!identifier) return "";
@@ -142,6 +192,7 @@ function coerceValueForColumn(value, colMeta) {
 export default class Core {
   #tableColumnsCache = new Map();
   #knex = null;
+  #savepointSeq = 0;
 
   // Every connection the connector opens goes through this setter, so query
   // probes (see query-probes.js) observe all of them. Replacing a connection
@@ -610,6 +661,12 @@ export default class Core {
       ]);
     }
 
+    // A column changing type can't keep a foreign key (PG/MySQL): the
+    // framework's keys on this table go now and come back from the refs at
+    // the next loopar.build() (core/document/foreign-keys.js).
+    if (changedFields.length) await this.#prepareRetype(literalName, changedFields);
+    if (changedFields.length) await this.dropFrameworkForeignKeys(literalName);
+
     await this.qx().schema.alterTable(literalName, (table) => {
       for (const field of newFields) buildColumn(table, field, { adding: true });
       for (const { field } of changedFields) buildColumn(table, field, { alter: true });
@@ -639,24 +696,61 @@ export default class Core {
       n => !newFieldNames.has(n?.toLowerCase())
     );
 
+    const uniqueExists = (e) => /already exists|duplicate key name|duplicate.*key/i.test(e?.message || "");
     for (const colName of ensureUnique) {
       try {
-        await this.qx().schema.alterTable(literalName, (t) => {
-          t.unique(colName);
-        });
-        console.log([`[alterTable] ${literalName}.${colName}: UNIQUE constraint added`]);
+        const added = await this.tolerating(
+          () => this.qx().schema.alterTable(literalName, (t) => t.unique(colName)),
+          uniqueExists,
+        );
+        added && console.log([`[alterTable] ${literalName}.${colName}: UNIQUE constraint added`]);
       } catch (e) {
-        const msg = (e?.message || "").toLowerCase();
-        if (
-          !(msg.includes("already exists") ||
-          msg.includes("duplicate key name") ||
-          msg.includes("duplicate") && msg.includes("key"))
-        ) {
-          console.error(
-            `[alterTable] ${literalName}.${colName}: failed to add UNIQUE — ${e.message}`
-          );
-        }
+        console.error(`[alterTable] ${literalName}.${colName}: failed to add UNIQUE — ${e.message}`);
+        throw e;
       }
+    }
+  }
+
+  /**
+   * Runs `fn`, swallowing the errors `expected` accepts (an index that is
+   * already there, one that is missing). Returns false when one was swallowed.
+   *
+   * Postgres aborts the whole transaction on ANY failed statement, caught or
+   * not: every later query fails with "current transaction is aborted". Inside
+   * a transaction the attempt runs under a SAVEPOINT, so an expected failure
+   * is rolled back alone and the transaction stays usable.
+   */
+  async tolerating(fn, expected) {
+    const savepoint = this.isPostgresLike && this.transaction
+      ? `sp_tolerate_${++this.#savepointSeq}`
+      : null;
+
+    savepoint && await this.qx().raw(`SAVEPOINT ${savepoint}`);
+    try {
+      await fn();
+      savepoint && await this.qx().raw(`RELEASE SAVEPOINT ${savepoint}`);
+      return true;
+    } catch (e) {
+      savepoint && await this.qx().raw(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+      if (expected(e)) return false;
+      throw e;
+    }
+  }
+
+  /** Drops the framework's foreign keys (`fk_…`) declared on `table`. */
+  async dropFrameworkForeignKeys(table) {
+    if (this.isPostgresLike) {
+      const rows = this.unwrapRawRows(await this.qx().raw(
+        `SELECT con.conname AS name FROM pg_constraint con
+           JOIN pg_class rel ON rel.oid = con.conrelid
+           JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+          WHERE con.contype = 'f' AND ns.nspname = current_schema() AND rel.relname = ? AND con.conname LIKE 'fk\\_%'`, [table]));
+      for (const { name } of rows) await this.qx().raw(`ALTER TABLE "${table}" DROP CONSTRAINT IF EXISTS "${name}"`);
+    } else if (this.isMySQLLike) {
+      const rows = this.unwrapRawRows(await this.qx().raw(
+        `SELECT CONSTRAINT_NAME AS name FROM information_schema.TABLE_CONSTRAINTS
+          WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY' AND CONSTRAINT_NAME LIKE 'fk\\_%'`, [this.database, table]));
+      for (const { name } of rows) await this.qx().raw(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`${name}\``);
     }
   }
 
@@ -671,18 +765,16 @@ export default class Core {
     const missing = (e) => /no such index|doesn't exist|does not exist|check that (column|it) exists|can't drop/i.test(e?.message || "");
     const present = (e) => /already exists|duplicate key name|duplicate/i.test(e?.message || "");
 
-    try {
-      await this.qx().schema.alterTable(literalName, (t) => t.dropUnique(["module", "name"]));
-      console.log([`[name-identity] ${literalName}: UNIQUE(module, name) dropped`]);
-    } catch (e) {
-      if (!missing(e)) throw e;
-    }
+    const dropped = await this.tolerating(
+      () => this.qx().schema.alterTable(literalName, (t) => t.dropUnique(["module", "name"])),
+      missing,
+    );
+    dropped && console.log([`[name-identity] ${literalName}: UNIQUE(module, name) dropped`]);
 
-    try {
-      await this.qx().schema.alterTable(literalName, (t) => t.unique(["name"]));
-    } catch (e) {
-      if (!present(e)) throw e;
-    }
+    await this.tolerating(
+      () => this.qx().schema.alterTable(literalName, (t) => t.unique(["name"])),
+      present,
+    );
   }
 
   #auditColumnsNeedAlter(existingByName) {
@@ -739,6 +831,10 @@ export default class Core {
     });
     ensure(VERSION_COLUMN, (alter) => {
       const c = table.integer(VERSION_COLUMN).notNullable().defaultTo(0);
+      if (alter) c.alter();
+    });
+    ensure(AMENDED_FROM_COLUMN, (alter) => {
+      const c = table.string(AMENDED_FROM_COLUMN, 255).nullable();
       if (alter) c.alter();
     });
   }
@@ -831,33 +927,63 @@ export default class Core {
       !/bigint/i.test(existingCol.type || "")
     ) return true;
 
-    const FORMAT_FAMILY = {
-      data: "string", email: "string", password: "string",
-      text: "string", mediumtext: "string", longtext: "string",
-      int: "int", long_int: "int",
-      float: "float", double: "double",
-      decimal: "decimal", currency: "decimal",
-      date: "date", datetime: "datetime", time: "time",
-      boolean: "bool", json: "json", jsonb: "json",
-      uuid: "uuid", blob: "blob",
-    };
+    return !this.#sameColumnFamily(declaredColumnFamily(field), existingFamily);
+  }
 
-    let declaredFamily = null;
-    const fmt = resolveColumnFormat(field);
-    if (fmt && FORMAT_FAMILY[fmt]) {
-      declaredFamily = FORMAT_FAMILY[fmt];
-    } else {
-      const tag = elementsDict[field.element]?.def?.type;
-      if (tag) {
-        const fmtFromTag = LEGACY_TAG_TO_FORMAT.get(tag);
-        if (fmtFromTag && FORMAT_FAMILY[fmtFromTag]) {
-          declaredFamily = FORMAT_FAMILY[fmtFromTag];
-        }
-      }
+  /**
+   * Whether a column of the `existing` family already is what the field
+   * declares. Engines store some types as others: outside Postgres a UUID
+   * is CHAR(36) and a boolean an integer (MySQL TINYINT(1)); JSON may be
+   * TEXT (SQLite, MariaDB).
+   */
+  #sameColumnFamily(declared, existing) {
+    if (declared === existing) return true;
+    if (declared === "json" && existing === "string") return true;
+    if (!this.isPostgresLike) {
+      if (declared === "uuid" && existing === "string") return true;
+      if (declared === "bool" && existing === "int") return true;
     }
-    if (!declaredFamily) declaredFamily = "string";
+    return false;
+  }
 
-    return declaredFamily !== existingFamily;
+  /**
+   * Before text columns change to another type: empty texts become NULL
+   * (they hold no value of the new type) and any value the new type can't
+   * take stops the change with a message that says which — instead of the
+   * engine's error halfway through the ALTER (Postgres, MySQL) or values of
+   * the wrong type copied as they are (SQLite's table rebuild).
+   */
+  async #prepareRetype(literalName, changedFields) {
+    const problems = [];
+
+    for (const { field, existing } of changedFields) {
+      const to = declaredColumnFamily(field);
+      const check = CONVERTIBLE_TEXT[to];
+      if (this.#sqlTypeFamily(existing.type) !== "string" || !check) continue;
+
+      const col = field.data.name;
+      const nullable = existing.nullable !== false;
+      if (nullable) {
+        await this.qx()(literalName).whereRaw("TRIM(??) = ?", [col, ""]).update({ [col]: null });
+      }
+
+      const rows = await this.qx()(literalName).distinct(col).whereNotNull(col).limit(RETYPE_SAMPLE);
+      const bad = rows.map((row) => row[col]).filter((v) => !check(String(v).trim()));
+      if (!bad.length) continue;
+
+      const shown = bad.slice(0, 5).map((v) => `"${String(v).slice(0, 40)}"`).join(", ");
+      const more = bad.length > 5 ? ` and ${bad.length - 5} more` : "";
+      problems.push(`${field.data.label || col} (${col}) can't become ${resolveColumnFormatKey(field)}: ${shown}${more} ${bad.length === 1 ? "is" : "are"} not ${to === "int" ? "a whole number" : `a valid ${to}`}.`);
+    }
+
+    if (problems.length) {
+      const err = new Error(`${problems.join("<br/>")}<br/>Fix or clear those values first, or keep the current format.`);
+      err.status = 400;
+      err.code = 400;
+      err.title = "Can't change the column type";
+      err.expose = true;
+      throw err;
+    }
   }
 
   async reconcileOrphanColumns(tableName, fields, existingFields) {

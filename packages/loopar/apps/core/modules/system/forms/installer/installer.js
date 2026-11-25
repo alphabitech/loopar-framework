@@ -3,6 +3,7 @@ import fs from "fs";
 import { loopar, fileManage, Op } from "loopar";
 import BaseDocument from "../../../../../../core/document/base-document.js";
 import { readRenameRecords, applyRenameToDatabase } from "../../../../../../core/document/entity-rename.js";
+import { dropForeignKeys, syncForeignKeys } from "../../../../../../core/document/foreign-keys.js";
 import { normalizeScope } from "../../../../../../core/auth/PermissionManager.js";
 import { readAppHeader, isTemplateHeader, isTemplateHostTenant, belongsToOtherTenant, parseRequires, loadInstaller } from "./template.js";
 
@@ -254,6 +255,9 @@ export default class Installer extends BaseDocument {
 
     console.log("Uninstalling App", this.app_name);
     loopar.installingApp = this.app_name;
+    // Records go in the installer's order, not the links': the database keys
+    // come back from the refs once the app is gone.
+    await dropForeignKeys(loopar.db);
 
     const moduleRoute = loopar.makePath('apps', this.app_name);
     const appData = await fileManage.getConfigFile('installer', moduleRoute);
@@ -320,6 +324,7 @@ export default class Installer extends BaseDocument {
 
     await loopar.unsetApp(this.name);
     await loopar.buildRefs();
+    await syncForeignKeys(loopar.db);
     console.log(`App ${this.app_name} uninstalled successfully!`);
     return `App ${this.app_name} uninstalled successfully!`;
   }
@@ -458,6 +463,9 @@ export default class Installer extends BaseDocument {
       }
     }
 
+    // Install data comes in the installer's order, not the links': the
+    // database keys are dropped here and rebuilt by loopar.build() below.
+    if (loopar.__installed__) await dropForeignKeys(loopar.db);
     await this.installData(reinstall);
     await this.seedRoles();
 

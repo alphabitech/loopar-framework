@@ -86,7 +86,8 @@ function TransitionFields({ fields, defs, values, current }) {
  */
 export function runTransition({ entity, name, transition, docStructure, current, onDone, onOpen }) {
   const send = (values = {}) => {
-    loopar.call(entity, "transition", {
+    // Submit / Cancel / Amend of submittable records go to `lifecycle`.
+    loopar.call(entity, transition.endpoint || "transition", {
       query: { name },
       body: { action: transition.action, values: JSON.stringify(values) },
       success: (r) => {

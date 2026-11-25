@@ -117,6 +117,47 @@ test("Record payment on an invoice creates and posts a Payment", async () => {
   });
 });
 
+test("invoice and payment are submittable: issued and posted are Submitted, cancelled ones are kept and amended", async () => {
+  await t.run(async () => {
+    const st = async (entity, name) => Number((await q()(entity).where({ name }).first("__document_status__")).__document_status__);
+    const inv = await issued(200);
+    assert.equal(await st("Invoice", inv), 8, "issuing submits the invoice");
+
+    // Posted after the invoice was submitted: its Payments tab (allow on submit) still takes the rows.
+    const p = await newPayment({ amount: 200, allocations: [{ invoice: inv, allocated_amount: 200 }] });
+    assert.equal(await st("Payment", p.name), 3);
+    await pay.postPayment(p);
+    assert.equal(await st("Payment", p.name), 8, "posting submits the payment");
+    assert.equal((await q()("Invoice Payment").where({ payment: p.name })).length, 1);
+
+    // Submitted records are never deleted, nor changed behind the model.
+    await assert.rejects(() => loopar.getDocument("Payment", p.name).then((d) => d.delete()), /Submitted: it can't be deleted/);
+    await assert.rejects(() => loopar.db.setValue("Invoice", "customer", other, inv), /Submitted/);
+
+    // Cancel runs the payment's own undo first (its rows on the invoice point to it), then marks it.
+    const doc = await loopar.getDocument("Payment", p.name);
+    await pay.cancelPayment(doc, { reason: "Wrong amount" });
+    assert.equal(await st("Payment", p.name), 9);
+    assert.equal((await q()("Invoice Payment").where({ payment: p.name })).length, 0);
+    await assert.rejects(() => loopar.getDocument("Payment", p.name).then((d) => d.delete()), /Cancelled: it is kept/);
+
+    // Amend: a new Draft with its own number that remembers the cancelled one.
+    const { name: copy } = await (await loopar.getDocument("Payment", p.name)).amend();
+    const row = await q()("Payment").where({ name: copy }).first();
+    assert.notEqual(copy, p.name);
+    assert.deepEqual([row.status, Number(row.__document_status__), row.__amended_from__, row.cancel_reason || null], ["Draft", 3, p.name, null]);
+    await assert.rejects(() => loopar.getDocument("Payment", p.name).then((d) => d.submit()), /runs "Submit" from its own actions|only a Draft/);
+
+    // The invoice: cancelled (no payments left), then amended into a new Draft.
+    const issuedInv = await loopar.getDocument("Invoice", inv);
+    await issuedInv.cancel({ reason: "Re-bill" });
+    assert.deepEqual([await loopar.db.getValue("Invoice", "status", inv), await st("Invoice", inv)], ["Cancelled", 9]);
+    const { name: again } = await (await loopar.getDocument("Invoice", inv)).amend();
+    const draft = await q()("Invoice").where({ name: again }).first();
+    assert.deepEqual([draft.status, Number(draft.__document_status__), draft.__amended_from__], ["Draft", 3, inv]);
+  });
+});
+
 test("updating turns old invoice payment rows into posted Payments", async () => {
   await t.run(async () => {
     const C = await issued(70);

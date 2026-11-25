@@ -353,6 +353,13 @@ BaseInput.metaFields = () => {
             description: "Optional, comma separated: only these roles (and the Administrator) may write the field. Enforced on the server.",
           }
         },
+        allow_on_submit: {
+          element: SWITCH,
+          data: {
+            label: "Editable after submit",
+            description: "Submittable entities: the field can still change once the record is submitted (notes, payment status…). Every other field is locked. Enforced on the server.",
+          }
+        },
         in_list_view: { element: SWITCH },
         list_order: {
           element: INPUT,

@@ -141,7 +141,7 @@ test("a generated quote is written by its generator only while Draft", async () 
     const quote = await loopar.getDocument("Quote", name);
     assert.deepEqual(quote.lockedFields(), ["lines", "adjustments"]);
     await applyTransition(quote, "Mark approved", {}, { system: true });
-    await assert.rejects(() => writeGeneratedQuote({ customer, lines: [] }, name), /revise it/);
+    await assert.rejects(() => writeGeneratedQuote({ customer, lines: [] }, name), /cancel and amend it/);
   });
 });
 

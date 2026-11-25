@@ -32,6 +32,7 @@
     "mfa-reset": "node bin/cli/index.js mfa-reset",
     "admin-reset": "node bin/cli/index.js admin-reset",
     "backup": "node bin/cli/index.js backup",
+    "integrity": "node bin/cli/index.js integrity",
     "build": "node bin/build/prepare.js && yarn build:client && yarn build:server && node bin/build/activate.js",
     "build:client": "node bin/build/run-vite.js client",
     "build:server": "node bin/build/run-vite.js server",

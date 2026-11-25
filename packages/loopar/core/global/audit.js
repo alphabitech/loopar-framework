@@ -8,6 +8,10 @@ export const DOC_STATUS = Object.freeze({
   APPROVED: 5,
   REJECTED: 6,
   ARCHIVED: 7,
+  // Submittable entities (core/document/document-lifecycle.js): DRAFT →
+  // SUBMITTED (locked) → CANCELLED (locked, amended into a new draft).
+  SUBMITTED: 8,
+  CANCELLED: 9,
 });
 
 export const DOC_STATUS_LABEL = Object.freeze(
@@ -37,7 +41,11 @@ export const AUDIT_COLUMN_NAMES = Object.freeze([
   "__document_status__",
   "__created_by__",
   "__version__",
+  "__amended_from__",
 ]);
+
+/** On a record amended from a cancelled one (submittable entities): the cancelled record's name. */
+export const AMENDED_FROM_COLUMN = "__amended_from__";
 
 /**
  * Counts the writes of a row: every update adds one. A save applies only over
@@ -60,6 +68,7 @@ export const AUDIT_COLUMN_FAMILY = Object.freeze({
   __document_status__: "int",
   __created_by__: "string",
   __version__: "int",
+  __amended_from__: "string",
 });
 
 /**
@@ -114,6 +123,7 @@ export function addAuditColumns(table, knex) {
   table.integer("__document_status__").notNullable().defaultTo(DOC_STATUS.ACTIVE);
   table.string(CREATED_BY_COLUMN, CREATED_BY_LENGTH).nullable().index();
   table.integer(VERSION_COLUMN).notNullable().defaultTo(0);
+  table.string(AMENDED_FROM_COLUMN, 255).nullable();
 }
 
 export const FRAMEWORK_OWNED_COLUMN_NAMES = Object.freeze([

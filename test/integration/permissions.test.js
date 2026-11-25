@@ -20,8 +20,16 @@ const grant = (relation, relation_name, document, action, { scope = "all", deny 
     relation, relation_name, document, action, scope, deny, app: "loopar",
   });
 
-const giveRole = (user, role) =>
-  loopar.db.insertRow("User Role", { name: `${user}-${role}-${++seq}`, user, role });
+// User Role points to a User and a Role (checked by the ORM): the fixtures exist first.
+const ensure = async (entity, name, data = {}) => {
+  if (!(await loopar.db.qx()(entity).where({ name }).first("id"))) await loopar.db.insertRow(entity, { name, ...data });
+};
+
+const giveRole = async (user, role) => {
+  await ensure("User", user, { email: `${user}@loopar.test` });
+  await ensure("Role", role, { app: "loopar" });
+  return loopar.db.insertRow("User Role", { name: `${user}-${role}-${++seq}`, user, role });
+};
 
 const user = async (name, setup = async () => {}) => {
   await setup(name);
