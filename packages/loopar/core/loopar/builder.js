@@ -338,15 +338,24 @@ export class Builder {
   }
 
   /**
-   * app/auto/preloaded-icons.jsx: the icons of every tenant's segment, so one
-   * client bundle serves them all. Written only when its content changes (a
+   * app/auto/preloaded-icons.jsx: the icons of every existing tenant's segment,
+   * so one client bundle serves them all. Written only when its content changes (a
    * rewrite reloads the dev client).
    */
   async writePreloadedIcons() {
     const segmentsDir = path.join(this.pathRoot, 'app/auto/icon-segments');
-    const segmentFiles = existsSync(segmentsDir)
-      ? readdirSync(segmentsDir).filter(f => f.endsWith('.json'))
-      : [];
+    // A segment outlives its tenant (destroyed tenants, test tenants): drop the
+    // ones whose site folder is gone, or their icons stay in every bundle.
+    const sitesDir = path.join(this.pathRoot, 'sites');
+    const hasSite = (tenant) => !existsSync(sitesDir) || tenant === this.tenantId || existsSync(path.join(sitesDir, tenant));
+    const segmentFiles = [];
+    for (const file of existsSync(segmentsDir) ? readdirSync(segmentsDir).filter(f => f.endsWith('.json')) : []) {
+      if (hasSite(file.slice(0, -'.json'.length))) {
+        segmentFiles.push(file);
+      } else {
+        try { fs.rmSync(path.join(segmentsDir, file), { force: true }); } catch { /* left for the next build */ }
+      }
+    }
   
     const allIcons = Array.from(new Set(
       segmentFiles.flatMap(file => {
