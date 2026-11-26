@@ -12,6 +12,7 @@ import { seoMeta, organizationJsonLd } from "../global/seo.js";
 import { requestLanguage, clientI18nPayload, contentLanguages, siteLanguages, siteDefaultLanguage, translateRecord, loadRegional, availableLanguages } from "../server/i18n.js";
 import { localizePath, splitLanguagePrefix } from "../global/i18n.js";
 import { readDeskPins } from "../document/desk-pins.js";
+import { assetsVersion, versioned } from "../global/assets-version.js";
 import fs from 'fs';
 
 /** Builders whose documents are not desk destinations (controllers, print formats). */
@@ -311,7 +312,7 @@ export default class WorkspaceController extends AuthController {
     const faviconSrc = fileManager.getMappedFiles(__META__.web_app?.favicon)[0]?.src;
 
     const kioskTags = (__META__.name || this.workspace) === "kiosk" ? kioskHeadTags(__META__.Document?.Entity?.name) : "";
-    html = html.replace(`<!--__favicon__-->`, `<link rel="icon" href="${faviconSrc || "/assets/public/loopar-favicon.ico"}"/>${kioskTags}`)
+    html = html.replace(`<!--__favicon__-->`, `<link rel="icon" href="${faviconSrc || versioned("/assets/public/loopar-favicon.ico")}"/>${kioskTags}`)
 
     let themeVersion = '0';
     try { themeVersion = Math.floor(fs.statSync(loopar.themeCssPath()).mtimeMs).toString(36); } catch {}
@@ -324,7 +325,7 @@ export default class WorkspaceController extends AuthController {
     // `<` escaped so a translation can never close the script element.
     const i18nJson = JSON.stringify(clientI18nPayload(language)).replace(/</g, "\\u003c");
     html = html.replace(`<!--__loopar-meta-data__-->`, `
-      <script>window.__LOOPAR_I18N__ = ${i18nJson};</script>
+      <script>window.__LOOPAR_I18N__ = ${i18nJson};window.__LOOPAR_ASSETS_V__ = ${JSON.stringify(assetsVersion())};</script>
       <script id="__loopar-meta-data__" type="application/json">
         ${JSON.stringify(__META__)}
       </script>

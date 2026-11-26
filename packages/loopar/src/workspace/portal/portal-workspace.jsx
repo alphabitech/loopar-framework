@@ -12,6 +12,7 @@ import { GlobeIcon, HouseIcon, LayoutDashboardIcon, LogOutIcon, UserRoundCogIcon
 import { ThemeToggle } from "@workspace/theme-toggle";
 import { Logo } from "../web/src/logo";
 import { __ } from "@global/i18n";
+import { versioned } from "@global/assets-version";
 
 /** Kill the session and reload the current page (same pattern as the web nav). */
 function handleLogout() {
@@ -133,7 +134,7 @@ export default function PortalWorkspace(props) {
             <Logo />
           ) : (
             <Link to="/" bare className="font-semibold">
-              <img src="/assets/public/images/loopar.svg" alt="loopar" style={{ height: 24 }} />
+              <img src={versioned("/assets/public/images/loopar.svg")} alt="loopar" style={{ height: 24 }} />
             </Link>
           )}
           <div className="ml-auto flex items-center gap-1">

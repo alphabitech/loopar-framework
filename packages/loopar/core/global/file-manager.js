@@ -1,4 +1,5 @@
 import { loopar } from "loopar";
+import { versioned, unversioned } from "./assets-version.js";
 
 export const getExtention = (file = "") => {
   const match = file.match(/\.([a-z0-9]+)$/i);
@@ -248,7 +249,7 @@ class FileManager {
       // absent (legacy rows, ad-hoc objects) we fall back to the path
       // computation in getSrc().
       const previewSrc = file.previewSrc
-        ? encodeURI(file.previewSrc)
+        ? versioned(encodeURI(file.previewSrc))
         : this.getSrc(file, true, ext);
 
       return file instanceof File ? file : {
@@ -268,14 +269,14 @@ class FileManager {
     }
 
     if (typeof file?.src === "string" && file.src.startsWith("/")) {
-      const normalizedSrc = file.src.startsWith("/uploads/")
+      const normalizedSrc = unversioned(file.src.startsWith("/uploads/")
         ? file.src.replace("/uploads/", "/assets/")
-        : file.src;
-      return this.encodePath(normalizedSrc);
+        : file.src);
+      return versioned(this.encodePath(normalizedSrc));
     }
 
     const encodedName = encodeURIComponent(this.decodeFileName(file.name || ""));
-    return "/assets/public/" + ((preview && !["svg", "ico"].includes(ext)) ? "thumbnails/" : "") + encodedName;
+    return versioned("/assets/public/" + ((preview && !["svg", "ico"].includes(ext)) ? "thumbnails/" : "") + encodedName);
   }
 
   getImage(data = {}, field, avatar = null) {

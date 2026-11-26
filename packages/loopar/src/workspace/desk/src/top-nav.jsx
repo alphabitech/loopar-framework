@@ -9,6 +9,7 @@ import { AppCrumb } from "./app-crumb"
 import { Link } from "@link"
 import { ChevronRightIcon } from "lucide-react"
 import { __ } from "@global/i18n"
+import { versioned } from "@global/assets-version";
 
 /** Where the document header puts its breadcrumbs. */
 export const DESK_TRAIL_SLOT = "desk-trail"
@@ -26,7 +27,7 @@ export function TopNav() {
         <div className="flex shrink-0 items-center gap-1 pl-2">
           <MainNav logo={false} />
           <Link award={false} bare to="/desk" title={__("Desk")} className="flex h-9 shrink-0 items-center justify-center px-1">
-            <img src="/assets/public/images/logo-dark-min.svg" alt={__("Loopar")} className="h-7 w-8" loading="lazy" decoding="async" />
+            <img src={versioned("/assets/public/images/logo-dark-min.svg")} alt={__("Loopar")} className="h-7 w-8" loading="lazy" decoding="async" />
           </Link>
           <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground opacity-60 max-sm:hidden" aria-hidden="true" />
         </div>

@@ -12,6 +12,7 @@ import { Link } from "@link";
 import Icon from "@icon";
 import { MainNav } from "./main-nav";
 import { __ } from "@global/i18n";
+import { versioned } from "@global/assets-version";
 
 const appOwns = (app, key) =>
   !!key && (app.home === key || (app.modules || []).some(m => m.link === key || (m.submodules || []).includes(key) || (m.routes || []).some(r => r.description === key)));
@@ -113,7 +114,7 @@ function LogoMark() {
   return (
     // Phones only: on lg the brand sits in the top bar, above the sidebar.
     <Link award={false} bare to="/desk" title={__("Desk")} className="mb-1 flex h-header-height w-full shrink-0 items-center justify-center lg:hidden">
-      <img src="/assets/public/images/logo-dark-min.svg" alt={__("Loopar")} className="h-7 w-8" loading="lazy" decoding="async" />
+      <img src={versioned("/assets/public/images/logo-dark-min.svg")} alt={__("Loopar")} className="h-7 w-8" loading="lazy" decoding="async" />
     </Link>
   );
 }

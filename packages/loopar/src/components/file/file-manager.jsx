@@ -1,4 +1,5 @@
 import elementManage from "@@tools/element-manage";
+import { versioned, unversioned } from "@global/assets-version";
 
 export const getExtention = (file = "") => {
   const match = file.match(/\.([a-z0-9]+)$/i);
@@ -214,7 +215,7 @@ class FileManager {
       const fileType = this.getFileType(file);
 
       const previewSrc = file.previewSrc
-        ? encodeURI(file.previewSrc)
+        ? versioned(encodeURI(file.previewSrc))
         : this.getSrc(file, true, ext);
 
       return file instanceof File ? file : {
@@ -264,13 +265,13 @@ class FileManager {
     }
 
     if (typeof file?.src === "string" && file.src.startsWith("/")) {
-      const normalizedSrc = file.src.startsWith("/uploads/")
+      const normalizedSrc = unversioned(file.src.startsWith("/uploads/")
         ? file.src.replace("/uploads/", "/assets/")
-        : file.src;
-      return this.encodePath(normalizedSrc);
+        : file.src);
+      return versioned(this.encodePath(normalizedSrc));
     }
 
-    return "/assets/public/" + ((preview && !["svg", "ico"].includes(ext)) ? "thumbnails/" : "") + this.encodeFileName(file.name);
+    return versioned("/assets/public/" + ((preview && !["svg", "ico"].includes(ext)) ? "thumbnails/" : "") + this.encodeFileName(file.name));
   }
 
   getImage(data = {}, field, avatar = null) {

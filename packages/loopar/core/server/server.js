@@ -16,6 +16,7 @@ import http from "http";
 import { RealtimeManager } from "../realtime/RealtimeManager.js";
 import { kioskManifest } from "../global/kiosk-manifest.js";
 import { robotsTxt, sitemapXml } from "../global/seo.js";
+import { installAssetsVersion } from "./assets-version.js";
 import { buildIdMiddleware, buildEndpoint, previousAssetsMiddleware, isBuildAsset, IMMUTABLE_CACHE } from "./build-info.js";
 import { debugCollector } from "../debug/collector.js";
 import { isRestoring, maintenanceReason, unplugTenant } from "../backup/core-ops.js";
@@ -236,6 +237,9 @@ export class Server extends Router {
   }
 
   async #exposePublicDirectories() {
+    // Stamp carried by public file URLs (?v=…), see global/assets-version.js.
+    installAssetsVersion();
+
     // Per-request theme (the host's web app theme, or the tenant's). First,
     // so a static theme.css in dist/ or any public root can never shadow it.
     // The URL carries ?v=<mtime>, so it can be cached hard.
@@ -301,15 +305,21 @@ export class Server extends Router {
       let chain = assetChains.get(key);
       if (!chain) {
         for (const k of assetChains.keys()) if (k.startsWith(`${tenantId}|`)) assetChains.delete(k);
-        chain = loopar.getAssetRoots("public").map((root) => express.static(root));
+        // Two handlers per root: a URL carrying the files' stamp (?v=…) names
+        // one content for good; a bare URL is revalidated on every use.
+        chain = loopar.getAssetRoots("public").map((root) => ({
+          plain: express.static(root),
+          versioned: express.static(root, { maxAge: '1y', immutable: true }),
+        }));
         assetChains.set(key, chain);
       }
 
+      const kind = req.query?.v ? 'versioned' : 'plain';
       let i = 0;
       const advance = (err) => {
         if (err) return next(err);
         if (i >= chain.length) return next();
-        chain[i++](req, res, advance);
+        chain[i++][kind](req, res, advance);
       };
       advance();
     });

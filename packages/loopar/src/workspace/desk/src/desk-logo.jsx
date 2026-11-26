@@ -1,8 +1,9 @@
 import React from "react";
+import { versioned } from "@global/assets-version";
 
 export const DeskLogo = (props) => {
   const imageProps = {
-    src: `/assets/public/images/loopar.svg`,
+    src: versioned("/assets/public/images/loopar.svg"),
     alt: "Loopar Logo",
     className: 'hidden h-6 md:block text-white',
     href: "/desk",
@@ -18,7 +19,7 @@ export const DeskLogo = (props) => {
           decoding="async"
         />
         <img {...imageProps} 
-          src="/assets/public/images/logo-dark-min.svg" 
+          src={versioned("/assets/public/images/logo-dark-min.svg")} 
           className="h-6 w-20 md:hidden" 
           style={{minWidth:40, maxWidth:40}}
           loading="lazy"

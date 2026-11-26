@@ -3,6 +3,7 @@ import { ArrowRightIcon } from "@radix-ui/react-icons";
 import Particles from "@particles";
 import { cn } from "@cn/lib/utils";
 import { __ } from "@global/i18n";
+import { versioned } from "@global/assets-version";
 
 const PARTICLES = {
   "particles_settings": JSON.stringify({
@@ -58,7 +59,7 @@ export default function SystemShell({ width = "md", children }) {
       <main className="relative z-10 flex min-h-dvh flex-col items-center justify-start px-4 py-6 sm:justify-center sm:px-8 sm:py-12">
         <div className={cn("w-full rounded-xl border bg-background/85 shadow-lg backdrop-blur-sm p-5 sm:p-8", WIDTHS[width] || width)}>
           <div className="mb-6 flex justify-center">
-            <img src="/assets/public/images/loopar.svg" alt="loopar" style={{ height: 28, width: 140 }} />
+            <img src={versioned("/assets/public/images/loopar.svg")} alt="loopar" style={{ height: 28, width: 140 }} />
           </div>
           {children}
         </div>
