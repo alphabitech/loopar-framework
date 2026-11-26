@@ -15,6 +15,7 @@ import {
   ListIcon, Loader2Icon, PlusIcon, SearchIcon, Settings2Icon,
 } from "lucide-react";
 import { useWorkspace } from "@workspace/workspace-provider";
+import { useSearchIndex } from "./search-index";
 import loopar from "loopar";
 import { __ } from "@global/i18n";
 
@@ -87,7 +88,7 @@ const score = (text, query, tokens) => {
 function useEntries() {
   const { __META__ } = useWorkspace();
   const menu = __META__?.menu_data;
-  const index = __META__?.search_index;
+  const index = useSearchIndex();
 
   return useMemo(() => {
     const apps = Array.isArray(menu) ? menu : [];

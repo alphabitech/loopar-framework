@@ -5,7 +5,7 @@ import { scrollMemory } from "@@tools/router/scroll-memory";
  * layout props.
  *
  * VIEW options — presentation, kept as React state (base/view-options.jsx):
- *   slots · actions · rowActions · handlers · columns · gridTemplate · summary · status · flow · headerTabs ·
+ *   slots · actions · rowActions · customViews · handlers · columns · gridTemplate · summary · status · flow · headerTabs ·
  *   canUpdate · readOnly · hasSidebar · hasHeader · hasBreadcrumb · hasHistory ·
  *   hasSearchForm · hasSelectAll · hasSelectRow · hasListSettings · hiddenSearchFields · gridMinWidth · onlyList · onlyGrid
  *
@@ -13,11 +13,13 @@ import { scrollMemory } from "@@tools/router/scroll-memory";
  *   controller · notRequireChanges · restoreScroll · overrides (raw methods)
  */
 export const VIEW_OPTION_KEYS = [
-  "slots", "actions", "rowActions", "handlers", "columns", "gridTemplate",
+  "slots", "actions", "rowActions", "customViews", "handlers", "columns", "gridTemplate",
   "summary", "status", "flow", "headerTabs",
   "canUpdate", "readOnly", "hasSidebar", "hasHeader", "hasBreadcrumb", "hasHistory",
   "hasSearchForm", "hasSelectAll", "hasSelectRow", "hasListSettings", "hiddenSearchFields", "gridMinWidth",
   "onlyList", "onlyGrid",
+  // false: rows are not records to open (no link to the form, no row menu).
+  "openRecords",
 ];
 
 /** Keyed options merge by key instead of replacing the whole map. */

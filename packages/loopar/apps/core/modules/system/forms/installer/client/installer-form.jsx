@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import loopar from 'loopar';
 import MetaComponent from '@meta-component';
 import { Button } from '@cn/components/ui/button';
@@ -6,6 +6,7 @@ import { CheckIcon } from 'lucide-react';
 import { cn } from '@cn/lib/utils';
 import { useForm } from '@loopar/form';
 import { __ } from "loopar";
+import { JobProgress } from '@@components/job-progress';
 
 /** The browser's time zone and language, as installer defaults. */
 function browserDefaults() {
@@ -19,6 +20,26 @@ function browserDefaults() {
 const ENGINE_LABELS = {
   mysql: 'MySQL', mariadb: 'MariaDB', postgres: 'PostgreSQL', sqlite: 'SQLite', mssql: 'SQL Server',
 };
+
+/** 32 random bytes as hex: the nonce that signs this browser in after the install. */
+function randomNonce() {
+  const bytes = new Uint8Array(32);
+  window.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * The install job ended well: this browser trades the job id and its nonce
+ * for the Administrator's session and goes to the desk. If the claim isn't
+ * accepted (expired, core restarted…) it lands where it always did: login.
+ */
+function enterWorkspace(job, nonce) {
+  const fallback = job.result?.redirect || '/desk';
+  if (!nonce) return window.location.replace(fallback);
+  loopar.call('System', 'claimLogin', { body: { job: job.id, nonce }, freeze: false, notifyError: false })
+    .then((r) => window.location.replace(r?.signed_in ? '/desk' : fallback))
+    .catch(() => window.location.replace(fallback));
+}
 
 /** Writable field names inside a structure element. */
 function fieldNames(element, acc = []) {
@@ -115,6 +136,10 @@ export default function InstallerForm() {
   // kept: the step shows it instead of asking for credentials again.
   const [keepConnection, setKeepConnection] = useState(!!Number(data.connection_ready));
   const [busy, setBusy] = useState(false);
+  // The install runs as a background job (System/install answers at once).
+  const [job, setJob] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const nonceRef = useRef(null);
 
   useEffect(() => {
     const defaults = browserDefaults();
@@ -153,11 +178,16 @@ export default function InstallerForm() {
   const install = async () => {
     if (!(await ctrl.Form.trigger(steps[current].fields))) return;
     setBusy(true);
+    setFailed(false);
     try {
-      await send({
+      // Kept only in this browser; the server stores its hash.
+      nonceRef.current = randomNonce();
+      const response = await send({
         action: 'install',
         query: { app_name: 'loopar', connection: keepConnection ? 'current' : 'new' },
+        extra: { login_nonce: nonceRef.current },
       });
+      if (response?.job) setJob(response.job);
     } catch {
       // Error shown by the request layer; the install was rolled back.
     } finally {
@@ -169,6 +199,41 @@ export default function InstallerForm() {
   const server = data.db_dialect === 'sqlite'
     ? 'local file'
     : [data.db_host, data.db_port].filter(Boolean).join(':');
+
+  // Installing: the job's progress replaces the steps. No user exists yet,
+  // so it is read from System/job (polling), not from realtime.
+  if (job) {
+    return (
+      <div className="w-full space-y-6">
+        <header className="space-y-1">
+          <h2 className="text-xl font-semibold tracking-tight">{failed ? __("The installation failed") : __("Installing your workspace")}</h2>
+          <p className="text-sm text-muted-foreground">
+            {failed ? __("Nothing is lost: check the log, go back and try again.") : __("This can take a few minutes. Keep this page open.")}
+          </p>
+        </header>
+        <JobProgress
+          job={job}
+          entity="System"
+          realtime={false}
+          closable={false}
+          onEnd={(ended) => {
+            if (ended.state === 'completed') {
+              setTimeout(() => enterWorkspace(ended, nonceRef.current), 1200);
+            } else {
+              setFailed(true);
+            }
+          }}
+        />
+        {failed && (
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" onClick={() => { setJob(null); setFailed(false); }}>
+              {__("Back to the installer")}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">

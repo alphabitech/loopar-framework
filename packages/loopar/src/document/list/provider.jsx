@@ -6,6 +6,7 @@ import { listFields, flatElements, defaultReportSpec } from "@@table/list-fields
 import { queryOf, urlWith } from "@@table/list-url";
 import { REPORT_PARAM, REPORT_PARAMS, formatReportSpec } from "@global/list-report";
 import { listViews, nextListView, treeOf } from "./views";
+import { useViewOptions } from "../base/view-options";
 
 /**
  * List middleware: table state (rows, selection, search, pagination) + the
@@ -24,9 +25,10 @@ export function ListProvider({ ctrl, children }) {
   const configured = Document.Entity.default_list_view;
   const defaultView = configured && configured !== "List" ? configured : (treeOf(Document) ? "Tree" : "List");
   const [viewType, setPersisted] = usePersist(Document.Entity.name + "_viewType", defaultView);
+  const { customViews } = useViewOptions();
 
   // Kanban only exists for entities with an active workflow.
-  const views = listViews(Document);
+  const views = listViews(Document, customViews);
   const reportInUrl = queryOf(currentUrl).has(REPORT_PARAM);
   const fallback = views.includes(defaultView) && defaultView !== "Report" ? defaultView : "List";
   const stored = views.includes(viewType) && viewType !== "Report" ? viewType : fallback;
@@ -60,8 +62,8 @@ export function ListProvider({ ctrl, children }) {
     viewType: current,
     setViewType,
     applyView,
-    viewTypeToggle: () => setViewType(nextListView(Document, current)),
-  }), [ctrl, current, setViewType, applyView, Document]);
+    viewTypeToggle: () => setViewType(nextListView(Document, current, customViews)),
+  }), [ctrl, current, setViewType, applyView, Document, customViews]);
 
   return (
     <ListContext.Provider value={value}>

@@ -6,6 +6,26 @@ import path from "pathe";
 import { fileManage } from "../file-manage.js";
 import { Builder } from "./builder.js";
 
+// Folders already reported: getEntities() runs on every refs rebuild.
+const reportedEntityFolders = new Set();
+
+/**
+ * A folder under modules/<module>/<type>/ without its <name>.json. It is only
+ * reported when it looks like an entity (it has the <name>.js model or the
+ * <name>-controller.js): those are leftovers that would never load. Anything
+ * else (shared code such as modules/<module>/shared/client) is not an entity
+ * folder and is skipped silently.
+ */
+function reportInvalidEntityFolder(folder, name, root) {
+  const hasModel = fs.existsSync(path.join(folder, `${name}.js`));
+  const hasController = fs.existsSync(path.join(folder, `${name}-controller.js`));
+  if (!hasModel && !hasController) return;
+  if (reportedEntityFolders.has(folder)) return;
+  reportedEntityFolders.add(folder);
+  const found = [hasModel && `${name}.js`, hasController && `${name}-controller.js`].filter(Boolean).join(" and ");
+  console.warn(`[entities] ${path.relative(root, folder)} is not a valid entity: it has ${found} but no ${name}.json — ignored`);
+}
+
 export class Core extends Builder {
   getApps() {
     const baseApps = this.getDirList(this.makePath(this.pathRoot, "apps")).map(app => {
@@ -62,7 +82,7 @@ export class Core extends Builder {
                 acc.push(data);
               }
             } else {
-              console.log([`Entity [${entity.name}] not found`]);
+              reportInvalidEntityFolder(this.makePath(entitiesRoot, entity.name), entity.name, this.pathRoot);
             }
           });
         });

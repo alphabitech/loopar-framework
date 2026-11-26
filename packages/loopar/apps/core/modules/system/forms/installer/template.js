@@ -25,6 +25,40 @@ export function parseRequires(value) {
   return [...new Set(list.map(v => String(v).trim()).filter(Boolean))];
 }
 
+/**
+ * The installed apps that need `appName`, directly or through others, in the
+ * order they can be uninstalled: an app always comes before the apps it
+ * requires (the deepest dependents first).
+ */
+export async function installedDependents(appName) {
+  const installed = (await loopar.db.getAll("App", ["name"])).map((r) => r.name).filter((n) => n !== appName);
+  const requiresOf = new Map(installed.map((n) => [n, parseRequires(readAppHeader(n)?.requires)]));
+
+  const found = new Set();
+  const walk = (target) => {
+    for (const [name, reqs] of requiresOf) {
+      if (!found.has(name) && reqs.includes(target)) {
+        found.add(name);
+        walk(name);
+      }
+    }
+  };
+  walk(appName);
+
+  // Depth inside the dependents: how far each is from `appName`.
+  const depth = new Map();
+  const depthOf = (name, seen = new Set()) => {
+    if (depth.has(name)) return depth.get(name);
+    if (seen.has(name)) return 0;
+    seen.add(name);
+    const reqs = (requiresOf.get(name) || []).filter((r) => found.has(r));
+    const d = reqs.length ? 1 + Math.max(...reqs.map((r) => depthOf(r, seen))) : 0;
+    depth.set(name, d);
+    return d;
+  };
+  return [...found].sort((a, b) => depthOf(b) - depthOf(a) || a.localeCompare(b));
+}
+
 /** installer.json header (`App`) of an app folder, or null. */
 export function readAppHeader(appName) {
   if (!appName || !fs.existsSync(appsDir(appName, "installer.json"))) return null;

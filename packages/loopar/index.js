@@ -20,7 +20,7 @@ import fileManager from "./core/global/file-manager.js";
 import ContactFormBase from "./core/document/contact-form-base.js";
 import { namingSeriesError } from "./core/document/naming-series.js";
 import { invalidateWorkflows, workflowFor, applyTransition, backfillInitialState } from "./core/document/workflow.js";
-import { grantWorkflowRoles, restrictWorkflowRoles, shapeWorkflow } from "./core/document/workflow-roles.js";
+import { grantWorkflowRoles, revokeWorkflowRoles, restrictWorkflowRoles, shapeWorkflow } from "./core/document/workflow-roles.js";
 import BaseContactFormController from "./core/controller/base-contact-form-controller.js";
 import BaseController from "./core/controller/base-controller.js";
 import { readListSettings, writeListSettings } from "./core/document/list-settings.js";
@@ -186,7 +186,7 @@ export {
   workflowFor,
   applyTransition,
   backfillInitialState,
-  grantWorkflowRoles,
+  grantWorkflowRoles, revokeWorkflowRoles,
   restrictWorkflowRoles,
   shapeWorkflow,
   BaseContactFormController,

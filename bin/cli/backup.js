@@ -3,7 +3,7 @@
  * core needed; the rescue path when a site won't boot).
  *
  *   yarn backup                                   last backup of every tenant
- *   yarn backup create <tenant|--all> [--local]   back up (--local: don't copy to the destination)
+ *   yarn backup create <tenant|--all> [--local] [--format native|loopar]   back up (--local: don't copy to the destination)
  *   yarn backup list <tenant>                     local + remote backups
  *   yarn backup restore <tenant> <file> [--as <new>] [--passphrase <p>] [--yes] [--force]
  *   yarn backup delete <tenant> <file> [--local|--remote]
@@ -26,7 +26,7 @@ function parse(argv) {
     if (a.startsWith('--')) {
       const key = a.slice(2);
       const next = argv[i + 1];
-      if (['as', 'passphrase'].includes(key) && next !== undefined) { flags[key] = next; i++; } else flags[key] = true;
+      if (['as', 'passphrase', 'format'].includes(key) && next !== undefined) { flags[key] = next; i++; } else flags[key] = true;
     } else args.push(a);
   }
   return { args, flags };
@@ -38,7 +38,7 @@ const die = (msg) => { console.error(red(`\n✗ ${msg}\n`)); process.exit(1); };
 
 export function usage() {
   log(cyan('\nyarn backup') + gray('                                  last backup of every tenant'));
-  log(cyan('yarn backup create <tenant|--all> [--local]') + gray('  back up (--local: keep it on this server only)'));
+  log(cyan('yarn backup create <tenant|--all> [--local] [--format native|loopar]') + gray('  back up (--local: keep it on this server only; --format: native dump or Loopar\'s own format, default: native when the engine\'s tools are installed)'));
   log(cyan('yarn backup list <tenant>') + gray('                    local and remote backups'));
   log(cyan('yarn backup restore <tenant> <file> [--as <new>] [--passphrase <p>] [--yes]'));
   log(gray('                                               in place (tenant Off) or as a new tenant'));
@@ -70,7 +70,8 @@ export async function backupCmd(argv) {
     for (const t of list) {
       process.stdout.write(`${cyan(t)} `);
       try {
-        const r = await engine.createBackup({ tenant: t, kind: 'manual', upload: !flags.local, onStep: (s) => process.stdout.write(gray(`${s}… `)) });
+        if (flags.format && !['native', 'loopar', 'auto'].includes(flags.format)) die('--format: native, loopar or auto.');
+        const r = await engine.createBackup({ tenant: t, kind: 'manual', upload: !flags.local, format: flags.format || null, onStep: (s) => process.stdout.write(gray(`${s}… `)) });
         log(green(`✓ ${r.file}`) + gray(` ${fmtSize(r.size)}${r.encrypted ? ', encrypted' : ''}`));
         if (r.remote.destination) log(r.remote.ok ? gray(`  copied to ${r.remote.destination}`) : yellow(`  not copied to ${r.remote.destination}: ${r.remote.error}`));
         if (r.remote.ok === false) failed++;

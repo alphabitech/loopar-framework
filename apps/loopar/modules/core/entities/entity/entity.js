@@ -1,5 +1,9 @@
 import { BaseDocument, fileManage, loopar, Helpers, pruneDocStructure, TYPES, namingSeriesError, isVirtualField, virtualFormulaIssue, formulaRefIssues } from "loopar";
 import { pluralize } from "inflection";
+import fs from "node:fs";
+import { createMigration, runMigrations, renamedFields, appliedMigrations } from "loopar/core/document/app-migrations.js";
+import { syncForeignKeys } from "loopar/core/document/foreign-keys.js";
+import { renameFieldInEntityRecord, renameFieldInFiles, fieldCodeUsages } from "loopar/core/document/field-rename.js";
 
 export default class Entity extends BaseDocument {
   get is_builder() {return true};
@@ -111,6 +115,11 @@ export default class Entity extends BaseDocument {
       }
     }
 
+    // A field renamed in the designer: its values would stay in the old
+    // column. A data migration moves them, here now and on every tenant at
+    // its next update (core/document/app-migrations.js).
+    const migration = await this.#renameMigration();
+
     const write = async () => {
       if (this.isDBEntity()) {
         await loopar.db.makeTable(this.name, this.doc_structure, {
@@ -128,13 +137,80 @@ export default class Entity extends BaseDocument {
     };
 
     if (!loopar.installing) {
-      // The table change and the entity record, together or not at all.
-      await loopar.db.withTransaction(write);
+      // The table change, the entity record and its data migration, together or not at all.
+      try {
+        await loopar.db.withTransaction(write);
+      } catch (e) {
+        // Not saved: the migration it would have shipped goes too, and the
+        // other entities' files get their references back.
+        if (migration) {
+          fs.rmSync(migration.file, { force: true });
+          for (const f of [...migration.files].reverse()) fs.writeFileSync(f.path, f.original);
+        }
+        throw e;
+      }
       await this.__build__();
+      if (migration) {
+        // After the build: the refs now say which columns the entity still
+        // declares, so the renamed ones' old columns can go.
+        const what = `${migration.app}/migrations/${migration.name} (${migration.renames.map((r) => `${r.from} → ${r.to}`).join(", ")})`;
+        try {
+          await runMigrations(migration.app, { only: [migration.name] });
+          await syncForeignKeys(loopar.db);
+          const notes = [`Data migration ${what} created and applied here: it renames the column and what names the field on every site at its next update.`];
+          if (migration.files.length) notes.push(`References updated in ${migration.files.length} other file(s): ${migration.files.slice(0, 5).map((f) => f.file).join(", ")}${migration.files.length > 5 ? "…" : ""}.`);
+          if (migration.usages.length) notes.push(`Check the code that may name "${migration.renames.map((r) => r.from).join('", "')}": ${migration.usages.slice(0, 5).join(", ")}${migration.usages.length > 5 ? ` and ${migration.usages.length - 5} more` : ""}.`);
+          this.saveNotice = notes.join(" ");
+        } catch (e) {
+          console.error(`[entity] data migration ${what} failed:`, e?.message || e);
+          this.saveNotice = `Data migration ${what} created, but applying it here failed (${e?.message || e}): it stays pending and runs again with the app's next Update.`;
+        }
+      }
     } else {
       await write();
       await this.makeViews();
     }
+  }
+
+  /**
+   * The data migration a save needs (renamed fields of a table entity), as a
+   * new file of the entity's app — or null. Only in the designer: an install
+   * replays the migrations the app already ships.
+   */
+  async #renameMigration() {
+    if (loopar.installing || this.__IS_NEW__ || !this.isDBEntity() || this.entityIsSingle()) return null;
+    const stored = await loopar.db.getValue(this.__ENTITY__?.name || "Entity", "doc_structure", this.name, { ifNotFound: null });
+    const parse = (v) => (typeof v === "string" ? loopar.utils.JSONparse(v, []) : v) || [];
+    const hasColumn = (el) => fieldIsWritable(el) && el.element !== FORM_TABLE && !isVirtualField(el.data || {});
+    const renames = renamedFields(parse(stored), parse(this.doc_structure), hasColumn);
+    if (!renames.length) return null;
+
+    const app = await this.targetApp();
+    if (!app) return null;
+    // The record table exists before the save's transaction opens (creating
+    // it inside would commit that transaction on MySQL).
+    await appliedMigrations(app);
+    // What names the field moves with it: in this entity now (it is saved
+    // with them), in the other entities' files here, and in every tenant's
+    // database through the migration.
+    const files = [];
+    const usages = [];
+    for (const r of renames) {
+      const ref = { entity: this.name, from: r.from, to: r.to };
+      renameFieldInEntityRecord(this, ref);
+      files.push(...renameFieldInFiles(ref));
+      usages.push(...fieldCodeUsages(ref));
+    }
+
+    const q = (v) => JSON.stringify(v);
+    const created = createMigration(app, {
+      description: `${this.name}: ${renames.map((r) => `${r.from} → ${r.to}`).join(", ")}`,
+      body: renames.flatMap((r) => [
+        `await migrate.renameColumn(${q(this.name)}, ${q(r.from)}, ${q(r.to)});`,
+        `await migrate.renameFieldReferences(${q(this.name)}, ${q(r.from)}, ${q(r.to)});`,
+      ]).join("\n"),
+    });
+    return { ...created, renames, files, usages: [...new Set(usages)] };
   }
 
   async initialize() {
@@ -630,7 +706,7 @@ export default class Entity extends BaseDocument {
       loopar.throw(
         `Cannot modify entities of "${appName}": ` +
         `physical version (${physical}) is ahead of installed (${installed}). ` +
-        `Run <a href="/desk/App Manager/view">Update</a> first to sync the database.`
+        `Run <a href="/desk/App Manager/list">Update</a> first to sync the database.`
       );
     }
   }

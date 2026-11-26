@@ -2,7 +2,6 @@
 
 import loopar from "loopar";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useCookies } from "@services/cookie";
 import { usePersist } from "@services/persist-state";
 import { PermissionTable } from "./permission-table.jsx";
 import { SubjectRail } from "./subject-rail.jsx";
@@ -16,7 +15,8 @@ import { __ } from "loopar";
  *   manager = "user"    → embedded in the User form (subject fixed = user)
  */
 export function RolePermissionManager({ manager = "general", role: initialRole, user: initialUser }) {
-  const [catalog, setCatalog] = useCookies("umCatalog", null);
+  // Fetched on every mount; never a cookie (too big for 4KB and sent on every request).
+  const [catalog, setCatalog] = useState(null);
   const [commonActions, setCommonActions] = useState([]);
   const [subjects, setSubjects] = useState(null);
   const [selected, setSelected] = usePersist(`${manager}subject`,

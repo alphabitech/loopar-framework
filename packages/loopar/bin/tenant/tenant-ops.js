@@ -274,14 +274,66 @@ export async function destroyTenant(name, { removePath = true, dropDatabase = tr
  * a proxy answer can't be mistaken for a finished install. Used by the cloud
  * control plane.
  *
- * @param {object} opts { domain, token?, payload? }
+ * The install answers at once with a background job; this follows it through
+ * `/api/System/job` until it ends, so no request is held open for minutes (Node
+ * cuts them at 5) and a long install can't read as a failed one.
+ * `onProgress(job)` gets each new state ({ state, step, percent, ... }).
+ *
+ * @param {object} opts { domain, token?, payload?, onProgress?, timeoutMs? }
  */
-export async function installTenant({ domain, token = null, payload = {} }) {
+export async function installTenant({ domain, token = null, payload = {}, onProgress = null, timeoutMs = 30 * 60 * 1000 }) {
   if (!domain) throw new Error('installTenant: domain is required');
   const body = JSON.stringify({
     email: '', company: '', admin_password: '', confirm_password: '',
     ...payload,
   });
+
+  const r = await coreRequest({ domain, path: '/api/System/install?app_name=loopar', body, token });
+  if (r.status >= 400) {
+    throw new Error(`Install returned ${r.status}: ${(r.text || '<no body>').slice(0, 300)}`);
+  }
+
+  const job = jobOf(r.text);
+  if (!job?.id) return { status: r.status };
+
+  // Follow the job until it ends.
+  const started = Date.now();
+  let last = '';
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const poll = await coreRequest({ domain, path: `/api/System/job?id=${encodeURIComponent(job.id)}&log=0`, body: '{}' })
+      .catch((e) => ({ status: 0, text: e.message }));
+    const state = poll.status < 400 ? jobOf(poll.text) : null;
+
+    if (state) {
+      const key = `${state.state}|${state.step}|${state.percent}`;
+      if (key !== last) {
+        last = key;
+        try { onProgress?.(state); } catch { /* best effort */ }
+      }
+      if (state.state === 'completed') return { status: 200, job: state };
+      if (state.state === 'failed') throw new Error(`Install failed: ${state.error || 'unknown error'}`);
+    } else if (poll.status === 404) {
+      throw new Error('Install job lost (the core restarted during the install?)');
+    }
+    if (Date.now() - started > timeoutMs) {
+      throw new Error(`Install still running after ${Math.round(timeoutMs / 60000)} min: giving up waiting (it may still finish).`);
+    }
+  }
+}
+
+/** The `job` in a JSON answer (`{ job }` or wrapped in `data`), or null. */
+function jobOf(text) {
+  try {
+    const parsed = JSON.parse(text || '{}');
+    return parsed?.job || parsed?.data?.job || null;
+  } catch {
+    return null;
+  }
+}
+
+/** POST to a tenant on the core itself (Host = its domain), body read whole. */
+function coreRequest({ domain, path, body, token = null }) {
   const headers = {
     Host: domain,
     'Content-Type': 'application/json',
@@ -292,22 +344,17 @@ export async function installTenant({ domain, token = null, payload = {} }) {
   const bind = coreHost();
   const host = !bind || bind === '0.0.0.0' || bind === '::' ? '127.0.0.1' : bind;
 
-  const r = await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const req = http.request(
-      { host, port: corePort(), method: 'POST', path: '/api/System/install?app_name=loopar', headers },
+      { host, port: corePort(), method: 'POST', path, headers },
       (res) => {
         let text = '';
         res.setEncoding('utf8');
-        res.on('data', (chunk) => { if (text.length < 2000) text += chunk; });
+        res.on('data', (chunk) => { if (text.length < 1_000_000) text += chunk; });
         res.on('end', () => resolve({ status: res.statusCode, text }));
       },
     );
     req.on('error', reject);
     req.end(body);
   });
-
-  if (r.status >= 400) {
-    throw new Error(`Install returned ${r.status}: ${(r.text || '<no body>').slice(0, 300)}`);
-  }
-  return { status: r.status };
 }

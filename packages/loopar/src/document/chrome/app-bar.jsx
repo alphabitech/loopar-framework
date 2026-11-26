@@ -192,9 +192,12 @@ const VIEW_BUTTON = {
  * to pick another (two views would just toggle).
  */
 function ViewSwitch({ Document, viewType, viewTypeToggle, setViewType }) {
-  const views = listViews(Document);
+  const { customViews } = useViewOptions();
+  const views = listViews(Document, customViews);
+  // Built-in views, then the ones the list declares itself (`customViews`).
+  const button = (view) => VIEW_BUTTON[view] || customViews?.[view] || VIEW_BUTTON.List;
   if (views.length <= 2 || !setViewType) {
-    const next = VIEW_BUTTON[nextListView(Document, viewType)];
+    const next = button(nextListView(Document, viewType, customViews));
     return (
       <Button className="px-2" variant="secondary" onClick={viewTypeToggle} title={__("Toggle view")}>
         {next.icon}
@@ -203,7 +206,7 @@ function ViewSwitch({ Document, viewType, viewTypeToggle, setViewType }) {
     );
   }
 
-  const current = VIEW_BUTTON[viewType] || VIEW_BUTTON.List;
+  const current = button(viewType);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -215,8 +218,8 @@ function ViewSwitch({ Document, viewType, viewTypeToggle, setViewType }) {
       <DropdownMenuContent align="end">
         {views.map((view) => (
           <DropdownMenuItem key={view} onSelect={() => setViewType(view)} className="gap-2 [&_svg]:size-4">
-            {VIEW_BUTTON[view].icon}
-            <span className="flex-1">{VIEW_BUTTON[view].label()}</span>
+            {button(view).icon}
+            <span className="flex-1">{button(view).label()}</span>
             {view === viewType && <CheckIcon className="text-muted-foreground" />}
           </DropdownMenuItem>
         ))}

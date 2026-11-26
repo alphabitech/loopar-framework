@@ -42,7 +42,12 @@ export function useActiveApp(apps) {
     || (dashboard && apps.find(a => (a.dashboards || []).some(d => d.name === dashboard)))
     // The route first: while the next document loads, `activeModule` still names the
     // previous one's module (App Home lives in core → Loopar flashed in between).
-    || apps.find(a => appOwns(a, segment)) || apps.find(a => appOwns(a, activeModule));
+    || apps.find(a => appOwns(a, segment))
+    // Desk home (/desk, no segment) belongs to no app: keep the stored one. Its
+    // document lives in `core`, and `activeModule` is only set in an effect (null
+    // during SSR), so asking it here made SSR show the stored app and the client
+    // then jump to Loopar.
+    || (segment && apps.find(a => appOwns(a, activeModule)));
 
   useEffect(() => {
     if (fromRoute && fromRoute.name !== stored) setStored(fromRoute.name);

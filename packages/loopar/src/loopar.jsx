@@ -223,8 +223,9 @@ class Loopar {
     this.emit('refresh', { force: true });
   }
 
-  refresh() {
-    this.emit('refresh');
+  /** Re-fetch the active document. `{ freeze: false }`: in the background, no loading overlay. */
+  refresh({ freeze } = {}) {
+    this.emit('refresh', freeze === false ? { freeze: false } : undefined);
   }
 
   /**

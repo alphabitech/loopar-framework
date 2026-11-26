@@ -16,7 +16,7 @@ import http from "http";
 import { RealtimeManager } from "../realtime/RealtimeManager.js";
 import { kioskManifest } from "../global/kiosk-manifest.js";
 import { robotsTxt, sitemapXml } from "../global/seo.js";
-import { buildIdMiddleware, buildEndpoint, previousAssetsMiddleware } from "./build-info.js";
+import { buildIdMiddleware, buildEndpoint, previousAssetsMiddleware, isBuildAsset, IMMUTABLE_CACHE } from "./build-info.js";
 import { debugCollector } from "../debug/collector.js";
 import { isRestoring, maintenanceReason, unplugTenant } from "../backup/core-ops.js";
 import { PermissionManager } from "../auth/PermissionManager.js";
@@ -271,7 +271,15 @@ export class Server extends Router {
     });
 
     if (this.serveProduction) {
-      server.use(express.static(path.join(loopar.pathRoot, 'dist/client')));
+      // Build files with no precompressed variant (under the plugin's size
+      // threshold) land here: same forever-cache as the ones zstdMiddleware serves.
+      const distClient = path.join(loopar.pathRoot, 'dist/client');
+      server.use(express.static(distClient, {
+        setHeaders: (res, filePath) => {
+          const urlPath = '/' + path.relative(distClient, filePath).split(path.sep).join('/');
+          if (isBuildAsset(urlPath)) res.setHeader('Cache-Control', IMMUTABLE_CACHE);
+        },
+      }));
       // A tab still on the previous bundle may lazy-load a chunk the new dist
       // no longer has: serve it from the releases kept on disk.
       server.use(previousAssetsMiddleware());
@@ -337,6 +345,7 @@ export class Server extends Router {
           return null;
         }
       },
+      getTokenNameFor: (siteName) => getTenantInstance(siteName)?.auth?.tokenName ?? null,
       isKnownTenant: (siteName) => !!tenantRegistry.get(siteName),
       // Debugger stream: the users who may open the Debugger page.
       canJoin: (siteName, channel, userId) => {

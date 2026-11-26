@@ -375,7 +375,8 @@ export default class BaseController extends CoreController {
       await document.save();
 
       return await this.success(
-        `${(Entity.name === "Entity") ? document.type || "Entity" : (isSingle ? "" : Entity.name)} ${isSingle ? Entity.name : document.name} saved successfully`, { name: document.name, ...document.versionStamp() }
+        // `saveNotice`: what else the save did that the user should know (e.g. a data migration written).
+        `${(Entity.name === "Entity") ? document.type || "Entity" : (isSingle ? "" : Entity.name)} ${isSingle ? Entity.name : document.name} saved successfully${document.saveNotice ? `. ${document.saveNotice}` : ""}`, { name: document.name, ...document.versionStamp() }
       );
     } else {
       if(this.preloaded == true) {

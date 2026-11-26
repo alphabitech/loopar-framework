@@ -133,6 +133,14 @@ export class Middleware {
         return this.redirect(req, res, url);
       };
 
+      // The progress of a setup job (System/job) is read from memory, never
+      // from the database: it must answer all along the install it reports,
+      // which moves the tenant through states that look like an outage
+      // (db.config already names the new database, the server isn't
+      // initialized yet). Without this every poll got a 503.
+      const isJobPoll = isSystemRpc && String(req.__params__?.action || '').toLowerCase() === 'job';
+      if (isJobPoll) return next();
+
       // A database outage blocks everything, setup RPCs included: the wizard
       // must not offer (or run) a fresh install over a tenant whose server
       // is merely down.

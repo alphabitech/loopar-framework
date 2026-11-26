@@ -5,6 +5,9 @@ import * as lucideIcons from 'lucide-react';
 import * as simpleIcons from 'simple-icons';
 
 import { fileManage } from "../file-manage.js";
+
+/** The app under packages/loopar/apps: always served, it is the framework itself. */
+const CORE_APP = "core";
 import { elementsDict, elementsDefinition } from "../global/element-definition.js";
 import { formulaFields, virtualFields, isVirtualField, fetchIfEmptyFields } from "../global/formula.js";
 import { calendarFields } from "../global/calendar.js";
@@ -25,6 +28,32 @@ import { pickWebApp } from '../global/web-app-pick.js';
 import { syncForeignKeys } from '../document/foreign-keys.js';
 
 export class Builder {
+  /**
+   * installed-apps.json follows the App table (the source of truth): the
+   * file drifted (apps uninstalled still listed, installed ones missing) and
+   * the refs read it to decide which apps' entities this tenant serves.
+   */
+  async syncInstalledApps() {
+    let rows;
+    try {
+      rows = await this.db.getAll('App', ['name']);
+    } catch {
+      return false; // No database yet (setup): nothing to compare with.
+    }
+    if (!Array.isArray(rows) || !rows.length) return false;
+
+    const current = this.installedApps || {};
+    const next = Object.fromEntries(rows.map(({ name }) => [name, current[name] ?? true]));
+    const same = Object.keys(next).length === Object.keys(current).length
+      && Object.keys(next).every((name) => name in current);
+    if (same) return false;
+
+    console.log(`[apps] installed-apps.json follows the App table: ${Object.keys(next).join(', ')}`);
+    await fileManage.setConfigFile('installed-apps', next);
+    this.__INSTALLED_APPS__ = next;
+    return true;
+  }
+
   async buildRefs() {
     let types = {};
     const docs = this.getEntities();
@@ -99,20 +128,15 @@ export class Builder {
     const isMine = (app) => installed.has(String(app).toLowerCase())
       || (app && this.installingApp && this.utils.compare(app, this.installingApp));
 
-    // Website templates are only the base sites are copied from: unless this
-    // tenant installed one (to edit it) or is installing it, its entities and
-    // pages stay out of the refs, so they never shadow or block anything.
-    const templateApps = new Set(this.getApps()
-      .filter(app => {
-        const raw = this.getFile(this.makePath(this.pathRoot, app.appRoot, "installer.json"));
-        const header = raw && this.utils.isJSON(raw) ? JSON.parse(raw)?.App : null;
-        return Number(header?.is_template) === 1;
-      })
-      .map(app => app.name.toLowerCase()));
   
+    // The core app ships with the framework; any other app serves its
+    // entities only while this tenant has it installed (or is installing
+    // it): an uninstalled app's records stay in the database, unreachable.
+    const servesApp = (app) => String(app).toLowerCase() === CORE_APP || isMine(app);
+
     for (const doc of Object.values(docs)) {
       if (doc.__deleted_at__) continue;
-      if (templateApps.has(String(doc.__APP__).toLowerCase()) && !isMine(doc.__APP__)) continue;
+      if (!servesApp(doc.__APP__)) continue;
   
       const isBuilder = (doc.build || ['Builder', 'Entity'].includes(doc.name)) ? 1 : 0;
       const isChild = doc.is_child ? 1 : 0;
@@ -371,6 +395,9 @@ export class Builder {
     if (this.installingApp) return;
 
     await this.buildRefs();
+    // The App table may disagree with installed-apps.json (it drifted): when
+    // it does, the file is corrected and the refs follow it.
+    if (await this.syncInstalledApps()) await this.buildRefs();
    
     const writeFile = async (data) => {
       await fileManage.setConfigFile('loopar.config', data);

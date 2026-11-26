@@ -1,5 +1,6 @@
 import { cn } from "@cn/lib/utils";
-import React, {useEffect} from "react";
+import React, {useEffect, useMemo, useState} from "react";
+import Emitter from "@services/emitter/emitter";
 import {CookiesProvider} from '@services/cookie';
 import {PersistStateProvider} from '@services/persist-state';
 import { WorkspaceProvider } from "@workspace/workspace-provider";
@@ -70,7 +71,17 @@ interface RootLayoutProps {
   onSaved?: (name: string, response?: unknown) => void;
 }
 
-const Main = ({ __META__, permissions, pathname, primary = true, onClose, onSaved }: RootLayoutProps) => {
+const Main = ({ __META__: initialMeta, permissions, pathname, primary = true, onClose, onSaved }: RootLayoutProps) => {
+  // Workspace data that can change without a page load (the desk menu after
+  // an app is installed or removed): `loopar.emit("workspace-meta", patch)`.
+  const [metaPatch, setMetaPatch] = useState<Record<string, unknown> | null>(null);
+  useEffect(() => {
+    if (!primary) return;
+    const onPatch = (patch: Record<string, unknown>) => setMetaPatch((prev) => ({ ...(prev || {}), ...(patch || {}) }));
+    Emitter.on("workspace-meta", onPatch);
+    return () => { Emitter.off("workspace-meta", onPatch); };
+  }, [primary]);
+  const __META__ = useMemo(() => (metaPatch ? { ...initialMeta, ...metaPatch } : initialMeta), [initialMeta, metaPatch]);
   const { components, Document } = __META__;
   const { Workspace, View } = components;
 

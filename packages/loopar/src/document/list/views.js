@@ -21,14 +21,17 @@ export function calendarOf(Document) {
  * field; Map needs latitude and longitude fields. List, Grid, Tree, Kanban,
  * Calendar and Map are remembered per user; Report is in the URL (`?report=…`,
  * global/list-report.js), so a report can be shared.
+ * `custom`: views a list declares itself (view option `customViews`:
+ * `{ Name: { icon, label, render(ctrl) } }`), listed before Report.
  */
-export const listViews = (Document) => [
+export const listViews = (Document, custom = null) => [
   "List",
   "Grid",
   ...(treeOf(Document) ? ["Tree"] : []),
   ...(Document?.workflow ? ["Kanban"] : []),
   ...(calendarOf(Document) ? ["Calendar"] : []),
   ...(geoOf(Document) ? ["Map"] : []),
+  ...Object.keys(custom || {}),
   "Report",
 ];
 
@@ -49,7 +52,7 @@ export function geoOf(Document) {
 }
 
 /** The view the toggle switches to from `current`. */
-export const nextListView = (Document, current) => {
-  const views = listViews(Document);
+export const nextListView = (Document, current, custom = null) => {
+  const views = listViews(Document, custom);
   return views[(views.indexOf(current) + 1) % views.length];
 };

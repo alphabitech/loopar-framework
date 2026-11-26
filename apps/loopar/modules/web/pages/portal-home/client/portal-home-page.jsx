@@ -5,7 +5,7 @@ import { loopar, __ } from 'loopar';
 import { Link } from '@link';
 import { Button, buttonVariants } from '@cn/components/ui/button';
 import { cn } from '@cn/lib/utils';
-import { FileText, KeyRound, RefreshCw, ShieldAlert } from 'lucide-react';
+import { FileText, KeyRound, LayoutDashboard, RefreshCw, ShieldAlert } from 'lucide-react';
 
 /** Portal page: always opens at the top. */
 export const config = { restoreScroll: false };
@@ -114,7 +114,7 @@ export default function PortalHomePage() {
   }
   if (!data) return <p className="p-6 text-center text-sm text-muted-foreground">{__("Loading…")}</p>;
 
-  const { account, sections } = data;
+  const { account, sections, pages = [] } = data;
 
   return (
     <div className="space-y-5 py-2">
@@ -133,9 +133,23 @@ export default function PortalHomePage() {
         </div>
       )}
 
+      {pages.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {pages.map((p) => (
+            <a key={p.page} href={p.href} className="group flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/50">
+              <LayoutDashboard className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+              <span className="min-w-0">
+                <span className="block font-semibold group-hover:text-primary">{__(p.label)}</span>
+                {p.description && <span className="block text-sm text-muted-foreground">{__(p.description)}</span>}
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
+
       {sections.map((s) => <Section key={s.entity} section={s} />)}
 
-      {!sections.length && (
+      {!sections.length && !pages.length && (
         <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
           {account.desk_user
             ? __("You are signed in with a staff account. This page lists the documents of portal users (customers).")

@@ -33,7 +33,7 @@ function DetailValue({ col, value }) {
       : <span className="text-muted-foreground" aria-label={__("No")}>—</span>;
   }
   if (col.element === ICON_INPUT) {
-    return isEmpty(value) ? <span className="text-muted-foreground">—</span> : <DynamicIcon className="h-4 w-4" icon={value} />;
+    return isEmpty(value) ? <span className="text-muted-foreground">—</span> : <DynamicIcon className="h-4 w-4" icon={{ value }} />;
   }
   if (isEmpty(value)) return <span className="text-muted-foreground">—</span>;
   return <span className="truncate" title={String(value)}>{String(value)}</span>;
@@ -41,6 +41,8 @@ function DetailValue({ col, value }) {
 
 /** Default card used when the view doesn't provide its own `gridTemplate`. */
 function GridCard({ row, titleFields, nameVisible, detailCols, iconCol, selected, onSelect, Entity, onDelete, portal = false }) {
+  // openRecords:false: the card doesn't open the record (no link, no row menu).
+  const opens = useViewOptions().openRecords !== false;
   const title = titleFields.map((f) => row.__titles__?.[f] ?? row[f]).filter((v) => !isEmpty(v)).join(" ") || row.name;
   const showName = nameVisible && String(title).toLowerCase() !== String(row.name).toLowerCase();
   const icon = iconCol ? row[iconCol.data.name] : null;
@@ -59,7 +61,7 @@ function GridCard({ row, titleFields, nameVisible, detailCols, iconCol, selected
           style={{ backgroundColor: loopar.bgColor(row.name) }}
         >
           {icon
-            ? <DynamicIcon className="h-5 w-5" icon={icon} />
+            ? <DynamicIcon className="h-5 w-5" icon={{ value: icon }} />
             : <span className="text-base font-semibold">{loopar.utils.avatar(String(title))}</span>}
           {/* Selection checkbox sits on the avatar: visible on hover, when selected, or on touch devices. */}
           {onSelect && <span
@@ -73,14 +75,18 @@ function GridCard({ row, titleFields, nameVisible, detailCols, iconCol, selected
         </div>
 
         <div className="min-w-0 flex-1">
-          <Link
-            to={recordLink(Entity, row.name, row, { portal })}
-            renderOnRestrict={true}
-            bare
-            className="block truncate font-medium leading-tight text-foreground hover:underline"
-          >
-            {title}
-          </Link>
+          {opens ? (
+            <Link
+              to={recordLink(Entity, row.name, row, { portal })}
+              renderOnRestrict={true}
+              bare
+              className="block truncate font-medium leading-tight text-foreground hover:underline"
+            >
+              {title}
+            </Link>
+          ) : (
+            <span className="block truncate font-medium leading-tight text-foreground">{title}</span>
+          )}
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             {showName && <span className="truncate font-mono">{row.name}</span>}
             {showName && tag && <span className="text-border">•</span>}
@@ -88,9 +94,11 @@ function GridCard({ row, titleFields, nameVisible, detailCols, iconCol, selected
           </div>
         </div>
 
-        <div className="-mr-2 -mt-1 flex-shrink-0">
-          <RowMenu row={row} Entity={Entity} onDelete={onDelete} />
-        </div>
+        {opens && (
+          <div className="-mr-2 -mt-1 flex-shrink-0">
+            <RowMenu row={row} Entity={Entity} onDelete={onDelete} />
+          </div>
+        )}
       </div>
 
       {detailCols.length > 0 && (

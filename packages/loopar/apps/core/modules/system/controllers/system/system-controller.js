@@ -7,6 +7,21 @@ import { isPrivateIp } from "../../../../../../core/global/storage/upload-guard.
 import { testServerConnection } from "db-env";
 import { connectionFromInstallData } from "../../../../../../core/global/install-connection.js";
 import { installSiteFromTemplate, defaultSiteName } from "../../forms/installer/template.js";
+import { startJob, getJob, publicJob } from '../../../../../../core/jobs/jobs.js';
+
+/**
+ * Sign-in after the install wizard. The browser that submitted the install
+ * sends a random nonce; only its hash is kept here, by job id. When the job
+ * has finished, that browser trades job id + nonce for the Administrator's
+ * session (System/claimLogin): once, within a few minutes. The job id alone
+ * (public, it reads the progress) is worth nothing; the nonce never leaves
+ * that browser nor appears in the job. Memory only: a restart drops it and
+ * the wizard falls back to the login page.
+ */
+const LOGIN_CLAIMS = new Map();
+const CLAIM_TTL_MS = 5 * 60 * 1000;
+const NONCE_RE = /^[a-f0-9]{64}$/;
+const hashNonce = (nonce) => crypto.createHash('sha256').update(String(nonce)).digest('hex');
 
 /**
  * Setup actions. They are `publicAction*` so the bootstrap pages (the install
@@ -22,7 +37,8 @@ const APP_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 export default class SystemController extends BaseController {
   client = "form";
   entry = "installer";
-  static publicActions = ['testConnection', 'install', 'update', 'reinstall'];
+  // `job`: progress of a setup job (install/update), read by its id — stays public.
+  static publicActions = ['testConnection', 'install', 'update', 'reinstall', 'job', 'claimLogin'];
 
   constructor(props) {
     super(props);
@@ -63,16 +79,16 @@ export default class SystemController extends BaseController {
   }
 
   async actionInstall() {
-    await this.#assertCanManageInstalls();
+    await this.assertCanManageInstalls();
     return await this.publicActionInstall();
   }
 
   async actionUpdate() {
-    await this.#assertCanManageInstalls();
+    await this.assertCanManageInstalls();
     return await this.publicActionUpdate();
   }
 
-  async #assertCanManageInstalls() {
+  async assertCanManageInstalls() {
     // Mutations only — validateCsrf exempts GET, and `update` needs no body.
     const method = String(this.method || '').toUpperCase();
     if (method === 'GET' || method === 'HEAD') {
@@ -163,11 +179,13 @@ export default class SystemController extends BaseController {
    * if the database is ever wiped. The Tenant Manager mints a fresh one on
    * demand when a new install link is needed.
    */
-  async #scrubSetupToken() {
+  async #scrubSetupToken({ cookie = true } = {}) {
     if (!loopar.__installed__ || !loopar.installToken) return;
     try {
       await tenant.saveTenant({ NAME: loopar.tenantId, INSTALL_TOKEN: '' });
-      loopar.cookie.set(this.#setupCookieName(), '', { httpOnly: true, path: '/', maxAge: 0 });
+      // In a background job the response is gone: the cookie just expires
+      // (30 min), and with the token emptied it opens nothing meanwhile.
+      if (cookie) loopar.cookie.set(this.#setupCookieName(), '', { httpOnly: true, path: '/', maxAge: 0 });
     } catch (e) {
       console.warn(`[setup] Could not scrub install token for ${loopar.tenantId}: ${e.message}`);
     }
@@ -264,15 +282,36 @@ export default class SystemController extends BaseController {
       // `connection=current`: the wizard kept the connection already saved
       // for this tenant (provisioned / pre-seeded db.config), so its db_*
       // fields are not a new connection to apply.
+      const { login_nonce: loginNonce, ...input } = this.data || {};
       const data = this.query?.connection === 'current'
-        ? Object.fromEntries(Object.entries(this.data).filter(([k]) => !k.startsWith('db_')))
-        : this.data;
-      await this.unInstallApp(this.getAppName(), data, reinstall);
-      if (this.getAppName() === "loopar" && !reinstall && data.template) {
-        await this.#createSiteFromSetup(data);
+        ? Object.fromEntries(Object.entries(input).filter(([k]) => !k.startsWith('db_')))
+        : input;
+      const appName = this.getAppName();
+      if (loopar.__installed__ && !reinstall && await loopar.appStatus(appName) === 'installed') {
+        loopar.throw({ status: 409, title: 'Conflict', message: 'App already installed, please refresh the page' });
       }
-      await this.#scrubSetupToken();
-      return this.redirect("view");
+
+      // The install runs as a background job: an install with integrity
+      // checks can outlast any HTTP timeout (Node cuts requests at 5 min) and
+      // a cut request read as a failed install that had actually finished.
+      // The caller follows the job: the wizard and the Update page poll
+      // `System/job`, cloud provisioning too (tenant-ops installTenant).
+      const job = this.#setupJob({
+        title: `${reinstall ? 'Update' : 'Install'} ${appName}`,
+        redirect: '/desk',
+        run: async () => {
+          await this.unInstallApp(appName, data, reinstall);
+          if (appName === "loopar" && !reinstall && data.template) {
+            await this.#createSiteFromSetup(data);
+          }
+          await this.#scrubSetupToken({ cookie: false });
+        },
+      });
+      // A fresh workspace install from the wizard may sign its browser in.
+      if (appName === 'loopar' && !reinstall && NONCE_RE.test(String(loginNonce || '')) && !job.alreadyRunning) {
+        this.#registerLoginClaim(job.id, loginNonce);
+      }
+      return { job };
     } else {
       const model = await loopar.newDocument("Installer", this.data)
       const response = await model.__meta__();
@@ -322,14 +361,84 @@ export default class SystemController extends BaseController {
       const model = await this.getInstallerModel();
       model.app_name ??= this.getAppName();
 
-      await model.install(true);
-      return this.redirect(this.postSetupDestination());
+      // Background job, like install: the Update page follows its progress.
+      const job = this.#setupJob({
+        title: `Update ${appName}`,
+        redirect: this.postSetupDestination() || (loopar.auth.user() ? '/desk' : '/auth/login'),
+        run: async () => { await model.install(true); },
+      });
+      return { job };
     } else {
       const model = await loopar.newDocument("Update", this.data)
       const response = await model.__meta__();
 
       return await this.render(response);
     }
+  }
+
+  /** A setup job (install/update): where the browser goes when it ends travels in its result. */
+  #setupJob({ title, redirect, run }) {
+    return startJob({
+      kind: 'setup',
+      title,
+      // One install/update at a time per tenant (shared with the App Manager).
+      key: 'app-lifecycle',
+      run: async () => {
+        await run();
+        return { redirect };
+      },
+    });
+  }
+
+  #registerLoginClaim(jobId, nonce) {
+    const now = Date.now();
+    for (const [id, claim] of LOGIN_CLAIMS) {
+      if (now - claim.at > CLAIM_TTL_MS * 6) LOGIN_CLAIMS.delete(id);
+    }
+    LOGIN_CLAIMS.set(jobId, { hash: hashNonce(nonce), tenant: loopar.tenantId ?? null, at: now });
+  }
+
+  /**
+   * The install wizard's browser, once its install job has finished, gets
+   * the Administrator's session: job id + the nonce it sent with the install.
+   * One attempt (right or wrong, the claim is spent), within CLAIM_TTL_MS of
+   * the job's end, only in this tenant. Anything else: sign in with the password.
+   */
+  async publicActionClaimLogin() {
+    const jobId = String(this.body?.job || this.data?.job || '');
+    const nonce = String(this.body?.nonce || this.data?.nonce || '');
+    const claim = LOGIN_CLAIMS.get(jobId);
+    LOGIN_CLAIMS.delete(jobId);
+
+    const job = getJob(jobId);
+    const valid = !!claim && !!job
+      && claim.tenant === (loopar.tenantId ?? null)
+      && job.kind === 'setup' && job.state === 'completed'
+      && !!job.finishedAt && Date.now() - job.finishedAt <= CLAIM_TTL_MS
+      && NONCE_RE.test(nonce) && this.#tokensMatch(hashNonce(nonce), claim.hash);
+
+    const user = valid ? await loopar.db.getDoc('User', 'Administrator') : null;
+    if (!user) {
+      loopar.throw({ code: 403, title: 'Sign in', message: 'Sign in with your password to continue.' });
+    }
+
+    loopar.auth.login(user);
+    return { signed_in: true };
+  }
+
+  /**
+   * Progress of a setup job. Public: the wizard has no user yet. The job id —
+   * a random UUID only the caller that started the install received — is what
+   * lets it be read, and only setup jobs of this tenant are served.
+   * `?log=0` leaves the log out (provisioning only needs the state).
+   */
+  async publicActionJob() {
+    const job = getJob(this.query?.id || this.body?.id);
+    if (!job || job.kind !== 'setup' || job.tenant !== (loopar.tenantId ?? null)) {
+      loopar.throw({ code: 404, title: 'Job', message: 'This job is no longer available (it may have ended before a restart).' });
+    }
+    const withLog = !['0', 'false'].includes(String(this.query?.log ?? '1'));
+    return { job: publicJob(job, { withLog }) };
   }
 
   async actionReinstall() {

@@ -34,6 +34,7 @@ import crypto from 'node:crypto';
 import { requestContext } from '../server/router/request-context.js';
 import { debugEnabled } from '../config/core-config.js';
 import { redactBindings, redactObject, redactUrl, scrubText, pickHeaders, clip } from './redact.js';
+import { parseStack, originOf, codeFrame, callSite } from './trace.js';
 
 export const DEBUG_LIMITS = Object.freeze({
   requests: 300,           // request entries kept per tenant
@@ -49,6 +50,9 @@ export const DEBUG_LIMITS = Object.freeze({
   slowQueryMs: 100,        // a query at least this slow is flagged
   repeatedQuery: 5,        // same statement this many times in one request → possible N+1
   pending: 5000,           // in-flight queries tracked before giving up on stragglers
+  stackFrames: 50,         // Error.stackTraceLimit while recording (Node's default 10 loses our frames)
+  trail: 25,               // events (SQL, logs) kept with an error: what led up to it
+  causes: 5,               // depth of err.cause chains kept
 });
 
 export const CORE_BUCKET = '__core__';
@@ -153,6 +157,9 @@ export class DebugCollector {
   #pendingCount = 0;
   #capturing = false;
   #resolveUser = null;
+  #resolveJob = null;
+  /** Error objects already recorded → their record (console.error(err) after the middleware, re-throws…). */
+  #recorded = new WeakMap();
   #removeProbe = null;
   #originalConsole = null;
   #onUncaught = null;
@@ -183,6 +190,10 @@ export class DebugCollector {
     this.#stream = stream && typeof stream.publish === 'function' ? stream : null;
     if (!this.#enabled) return this;
 
+    // Node keeps 10 frames by default: express, knex and the async hops eat
+    // them and the frame of our code that started it all is gone.
+    if (!(Error.stackTraceLimit >= DEBUG_LIMITS.stackFrames)) Error.stackTraceLimit = DEBUG_LIMITS.stackFrames;
+
     if (addQueryProbe) {
       this.#removeProbe = addQueryProbe({
         onQuery: (q) => this.#onQuery(q),
@@ -199,6 +210,15 @@ export class DebugCollector {
     this.#onUncaught = (err, origin) => this.recordError(err, { source: origin || 'uncaughtException', status: 500 });
     process.on('uncaughtExceptionMonitor', this.#onUncaught);
     return this;
+  }
+
+  /**
+   * `() => ({ id, kind, title, user }) | null` — the background job running in
+   * the current async context (core/jobs). Work done by a job is attributed to
+   * the job, not to the request that started it (which answered long ago).
+   */
+  setJobResolver(fn) {
+    this.#resolveJob = typeof fn === 'function' ? fn : null;
   }
 
   /** Undo install() (tests). */
@@ -273,7 +293,15 @@ export class DebugCollector {
 
   #context() {
     const store = requestContext.getStore();
-    return { store, entry: store?.req?.__DEBUG__ ?? null, tenant: store?.tenant?.name ?? null };
+    let job = null;
+    try { job = this.#resolveJob?.() ?? null; } catch { job = null; }
+    return {
+      store,
+      job,
+      // A job inherits the async context of the request that started it.
+      entry: job ? null : (store?.req?.__DEBUG__ ?? null),
+      tenant: store?.tenant?.name ?? job?.tenant ?? null,
+    };
   }
 
   // ─── Requests ─────────────────────────────────────────────────────────────
@@ -361,11 +389,11 @@ export class DebugCollector {
 
   #onQuery(q) {
     if (!this.#enabled || !q?.sql) return;
-    const { entry, tenant } = this.#context();
+    const { entry, tenant, job } = this.#context();
     if (this.#pendingCount >= DEBUG_LIMITS.pending) { this.#pending.clear(); this.#pendingCount = 0; }
     const key = q.__knexQueryUid || q.sql;
     const list = this.#pending.get(key);
-    const rec = { t: nowMs(), entry, tenant, sql: q.sql, bindings: q.bindings, method: q.method ?? null, tx: !!q.__knexTxId };
+    const rec = { t: nowMs(), at: new Date().toISOString(), entry, tenant, jobId: job?.id ?? null, sql: q.sql, bindings: q.bindings, method: q.method ?? null, tx: !!q.__knexTxId };
     if (list) list.push(rec); else this.#pending.set(key, [rec]);
     this.#pendingCount++;
   }
@@ -388,6 +416,7 @@ export class DebugCollector {
       rows: extra.rows ?? null,
       error: extra.error ?? null,
       tx: rec.tx,
+      at: rec.at,
     };
 
     const entry = rec.entry;
@@ -399,7 +428,7 @@ export class DebugCollector {
       else entry.droppedQueries++;
       return;
     }
-    this.#bucket(rec.tenant).background.push({ ...query, at: new Date().toISOString() });
+    this.#bucket(rec.tenant).background.push({ ...query, jobId: rec.jobId });
   }
 
   // ─── Logs ─────────────────────────────────────────────────────────────────
@@ -412,24 +441,49 @@ export class DebugCollector {
       const collector = this;
       console[level] = function debugCapture(...args) {
         original.apply(console, args);
-        collector.recordLog(level, args);
+        if (!collector.#enabled || collector.#capturing) return;
+        let site = null;
+        try { site = callSite(debugCapture); } catch { site = null; }
+        collector.recordLog(level, args, site);
       };
     }
   }
 
-  /** Record one console call (also usable directly: recordLog('info', ['text'])). */
-  recordLog(level, args) {
+  /**
+   * Record one console call (also usable directly: recordLog('info', ['text'])).
+   * `site` is where the call was made ({ fn, file, line, col }). An Error
+   * among the arguments keeps its stack, and console.error / console.warn of
+   * an Error is also recorded under Errors — caught-and-logged failures are
+   * exactly the ones nothing else reports.
+   */
+  recordLog(level, args, site = null) {
     if (!this.#enabled || this.#capturing) return;
     this.#capturing = true;
     try {
-      const { entry, tenant } = this.#context();
+      const { entry, tenant, job } = this.#context();
       const text = clip(scrubText(util.format(...args).replace(ANSI, '')), DEBUG_LIMITS.logChars);
-      const rec = { at: new Date().toISOString(), level, text, requestId: entry?.id ?? null };
+      const err = args.find((a) => a instanceof Error) ?? null;
+      const rec = {
+        at: new Date().toISOString(),
+        level,
+        text,
+        site,
+        requestId: entry?.id ?? null,
+        jobId: job?.id ?? null,
+        ...(job ? { job: job.title } : {}),
+      };
+      if (err?.stack && !text.includes(String(err.stack).split('\n')[1] ?? '\u0000')) {
+        rec.stack = clip(scrubText(String(err.stack).replace(ANSI, '')), DEBUG_LIMITS.stackChars);
+      }
       this.#bucket(tenant).logs.push(rec);
       this.#enqueue(tenant, 'logs', rec);
       if (entry) {
         if (entry.logs.length < DEBUG_LIMITS.logsPerRequest) entry.logs.push(rec);
         else entry.droppedLogs++;
+      }
+      if (err && (level === 'error' || level === 'warn')) {
+        const e = this.#recordError(err, { source: 'console', level: level === 'warn' ? 'warning' : 'error', site });
+        if (e) rec.errorId = e.id;
       }
     } catch {
       // a log line that can't be formatted is not worth breaking the caller
@@ -456,39 +510,122 @@ export class DebugCollector {
     }
   }
 
-  #recordError(err, { req, status, source = 'request' } = {}) {
+  #recordError(err, { req, status, source = 'request', level = null, site = null } = {}) {
+    if (err && typeof err === 'object' && this.#recorded.has(err)) return this.#recorded.get(err);
     const ctx = this.#context();
     req ??= ctx.store?.req;
-    const entry = req?.__DEBUG__ ?? null;
+    const job = ctx.job;
+    const entry = job ? null : (req?.__DEBUG__ ?? null);
     const code = Number(status ?? err?.status ?? (typeof err?.code === 'number' ? err.code : NaN));
     const httpStatus = Number.isFinite(code) && code >= 100 && code <= 599 ? code : 500;
+    const tenant = entry?.tenant ?? ctx.tenant;
 
-    // A query failure carries its SQL with the values interpolated in the
-    // message (and so in the first line of the stack): use the driver's part.
-    const fullMessage = String(err?.message ?? err);
-    const message = this.#queryErrors.get(err) ?? fullMessage;
-    let stack = err?.stack ? String(err.stack) : null;
-    if (stack && message !== fullMessage) stack = stack.split(fullMessage).join(message);
+    const main = this.#describe(err);
+    // No stack (a thrown string, a plain object): where it was reported from is the best we have.
+    if (!main.origin && site) main.origin = { ...site, reportedFrom: true };
+    if (!main.code && main.origin) main.code = codeFrame(main.origin);
+
+    const route = req?.__params__
+      ? {
+          workspace: req.__WORKSPACE_NAME__ ?? null,
+          document: req.__params__.document ?? null,
+          action: req.__CONTROLLER__?.action ?? req.__params__.action ?? null,
+          name: req.__params__.name ?? null,
+        }
+      : null;
 
     const rec = {
       id: newId(),
       at: new Date().toISOString(),
       source,
       status: httpStatus,
-      level: httpStatus >= 500 ? 'error' : 'warning',
-      name: err?.name ?? (typeof err),
+      level: level ?? (httpStatus >= 500 ? 'error' : 'warning'),
+      name: main.name,
       title: err?.title ? clip(err.title, 200) : null,
-      text: clip(scrubText(message), 2000),
+      text: main.text,
       code: typeof err?.code === 'string' ? clip(err.code, 80) : null,
-      stack: stack ? clip(scrubText(stack.replace(ANSI, '')), DEBUG_LIMITS.stackChars) : null,
-      method: req?.method ?? null,
-      url: req ? clip(redactUrl(req.originalUrl || req.url), 1000) : null,
+      stack: main.stack,
+      frames: main.frames,
+      origin: main.origin,
+      codeFrame: main.code,
+      causes: this.#causes(err),
+      method: job ? null : (req?.method ?? null),
+      url: !job && req ? clip(redactUrl(req.originalUrl || req.url), 1000) : null,
+      route: job ? null : route,
+      user: job ? (job.user ?? null) : (req ? this.#userOf(req, ctx.store) : null),
+      job: job ? { id: job.id, kind: job.kind ?? null, title: job.title ?? null } : null,
       requestId: entry?.id ?? null,
+      trail: this.#trail({ entry, job, tenant }),
     };
-    this.#bucket(entry?.tenant ?? ctx.tenant).errors.push(rec);
+    if (err && typeof err === 'object') this.#recorded.set(err, rec);
+    this.#bucket(tenant).errors.push(rec);
     if (entry && entry.errors.length < DEBUG_LIMITS.errorsPerRequest) entry.errors.push(rec);
-    this.#enqueue(entry?.tenant ?? ctx.tenant, 'errors', rec);
+    this.#enqueue(tenant, 'errors', rec);
     return rec;
+  }
+
+  /** name, text, stack, frames, origin and code frame of one error object. */
+  #describe(err) {
+    // A query failure carries its SQL with the values interpolated in the
+    // message (and so in the first line of the stack): use the driver's part.
+    const fullMessage = String(err?.message ?? err);
+    const message = this.#queryErrors.get(err) ?? fullMessage;
+    let stack = err?.stack ? String(err.stack).replace(ANSI, '') : null;
+    if (stack && message !== fullMessage) stack = stack.split(fullMessage).join(message);
+    const frames = parseStack(stack, DEBUG_LIMITS.stackFrames);
+    const origin = originOf(frames);
+    return {
+      name: err?.name ?? (typeof err),
+      text: clip(scrubText(message), 2000),
+      stack: stack ? clip(scrubText(stack), DEBUG_LIMITS.stackChars) : null,
+      frames,
+      origin,
+      code: origin ? codeFrame(origin) : null,
+    };
+  }
+
+  /** err.cause chain (and AggregateError.errors): what this error wraps. */
+  #causes(err) {
+    const out = [];
+    const seen = new Set([err]);
+    const queue = [];
+    const push = (c) => { if (c !== undefined && c !== null && !seen.has(c)) { seen.add(c); queue.push(c); } };
+    push(err?.cause);
+    if (Array.isArray(err?.errors)) err.errors.forEach(push);
+    while (queue.length && out.length < DEBUG_LIMITS.causes) {
+      const c = queue.shift();
+      const d = this.#describe(c);
+      out.push({ name: d.name, text: d.text, stack: d.stack, origin: d.origin, codeFrame: d.code });
+      push(c?.cause);
+    }
+    return out;
+  }
+
+  /**
+   * What led up to the error: the last SQL statements and log lines of the
+   * request (or of the background job) it happened in, oldest first.
+   */
+  #trail({ entry, job, tenant }) {
+    const events = [];
+    const addQuery = (q) => events.push({
+      at: q.at ?? null, kind: 'sql', text: clip(q.sql, 600), durationMs: q.durationMs ?? null,
+      rows: q.rows ?? null, error: q.error ?? null,
+    });
+    const addLog = (l) => events.push({
+      at: l.at, kind: 'log', level: l.level, text: clip(l.text, 600),
+      site: l.site ? `${l.site.file}:${l.site.line}` : null,
+    });
+    if (entry) {
+      entry.queries.slice(-DEBUG_LIMITS.trail).forEach(addQuery);
+      entry.logs.slice(-DEBUG_LIMITS.trail).forEach(addLog);
+    } else if (job) {
+      const b = this.#bucket(tenant);
+      b.background.items.filter((q) => q.jobId === job.id).slice(-DEBUG_LIMITS.trail).forEach(addQuery);
+      b.logs.items.filter((l) => l.jobId === job.id).slice(-DEBUG_LIMITS.trail).forEach(addLog);
+    }
+    return events
+      .sort((a, b) => String(a.at).localeCompare(String(b.at)))
+      .slice(-DEBUG_LIMITS.trail);
   }
 
   // ─── Reading ──────────────────────────────────────────────────────────────

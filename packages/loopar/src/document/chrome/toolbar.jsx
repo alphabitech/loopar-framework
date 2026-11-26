@@ -19,6 +19,7 @@ import { __ } from "@global/i18n";
  *   icon      lucide component
  *   onClick   handler, receives the event (menus pass a stub with preventDefault)
  *   to        URL: the action navigates instead of calling onClick
+ *   inModal   with `to`: opens it in a desk modal (onSaved runs when its form saves)
  *   primary   the record's main action: the only filled button. Several → the
  *             first wins, the rest show as visible secondaries. On an editable
  *             form Save keeps the primary slot and these show first in the row.
@@ -100,7 +101,7 @@ export function ActionButton({ action, variant = "secondary" }) {
 
   if (action.to) {
     return (
-      <Link variant={variant} to={action.to} className={className} title={action.title}>
+      <Link variant={variant} to={action.to} inModal={action.inModal} onSaved={action.onSaved} className={className} title={action.title}>
         <ActionContent action={action} />
       </Link>
     );

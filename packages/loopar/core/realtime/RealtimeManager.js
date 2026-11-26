@@ -39,11 +39,12 @@ class _RealtimeManager {
   attach(httpServer, options = {}) {
     if (this.io) return this;
 
-    const { tenantId, getJwtSecret, getJwtSecretFor, isKnownTenant, canJoin, ...ioOptions } = options;
+    const { tenantId, getJwtSecret, getJwtSecretFor, getTokenNameFor, isKnownTenant, canJoin, ...ioOptions } = options;
     this._canJoin = typeof canJoin === "function" ? canJoin : null;
     this._tenantId = tenantId || null;
     this._getJwtSecret = typeof getJwtSecret === "function" ? getJwtSecret : null;
     this._getJwtSecretFor = typeof getJwtSecretFor === "function" ? getJwtSecretFor : null;
+    this._getTokenNameFor = typeof getTokenNameFor === "function" ? getTokenNameFor : null;
     this._isKnownTenant = typeof isKnownTenant === "function" ? isKnownTenant : null;
 
     this.io = new Server(httpServer, {
@@ -111,7 +112,12 @@ class _RealtimeManager {
     socket.data.user = null;
 
     const cookies = parseCookies(socket.handshake.headers?.cookie);
-    const token = cookies[`loopar_token_${siteName}`];
+    // The session cookie is named after the tenant instance's id (a hash of
+    // the tenant name), not the namespace: ask the tenant for it.
+    const tokenName = this._getTokenNameFor?.(siteName) || `loopar_token_${siteName}`;
+    const token = cookies[tokenName];
+    // Tokens carry the same id in their `tenant` claim.
+    const authId = tokenName.slice("loopar_token_".length);
     // Per-namespace secret wins; legacy pinned resolver is the fallback. No
     // secret (tenant not initialized) → connect as guest (auth rooms denied).
     const secret = this._getJwtSecretFor?.(siteName) ?? this._getJwtSecret?.();
@@ -119,7 +125,7 @@ class _RealtimeManager {
     if (token && secret) {
       try {
         const userData = jwt.verify(token, secret);
-        if (userData && (!userData.tenant || userData.tenant === siteName)) {
+        if (userData && (!userData.tenant || userData.tenant === siteName || userData.tenant === authId)) {
           socket.data.userId = userData.name || null;
           socket.data.user = userData;
         }

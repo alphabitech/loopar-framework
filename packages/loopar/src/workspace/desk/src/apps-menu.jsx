@@ -11,6 +11,7 @@ import { cn } from "@cn/lib/utils";
 import { buttonVariants } from "@cn/components/ui/button";
 import { HistoryIcon, LayoutGridIcon, PinIcon, PinOffIcon, XIcon } from "lucide-react";
 import { useWorkspace } from "@workspace/workspace-provider";
+import { useSearchIndex } from "./search-index";
 import loopar from "loopar";
 import { __ } from "@global/i18n";
 
@@ -23,7 +24,7 @@ const APP_HOME = "App Home";
 const DEFAULT_PINS = [
   { label: "Entities", link: "/desk/Entity/list", icon: "Brush" },
   { label: "Builders", link: "/desk/Builder/list", icon: "Cog" },
-  { label: "Apps", link: "/desk/App Manager/view", icon: "CircuitBoard" },
+  { label: "Apps", link: "/desk/App Manager/list", icon: "CircuitBoard" },
   { label: "Modules", link: "/desk/Module/list", icon: "Component" },
   { label: "Settings", link: "/desk/System Settings/update", icon: "Settings2" },
   { label: "Files", link: "/desk/File Manager/list", icon: "Files" },
@@ -60,7 +61,7 @@ const writeRecent = (items) => {
 function useDestinations() {
   const { __META__ } = useWorkspace();
   const menu = __META__?.menu_data;
-  const index = __META__?.search_index;
+  const index = useSearchIndex();
 
   return useMemo(() => {
     const byLink = new Map();

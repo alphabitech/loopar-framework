@@ -13,7 +13,8 @@ import { isSubmittable, submitDocument, cancelDocument, withLifecycle } from './
  *
  *   - new records start in the initial state, whatever the client sends;
  *   - a save outside a transition keeps the stored state;
- *   - `applyTransition` checks the user, the required fields and the model's
+ *   - `applyTransition` checks the user (the transition's roles, or a
+ *     `transition:<Action>` grant on the entity), the required fields and the model's
  *     `beforeTransition`, runs the transition's method (only if the model
  *     lists it in `static workflowMethods`) and moves the state; then the
  *     model's `afterTransition` runs (its errors are logged, not thrown).
@@ -116,6 +117,21 @@ async function rolesOf(user) {
   return rows.map(r => r.role);
 }
 
+/** The permission action that lets a user run a role-narrowed transition without holding one of its roles. */
+export const transitionGrant = (action) => `transition:${action}`;
+
+/**
+ * Whether `user` may run transition `t` of `wf`: Administrator; anyone when
+ * the transition names no roles; a user with one of its roles; or a user
+ * granted exactly `transition:<Action>` on the entity (Permission). The
+ * grant is how an app built on another lets its own roles run that app's
+ * narrowed transitions, without writing role names into its workflow.
+ */
+function mayRun(t, wf, user, roles, admin) {
+  if (admin || !t.roles.length || t.roles.some(r => roles.includes(r))) return true;
+  return PermissionManager.grantedExactly(wf.document, transitionGrant(t.action), user);
+}
+
 /** The document's state; records saved before the workflow existed count as initial. */
 const stateOf = (doc, wf) => doc[wf.field] || wf.initial;
 
@@ -137,7 +153,7 @@ export async function availableTransitions(doc, wf, user = loopar.auth?.user?.()
     if (!fromOk || t.to === current) return false;
     if (system) return true;
     if (t.system_only) return false;
-    return admin || !t.roles.length || t.roles.some(r => roles.includes(r));
+    return mayRun(t, wf, user, roles, admin);
   });
 }
 
@@ -145,7 +161,7 @@ export async function availableTransitions(doc, wf, user = loopar.auth?.user?.()
 export async function userTransitions(wf, user = loopar.auth?.user?.()) {
   const admin = user === 'Administrator';
   const roles = admin ? [] : await rolesOf(user);
-  return wf.transitions.filter(t => !t.system_only && (admin || !t.roles.length || t.roles.some(r => roles.includes(r))));
+  return wf.transitions.filter(t => !t.system_only && mayRun(t, wf, user, roles, admin));
 }
 
 const clientTransition = (t) => ({

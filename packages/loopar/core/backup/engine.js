@@ -70,6 +70,13 @@ async function sha256File(file) {
   return hash.digest('hex');
 }
 
+/** Fingerprint of a folder's files (a Loopar database export): every file, by name. */
+async function sha256Folder(dir) {
+  const lines = [];
+  for (const f of fs.readdirSync(dir).sort()) lines.push(`${f}:${await sha256File(path.join(dir, f))}`);
+  return crypto.createHash('sha256').update(lines.join('\n')).digest('hex');
+}
+
 function frameworkInfo(root) {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -123,6 +130,55 @@ async function withLock(root, tenant, fn) {
 // the operator's CLI.
 const LEDGER = '.made';
 
+/**
+ * Lineage (the snapshot tree): HEAD names the backup the tenant's current
+ * state descends from — the last one taken, or the one restored. Each new
+ * backup records it as its `parent` and becomes the new HEAD; a restore
+ * moves HEAD to the restored backup, so what comes after branches from it.
+ */
+const HEAD = 'HEAD';
+export function readHead(root, tenant) {
+  try { return fs.readFileSync(path.join(backupsDir(root, tenant), HEAD), 'utf8').trim() || null; } catch { return null; }
+}
+async function writeHead(root, tenant, file) {
+  await fs.promises.mkdir(backupsDir(root, tenant), { recursive: true });
+  const p = path.join(backupsDir(root, tenant), HEAD);
+  if (file) await fs.promises.writeFile(p, `${file}\n`);
+  else await fs.promises.rm(p, { force: true });
+}
+
+/**
+ * The parent of the next backup: HEAD, or — when there is none yet (backups
+ * made before lineage was recorded) — the newest backup this server made,
+ * so the history stays one tree instead of starting a new root.
+ */
+function nextParent(root, tenant) {
+  const head = readHead(root, tenant);
+  if (head && fs.existsSync(path.join(backupsDir(root, tenant), head))) return head;
+  return listLocalBackups(root, tenant).find((b) => b.kind !== 'uploaded')?.file ?? null;
+}
+
+/**
+ * Keep the tree whole when a backup goes away (VMware's "delete snapshot"):
+ * its children are re-hung from its own parent and HEAD moves up to it.
+ * Only the local sidecars are rewritten; the manifest inside each archive
+ * keeps the parent it was made with.
+ */
+async function detachFromLineage(root, tenant, file) {
+  const dir = backupsDir(root, tenant);
+  const own = readSidecar(path.join(dir, file));
+  const hasParent = !!own && 'parent' in own;
+  const parent = hasParent ? own.parent : undefined;
+  for (const b of listLocalBackups(root, tenant)) {
+    if (b.file === file || b.manifest?.parent !== file) continue;
+    const side = { ...b.manifest };
+    if (hasParent) side.parent = parent;
+    else delete side.parent;
+    await fs.promises.writeFile(path.join(dir, `${b.file}.json`), JSON.stringify(side, null, 2));
+  }
+  if (readHead(root, tenant) === file) await writeHead(root, tenant, parent ?? null);
+}
+
 /** Was this archive made by this server (for this tenant)? */
 export async function madeHere(root, tenant, archive) {
   let lines;
@@ -145,7 +201,7 @@ export async function madeHere(root, tenant, archive) {
  * @param {Function} [o.onStep]         (step) progress callback
  * @returns {Promise<{ file, path, size, sha256, encrypted, manifest, remote: { destination, ok, error }, pruned }>}
  */
-export async function createBackup({ root = process.cwd(), tenant, kind = 'manual', settings, upload = true, prune = true, note = null, onStep = () => {}, lock = true } = {}) {
+export async function createBackup({ root = process.cwd(), tenant, kind = 'manual', settings, upload = true, prune = true, keep = [], note = null, format = null, onStep = () => {}, lock = true } = {}) {
   if (!tenant || !fs.existsSync(siteDir(root, tenant))) throw Object.assign(new Error(`Tenant "${tenant}" not found.`), { status: 404 });
   if (!BACKUP_KINDS.includes(kind)) throw new Error(`Unknown backup kind "${kind}".`);
   const run = async () => {
@@ -160,8 +216,18 @@ export async function createBackup({ root = process.cwd(), tenant, kind = 'manua
     try {
       onStep('database');
       await fs.promises.mkdir(path.join(work, 'database'));
-      const db = await dumpDatabase(root, tenant, path.join(work, 'database'));
+      // auto: native when this server has the engine's tools, else Loopar's own format.
+      const db = await dumpDatabase(root, tenant, path.join(work, 'database'), {
+        format: format || settings.db_format || 'auto',
+        onStep: (step) => onStep(`database: ${step}`),
+      });
       const dbPath = path.join(work, 'database', db.file);
+      // A Loopar export is a folder: its size and fingerprint cover all of its files.
+      const isFolder = fs.statSync(dbPath).isDirectory();
+      const dbSize = isFolder
+        ? fs.readdirSync(dbPath).reduce((n, f) => n + fs.statSync(path.join(dbPath, f)).size, 0)
+        : fs.statSync(dbPath).size;
+      const dbSha = isFolder ? await sha256Folder(dbPath) : await sha256File(dbPath);
 
       const date = new Date();
       const manifest = {
@@ -174,8 +240,12 @@ export async function createBackup({ root = process.cwd(), tenant, kind = 'manua
         host: os.hostname(),
         framework: frameworkInfo(root),
         apps: await appVersions(root, tenant),
-        database: { dialect: db.dialect, file: `database/${db.file}`, size: fs.statSync(dbPath).size, sha256: await sha256File(dbPath) },
+        // format: native (the engine's own dump; restores on the same engine, with `requires`)
+        // or loopar (core/db-migration/portable.js; restores on any engine, needs nothing).
+        database: { dialect: db.dialect, format: db.format, requires: db.requires, file: `database/${db.file}`, size: dbSize, sha256: dbSha },
         files: { included: !!settings.include_files },
+        // The backup the state being saved descends from (see HEAD).
+        parent: nextParent(root, tenant),
       };
       await fs.promises.writeFile(path.join(work, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
@@ -220,6 +290,7 @@ export async function createBackup({ root = process.cwd(), tenant, kind = 'manua
       const sidecar = { ...manifest, file, size, sha256, encrypted: encrypt };
       await fs.promises.writeFile(`${final}.json`, JSON.stringify(sidecar, null, 2));
       await fs.promises.appendFile(path.join(dir, LEDGER), `${sha256}\n`);
+      await writeHead(root, tenant, file);
 
       const remote = { destination: destination?.name ?? null, ok: null, error: null };
       if (destination) {
@@ -237,7 +308,7 @@ export async function createBackup({ root = process.cwd(), tenant, kind = 'manua
       let pruned = [];
       if (prune) {
         onStep('prune');
-        pruned = await pruneBackups({ root, tenant, settings, destination });
+        pruned = await pruneBackups({ root, tenant, settings, destination, keep });
       }
       return { file, path: final, size, sha256, encrypted: encrypt, manifest: sidecar, remote, pruned };
     } finally {
@@ -301,6 +372,7 @@ export async function deleteBackup({ root = process.cwd(), tenant, file, setting
   safeName(file);
   if (where !== 'remote') {
     const p = path.join(backupsDir(root, tenant), file);
+    if (fs.existsSync(p)) await detachFromLineage(root, tenant, file);
     await fs.promises.rm(p, { force: true });
     await fs.promises.rm(`${p}.json`, { force: true });
   }
@@ -314,13 +386,19 @@ export async function deleteBackup({ root = process.cwd(), tenant, file, setting
   }
 }
 
-/** Apply retention to local and remote copies. @returns {string[]} deleted file names */
-export async function pruneBackups({ root = process.cwd(), tenant, settings, destination } = {}) {
+/**
+ * Apply retention to local and remote copies. Never pruned: the backup the
+ * site comes from (HEAD) and any in `keep` (the one being restored).
+ * @returns {string[]} deleted file names
+ */
+export async function pruneBackups({ root = process.cwd(), tenant, settings, destination, keep = [] } = {}) {
   settings ??= await readSettingsBare(root, tenant);
   const retention = { daily: settings.keep_daily, weekly: settings.keep_weekly, monthly: settings.keep_monthly };
   const removed = [];
+  const protectedNames = new Set([readHead(root, tenant), ...keep].filter(Boolean));
+  const prunable = (names) => names.filter((n) => !protectedNames.has(n));
   const local = listLocalBackups(root, tenant).map((b) => ({ name: b.file, kind: b.kind, date: b.date }));
-  for (const name of backupsToDelete(local, retention)) {
+  for (const name of prunable(backupsToDelete(local, retention))) {
     await deleteBackup({ root, tenant, file: name, where: 'local' });
     removed.push(name);
   }
@@ -330,7 +408,7 @@ export async function pruneBackups({ root = process.cwd(), tenant, settings, des
       const remote = (await destination.list(tenant))
         .map((f) => ({ name: f.file, ...parseBackupName(f.file) }))
         .filter((b) => b.kind);
-      for (const name of backupsToDelete(remote, retention)) {
+      for (const name of prunable(backupsToDelete(remote, retention))) {
         await destination.remove(tenant, name);
         await destination.remove(tenant, `${name}.json`).catch(() => {});
         if (!removed.includes(name)) removed.push(name);
@@ -430,11 +508,16 @@ export async function extractBackup(file, passphrase, destDir) {
   }
   if (manifest.format !== BACKUP_FORMAT) throw new Error('The archive is not a Loopar backup.');
   if (manifest.version > BACKUP_VERSION) throw new Error(`The backup was made by a newer Loopar (format v${manifest.version}).`);
-  if (!DIALECTS.includes(manifest.database?.dialect) || !/^database\/database\.(sqlite|mysql\.ndjson|pgdump)$/.test(String(manifest.database?.file))) {
+  const portable = manifest.database?.format === 'loopar';
+  const validFile = portable
+    ? manifest.database?.file === 'database/loopar'
+    : /^database\/database\.(sqlite|mysql\.ndjson|pgdump)$/.test(String(manifest.database?.file));
+  if (!DIALECTS.includes(manifest.database?.dialect) || !validFile) {
     throw new Error('The backup manifest is not valid.');
   }
   const dbFile = path.join(destDir, manifest.database.file);
-  if (!fs.existsSync(dbFile) || (await sha256File(dbFile)) !== manifest.database.sha256) {
+  const sha = !fs.existsSync(dbFile) ? null : portable ? await sha256Folder(dbFile) : await sha256File(dbFile);
+  if (sha !== manifest.database.sha256) {
     throw new Error('The database in the backup is damaged (checksum mismatch).');
   }
   return manifest;
@@ -473,7 +556,14 @@ const readJson = (p, fallback = {}) => { try { return JSON.parse(fs.readFileSync
  * @param {Function} [o.afterSwap]   async (target, ok) — serve again
  * @param {Function} [o.onStep]
  */
-export async function restoreBackup({ root = process.cwd(), tenant, file, passphrase, settings, mode = 'replace', target, requireMadeHere = false, beforeSwap = async () => {}, afterSwap = async () => {}, onStep = () => {} } = {}) {
+/**
+ * `restorePortable(dir, { onStep })`: copies a Loopar-format export (`dir`)
+ * into a new database of the tenant's engine, shaped by the tenant's
+ * entities, and returns that database's db.config — it needs the running
+ * tenant, so the core provides it (core-ops startRestoreJob). The tenant's
+ * current database is left as it was (db.config.previous.json names it).
+ */
+export async function restoreBackup({ root = process.cwd(), tenant, file, passphrase, settings, mode = 'replace', target, requireMadeHere = false, restorePortable = null, beforeSwap = async () => {}, afterSwap = async () => {}, onStep = () => {} } = {}) {
   target = mode === 'new' ? target : tenant;
   if (mode === 'new') {
     if (!/^[a-z0-9][a-z0-9-]*$/.test(String(target || ''))) throw Object.assign(new Error('New tenant name: lowercase letters, numbers and dashes.'), { status: 400 });
@@ -491,7 +581,11 @@ export async function restoreBackup({ root = process.cwd(), tenant, file, passph
       onStep('verify');
       const manifest = await extractBackup(archive, passphrase || settings.passphrase, work);
       const dialect = manifest.database.dialect;
-      if (requireMadeHere && dialect !== 'sqlite' && !(await madeHere(root, tenant, archive))) {
+      const portable = manifest.database.format === 'loopar';
+      if (portable && (mode !== 'replace' || !restorePortable)) {
+        throw Object.assign(new Error('This backup is in Loopar\'s format: restore it in place from the Backups page, with the site running.'), { status: 400 });
+      }
+      if (!portable && requireMadeHere && dialect !== 'sqlite' && !(await madeHere(root, tenant, archive))) {
         throw Object.assign(new Error(`This ${dialect} backup was not made by this server: restore it with \`yarn backup restore\` on the server.`), { status: 400 });
       }
       const staged = path.join(work, 'site');
@@ -500,9 +594,12 @@ export async function restoreBackup({ root = process.cwd(), tenant, file, passph
 
       if (mode === 'replace') {
         const current = dialectOf(readDbConfig(root, target));
-        if (current !== dialect) throw new Error(`The backup holds a ${dialect} database and "${target}" uses ${current}.`);
+        // A native dump only goes back into its own engine; Loopar's format into any.
+        if (!portable && current !== dialect) {
+          throw new Error(`The backup holds a native ${dialect} database and "${target}" uses ${current}: only a backup in Loopar's format restores across engines.`);
+        }
         onStep('safety');
-        safety = await createBackup({ root, tenant: target, kind: 'pre-restore', settings, upload: false, prune: true, lock: false, note: `before restoring ${file}` });
+        safety = await createBackup({ root, tenant: target, kind: 'pre-restore', settings, upload: false, prune: true, keep: [file], lock: false, note: `before restoring ${file}` });
       } else if (dialect !== 'sqlite') {
         throw new Error('Restoring as a new tenant supports SQLite tenants only.');
       }
@@ -525,7 +622,19 @@ export async function restoreBackup({ root = process.cwd(), tenant, file, passph
         const dbCfg = path.join(siteDir(root, target), 'config', 'db.config.json');
         if (fs.existsSync(dbCfg)) await fs.promises.copyFile(dbCfg, path.join(staged, 'config', 'db.config.json'));
       }
-      if (dialect === 'sqlite') {
+
+      // Loopar's format: the records go into a new database first, while the
+      // site still runs on its own; the swap then points the site at it. A
+      // failure here changes nothing (the new database is dropped).
+      let restoredDb = null;
+      if (portable) {
+        onStep('database');
+        restoredDb = await restorePortable(path.join(work, manifest.database.file), { onStep });
+        await fs.promises.writeFile(path.join(staged, 'config', 'db.config.json'), JSON.stringify(restoredDb.config, null, 2));
+        const previousDb = path.join(siteDir(root, target), 'config', 'db.config.json');
+        if (fs.existsSync(previousDb)) await fs.promises.copyFile(previousDb, path.join(staged, 'config', 'db.config.previous.json'));
+      }
+      if (!portable && dialect === 'sqlite') {
         await fs.promises.rename(path.join(work, manifest.database.file), path.join(staged, 'database', `${target}.sqlite`));
       }
 
@@ -537,7 +646,7 @@ export async function restoreBackup({ root = process.cwd(), tenant, file, passph
         if (mode === 'replace') await fs.promises.rename(siteDir(root, target), previous);
         try {
           await fs.promises.rename(staged, siteDir(root, target));
-          if (dialect !== 'sqlite') {
+          if (!portable && dialect !== 'sqlite') {
             onStep('database');
             await restoreDatabase(root, target, dialect, path.join(work, manifest.database.file));
           }
@@ -554,7 +663,7 @@ export async function restoreBackup({ root = process.cwd(), tenant, file, passph
           // Put the previous files back; a server database is rolled back from the safety snapshot.
           if (fs.existsSync(siteDir(root, target))) await fs.promises.rename(siteDir(root, target), path.join(work, 'failed'));
           if (mode === 'replace') await fs.promises.rename(previous, siteDir(root, target));
-          if (dialect !== 'sqlite' && safety) {
+          if (!portable && dialect !== 'sqlite' && safety) {
             const back = path.join(work, 'rollback');
             const m = await extractBackup(safety.path, settings.passphrase, back);
             await restoreDatabase(root, target, dialect, path.join(back, m.database.file)).catch(() => {});
@@ -564,7 +673,9 @@ export async function restoreBackup({ root = process.cwd(), tenant, file, passph
       } finally {
         await afterSwap(target, ok);
       }
-      return { tenant: target, file, mode, manifest, safety: safety?.file ?? null, restoredAt };
+      // The site is now that backup's state: what comes next branches from it.
+      if (mode === 'replace') await writeHead(root, target, file);
+      return { tenant: target, file, mode, manifest, safety: safety?.file ?? null, restoredAt, ...(restoredDb ? { database: restoredDb.database, previousDatabase: restoredDb.previous } : {}) };
     } finally {
       await rmrf(work);
     }

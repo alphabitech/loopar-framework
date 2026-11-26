@@ -96,6 +96,11 @@ class _LoopSocket {
     return this._socket;
   }
 
+  /** Is the socket up right now? (callers fall back to polling when not) */
+  get connected() {
+    return !!this._socket?.connected;
+  }
+
   /**
    * Joins the socket to one or more rooms.
    * @param {string|string[]} channels

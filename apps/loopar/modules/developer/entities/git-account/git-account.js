@@ -1,7 +1,7 @@
 'use strict';
 
 import { loopar, BaseDocument } from 'loopar';
-import { inspectToken } from '../../pages/app-manager/github-api.js';
+import { inspectToken } from '../app-manager/github-api.js';
 
 /**
  * A personal git-hosting credential. Each account belongs to the user who

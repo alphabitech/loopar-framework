@@ -333,7 +333,7 @@ export function WorkspaceProvider({
   const RETRYABLE = [502, 503, 504];
   const MAX_RETRIES = 6;
 
-  const fetchDocument = useCallback((url, { attempt = 0, forceMeta = false } = {}) => {
+  const fetchDocument = useCallback((url, { attempt = 0, forceMeta = false, freeze } = {}) => {
     // Works off the path string alone (router location for the base,
     // in-memory path for a modal) — one code path, no second <Router>.
     const raw = String(url ?? '');
@@ -370,6 +370,8 @@ export function WorkspaceProvider({
       loopar.fetchDocument(targetPath, {
         workspace: __WORKSPACE_NAME__,
         query: { ...queryParams, preloaded: preloadedMeta },
+        // A background refresh (loopar.refresh({ freeze: false })) shows no overlay.
+        ...(freeze === false ? { freeze: false } : {}),
         // The error view below is the UI for a failed navigation — no toast.
         notifyError: false,
         success: r => {
@@ -380,7 +382,7 @@ export function WorkspaceProvider({
           // rendering a keyless/partial document.
           if (preloadedMeta && r && !r.key && !metaCacheRef.current[r.instance]) {
             navTrace('meta-cache-miss', { path: raw, instance: r.instance });
-            return resolve(fetchDocument(url, { attempt, forceMeta: true }));
+            return resolve(fetchDocument(url, { attempt, forceMeta: true, freeze }));
           }
 
           lastFetchedPath.current = raw;
@@ -397,7 +399,7 @@ export function WorkspaceProvider({
             setTimeout(() => {
               // A newer navigation started meanwhile → it owns the view now.
               if (currentFetchId !== fetchIdRef.current) return resolve();
-              resolve(fetchDocument(url, { attempt: attempt + 1, forceMeta }));
+              resolve(fetchDocument(url, { attempt: attempt + 1, forceMeta, freeze }));
             }, delay);
             return;
           }
@@ -428,7 +430,7 @@ export function WorkspaceProvider({
    */
   const refresh = useCallback((opts = {}) => {
     if (opts.force) metaCacheRef.current = {};
-    fetchDocument(pathname).then(() => {
+    fetchDocument(pathname, { freeze: opts.freeze }).then(() => {
       setRefreshFlag(prev => !prev);
     });
   }, [pathname, fetchDocument]);

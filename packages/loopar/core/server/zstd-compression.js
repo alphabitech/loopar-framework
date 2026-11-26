@@ -1,5 +1,6 @@
 import { createReadStream, readdirSync, statSync } from 'fs';
 import { extname, join, posix, relative, resolve, sep } from 'path';
+import { isBuildAsset, IMMUTABLE_CACHE } from './build-info.js';
 
 /**
  * Pre-built static asset middleware.
@@ -14,8 +15,8 @@ import { extname, join, posix, relative, resolve, sep } from 'path';
  *     stats in the hot path.
  *   - Files are streamed (createReadStream + pipe), not read into a
  *     Buffer, so memory stays constant under concurrent load.
- *   - Cache-Control adapts to the filename: hashed Vite assets get
- *     1-year-immutable; unhashed ones get 5-minute must-revalidate so
+ *   - Cache-Control adapts to the path: the build's hashed files
+ *     (/assets/<file>) get 1-year-immutable; the rest 5-minute must-revalidate so
  *     deploys aren't frozen in client caches.
  *   - HEAD requests get the same headers without the body.
  *   - On a missed variant or unsupported encoding, we fall through to
@@ -85,11 +86,9 @@ const CONTENT_TYPES = Object.freeze({
   '.svg':  'image/svg+xml',
 });
 
-const HASHED_NAME = /\.[a-zA-Z0-9_-]{8,}\.(js|mjs|css|svg)$/;
-
 function cacheControlFor(urlPath) {
-  return HASHED_NAME.test(urlPath)
-    ? 'public, max-age=31536000, immutable'
+  return isBuildAsset(urlPath)
+    ? IMMUTABLE_CACHE
     : 'public, max-age=300, must-revalidate';
 }
 

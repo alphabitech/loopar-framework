@@ -18,12 +18,20 @@ import {DynamicIcon} from "@icon-input";
 import { CheckIcon } from "lucide-react";
 import { TableSearch } from "./TableSearch";
 import { RowMenu } from "./RowMenu.jsx";
+import { cn } from "@cn/lib/utils";
 import { DropdownListGridActions } from "./DropdownListGridActions";
 import { __ } from "@global/i18n";
 import { formatDate, formatDateTime, formatCurrency } from "@global/format";
 
+/** The record's link, or the same content as plain text when rows don't open records. */
+const RecordLink = ({ opens, to, className, children }) => opens
+  ? <Link to={to} renderOnRestrict={true} className={className}>{children}</Link>
+  : <span className={cn(className, "cursor-default hover:no-underline")}>{children}</span>;
+
 export function ListGrid(props) {
-  const { columns, hasSelectAll, hasListSettings } = useViewOptions();
+  const { columns, hasSelectAll, hasListSettings, openRecords } = useViewOptions();
+  // openRecords:false: rows show, but don't open the record (no link, no row menu).
+  const opens = openRecords !== false;
   // The select-all menu sits in the toolbar, next to the search (as in the grid view).
   const inToolbar = hasSelectAll !== false;
   const {baseColumns, Document, selectorCol, deleteRow, search, listSettings, saveListSettings} = useTable();
@@ -79,7 +87,7 @@ export function ListGrid(props) {
 
     const withCellProps = (col) => {
       if (col.element === ICON_INPUT) {
-        return { ...col, render: (row) => <DynamicIcon className="w-7 h-7" icon={row[col.data.name]} /> };
+        return { ...col, render: (row) => <DynamicIcon className="w-7 h-7" icon={{ value: row[col.data.name] }} /> };
       }
       return col.cellProps ? col : { ...col, cellProps: { className: "align-middle py-2" } };
     };
@@ -107,10 +115,10 @@ export function ListGrid(props) {
           const showName = nameVisible && String(title).toLowerCase() !== String(row.name).toLowerCase();
 
           return (
-            <Link to={recordLink(Entity, row.name, row, { portal })} renderOnRestrict={true} className={linkClass}>
+            <RecordLink opens={opens} to={recordLink(Entity, row.name, row, { portal })} className={linkClass}>
               <span className="truncate font-medium text-foreground">{title}</span>
               {showName && <span className="truncate text-xs text-muted-foreground">{row.name}</span>}
-            </Link>
+            </RecordLink>
           );
         }
       };
@@ -128,9 +136,9 @@ export function ListGrid(props) {
           const empty = content === null || content === undefined || content === "";
 
           return (
-            <Link to={recordLink(Entity, row.name, row, { portal })} renderOnRestrict={true} className={linkClass}>
+            <RecordLink opens={opens} to={recordLink(Entity, row.name, row, { portal })} className={linkClass}>
               <span className="truncate font-medium text-foreground">{empty ? row.name : content}</span>
-            </Link>
+            </RecordLink>
           );
         }
       };
@@ -141,7 +149,7 @@ export function ListGrid(props) {
       ...(inToolbar ? [selectorCol({deleteOnServer: true, colSpan: 1, header: false})] : []),
       primary,
       ...rest.map(withCellProps),
-      {
+      ...(!opens ? [] : [{
         data: {
           name: "actions",
           label: () => <span className="sr-only">{__("Actions")}</span>,
@@ -149,9 +157,9 @@ export function ListGrid(props) {
         headProps: { className: "w-14 p-2" },
         cellProps: { className: "w-14 py-1 pr-2 text-right align-middle" },
         render: (row) => <RowMenu row={row} Entity={Entity} onDelete={(r) => deleteRow(r, true)} />,
-      }
+      }]),
     ];
-  }, [baseColumns, columns, Document, deleteRow, selectorCol, listSettings, inToolbar, portal]);
+  }, [baseColumns, columns, Document, deleteRow, selectorCol, listSettings, inToolbar, portal, opens]);
 
   // Runtime column changes, saved per user. Views with their own `columns` lay them out themselves.
   const customizable = !columns && !!saveListSettings && hasListSettings !== false;

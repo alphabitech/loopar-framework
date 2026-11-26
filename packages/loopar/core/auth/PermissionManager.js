@@ -30,6 +30,9 @@ import { isSourceLockedAction, sourceLockedKeys } from "./source-lock.js";
  * between the two narrowing scopes, `portal` wins over `own`.
  */
 export const SCOPE = Object.freeze({ ALL: 'all', OWN: 'own', PORTAL: 'portal' });
+/** Quiet window before announcing permission changes (see #emitUpdate). */
+const PERMISSIONS_EMIT_DELAY_MS = 400;
+
 const SCOPE_RANK = { [SCOPE.OWN]: 1, [SCOPE.PORTAL]: 2, [SCOPE.ALL]: 3 };
 export const normalizeScope = s => {
   const v = String(s ?? '').toLowerCase();
@@ -196,6 +199,20 @@ class PermissionManagerClass {
     return this.scope(document, action, username, { includePublic: false });
   }
 
+  /**
+   * Whether the user holds a grant of exactly (document, action): wildcard
+   * grants ("*" on the document, its app or every document) don't count.
+   * For actions that must be named to be given, e.g. a workflow transition
+   * narrowed to some roles (`transition:<Action>`). Administrator has none:
+   * callers decide what Administrator may do.
+   */
+  grantedExactly(document, action, username) {
+    username = username ?? loopar.auth.user() ?? 'Guest';
+    const key = this.#buildKey(document, action);
+    if (this.#denied().get(username)?.has(key)) return false;
+    return !!this.#store().get(username)?.get(key);
+  }
+
   /** Public re-read from DB (for code paths that bypass the ORM hooks). */
   async reload(username) {
     await this.#reload(username);
@@ -293,8 +310,20 @@ class PermissionManagerClass {
     }));
   }
 
+  // Coalesced per tenant: an install or uninstall changes hundreds of
+  // permission rows in a burst, and each change used to broadcast on its own
+  // (every open page re-read its permissions hundreds of times). One event
+  // shortly after the burst settles is enough.
+  #emitTimers = new Map();
+
   #emitUpdate(username) {
-    loopar.emit(`permissionsChanged`);
+    const tenant = loopar.tenantId ?? null;
+    if (this.#emitTimers.has(tenant)) return;
+    // Timers keep the async context: the emit lands in this tenant.
+    this.#emitTimers.set(tenant, setTimeout(() => {
+      this.#emitTimers.delete(tenant);
+      loopar.emit(`permissionsChanged`);
+    }, PERMISSIONS_EMIT_DELAY_MS));
   }
 
   async boot() {
@@ -361,13 +390,37 @@ class PermissionManagerClass {
     }
 
     return {
-      public:  [...this.#public()],
+      public:  compactKeys(this.#public()),
       private: isAdmin ? null : [...grants.keys()],
       // Source-locked writes are denied for every user, the Administrator included.
       denied:  [...(isAdmin ? [] : [...(this.#denied().get(username) ?? [])]), ...sourceLockedKeys()],
       scopes,
     };
   }
+}
+
+/**
+ * Permission keys (`doc:action`) packed for the wire as `[[docs], [actions]]`
+ * pairs, one per group of documents sharing the same actions. Most entities
+ * expose the same inherited public actions, so the list shrinks several times
+ * (it travels in every page). The client expands it (auth-context `expandKeys`).
+ */
+export function compactKeys(keys) {
+  const byDoc = new Map();
+  for (const key of keys) {
+    const i = key.lastIndexOf(':');
+    const doc = key.slice(0, i);
+    if (!byDoc.has(doc)) byDoc.set(doc, []);
+    byDoc.get(doc).push(key.slice(i + 1));
+  }
+
+  const groups = new Map();
+  for (const [doc, actions] of byDoc) {
+    const id = actions.sort().join(',');
+    if (!groups.has(id)) groups.set(id, [[], actions]);
+    groups.get(id)[0].push(doc);
+  }
+  return [...groups.values()];
 }
 
 export const PermissionManager = new PermissionManagerClass();

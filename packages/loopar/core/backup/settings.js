@@ -28,6 +28,7 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   keep_weekly: 4,
   keep_monthly: 3,
   include_files: 1,
+  db_format: 'auto',
   encrypt: 1,
   passphrase: '',
   destination: 'local',
@@ -56,6 +57,7 @@ export function normalizeSettings(raw = {}) {
   for (const k of ['enabled', 'include_files', 'encrypt']) s[k] = [1, '1', true, 'true'].includes(s[k]) ? 1 : 0;
   for (const k of ['keep_daily', 'keep_weekly', 'keep_monthly', 'sftp_port']) s[k] = Number(s[k]) || SETTINGS_DEFAULTS[k];
   s.destination = String(s.destination || 'local').toLowerCase();
+  if (!['auto', 'native', 'loopar'].includes(s.db_format)) s.db_format = 'auto';
   return s;
 }
 

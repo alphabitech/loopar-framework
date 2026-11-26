@@ -72,7 +72,7 @@ export default class App extends BaseDocument {
       loopar.throw(
         `Cannot save "${this.name}": ` +
         `physical version (${physical}) is ahead of installed (${installed}). ` +
-        `Run <a href="/desk/App Manager/view">Update</a> first to sync the database.`
+        `Run <a href="/desk/App Manager/list">Update</a> first to sync the database.`
       );
     }
   }
@@ -152,9 +152,9 @@ export default class App extends BaseDocument {
 
   async unInstall() {
     await loopar.unInstallApp(this.name);
-    const installedApps = fileManage.getConfigFile('installed-apps');
-    delete installedApps[this.name];
-    fileManage.setConfigFile('installed-apps', installedApps);
+    // Through loopar: it keeps its in-memory copy in step (a direct file write
+    // left the cache stale, and the next setApp wrote the app back).
+    await loopar.unsetApp(this.name);
     await this.#releaseWebsite();
     return await loopar.build();
   }

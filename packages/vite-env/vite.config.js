@@ -150,6 +150,11 @@ export default defineConfig(({ command }) => {
             ) {
               return 'react-vendor';
             }
+            // Icons used from several chunks were emitted one file each (~50
+            // requests of <1KB). One chunk for every lucide icon the code imports.
+            if (id.includes('/node_modules/lucide-react/')) {
+              return 'icons';
+            }
           },
         } : undefined,
       },

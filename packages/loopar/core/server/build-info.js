@@ -30,6 +30,16 @@ const ROOT = process.cwd();
 const RELEASES_DIR = path.join(ROOT, 'build', 'releases');
 const HASHED_ASSET = /^\/assets\/([A-Za-z0-9._-]+\.(?:js|mjs|css|woff2?|ttf|svg|png|jpe?g|webp|avif|gif|ico|wasm|map))$/;
 
+/**
+ * A file the client build emitted: `/assets/<file>`, one segment. The build
+ * names every one by content hash (vite.config: `assets/[hash].js`,
+ * `assets/[hash].[ext]`, `assets/main-[hash].js`), so its URL never changes
+ * content and can be cached for good. Tenant files (/assets/public|private/…)
+ * never match.
+ */
+export const isBuildAsset = (urlPath) => HASHED_ASSET.test(urlPath);
+export const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
+
 let cachedId;
 
 export function buildId() {

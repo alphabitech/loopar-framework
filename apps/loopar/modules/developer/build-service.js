@@ -5,11 +5,12 @@
  * Jobs carry a `kind`: 'install' runs yarn install, 'activate' deploys the
  * build/staging snapshot, anything else runs the full `build` script.
  * Imported by both the Tenant Manager and App Manager controllers, which
- * share this module's singleton state.
+ * share this module's singleton state. Each queued job is also a background
+ * job (core/jobs) that streams the process output to whoever started it.
  */
 
 import { spawn } from 'child_process';
-import crypto from 'node:crypto';
+import { trackJob } from 'loopar/core/jobs/jobs.js';
 
 const queue = [];
 let current = null;
@@ -21,9 +22,12 @@ export function setEmitter(fn) {
   if (typeof fn === 'function') emitFn = fn;
 }
 
+/** A queue entry without its job handle (state only: what the Tenant Manager shows). */
+const plain = ({ tracked, ...rest }) => rest;
+
 export function snapshot() {
   return {
-    build: current || { state: 'idle' },
+    build: current ? plain(current) : { state: 'idle' },
     queue: queue.map((j) => ({ id: j.id, scope: j.scope })),
   };
 }
@@ -42,6 +46,8 @@ function runNext() {
   const job = queue.shift();
   current = { ...job, state: 'running', startedAt: Date.now() };
   emit();
+  const tracked = job.tracked;
+  tracked?.start();
 
   const isInstall = job.kind === 'install';
   const isActivate = job.kind === 'activate';
@@ -79,11 +85,27 @@ function runNext() {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  child.stdout.on('data', (c) => process.stdout.write(`[${tag}] ${c}`));
-  child.stderr.on('data', (c) => process.stderr.write(`[${tag}] ${c}`));
+  // Process output, line by line, to the job's log.
+  const toLog = (level) => {
+    let rest = '';
+    return (chunk) => {
+      const text = rest + chunk.toString();
+      const lines = text.split(/\r?\n/);
+      rest = lines.pop();
+      for (const line of lines) tracked?.log(line, level);
+    };
+  };
+  const logOut = toLog('info');
+  const logErr = toLog('warn');
+
+  child.stdout.on('data', (c) => { process.stdout.write(`[${tag}] ${c}`); logOut(c); });
+  child.stderr.on('data', (c) => { process.stderr.write(`[${tag}] ${c}`); logErr(c); });
 
   const finish = (patch) => {
+    if (patch.state === 'completed') tracked?.finish({ exitCode: patch.exitCode ?? 0 });
+    else tracked?.fail(patch.error || `${tag} exited with code ${patch.exitCode}`);
     current = { ...current, ...patch, finishedAt: Date.now() };
+    delete current.tracked;
     history.unshift(current);
     history = history.slice(0, 10);
     emit();            // emit the terminal state (completed/failed) so listeners react
@@ -119,11 +141,12 @@ export function enqueueBuild({ scope = 'all', cwd, initiator } = {}) {
     }
   }
 
-  const job = { id: crypto.randomUUID(), scope, cwd, initiator };
+  const tracked = trackJob({ kind: 'build', title: scope === 'all' ? 'Build' : `Build ${scope}` });
+  const job = { id: tracked.id, scope, cwd, initiator, tracked };
   queue.push(job);
   emit();
   runNext();
-  return { queued: true, jobId: job.id, ...snapshot() };
+  return { queued: true, jobId: job.id, job: tracked.job, ...snapshot() };
 }
 
 export function enqueueInstall({ cwd, initiator } = {}) {
@@ -133,11 +156,12 @@ export function enqueueInstall({ cwd, initiator } = {}) {
   if (installPending) {
     return { queued: false, reason: 'ALREADY_QUEUED', ...snapshot() };
   }
-  const job = { id: crypto.randomUUID(), kind: 'install', scope: 'install', cwd, initiator };
+  const tracked = trackJob({ kind: 'build', title: 'Install dependencies' });
+  const job = { id: tracked.id, kind: 'install', scope: 'install', cwd, initiator, tracked };
   queue.push(job);
   emit();
   runNext();
-  return { queued: true, jobId: job.id, ...snapshot() };
+  return { queued: true, jobId: job.id, job: tracked.job, ...snapshot() };
 }
 
 export function enqueueActivate({ cwd, initiator } = {}) {
@@ -147,9 +171,10 @@ export function enqueueActivate({ cwd, initiator } = {}) {
   if (pending) {
     return { queued: false, reason: 'ALREADY_QUEUED', ...snapshot() };
   }
-  const job = { id: crypto.randomUUID(), kind: 'activate', scope: 'activate', cwd, initiator };
+  const tracked = trackJob({ kind: 'build', title: 'Activate build' });
+  const job = { id: tracked.id, kind: 'activate', scope: 'activate', cwd, initiator, tracked };
   queue.push(job);
   emit();
   runNext();
-  return { queued: true, jobId: job.id, ...snapshot() };
+  return { queued: true, jobId: job.id, job: tracked.job, ...snapshot() };
 }

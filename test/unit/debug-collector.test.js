@@ -183,3 +183,83 @@ test("live stream: recorded requests/logs/errors are pushed in batches to watche
     { tenant: "watched", kind: "requests", n: 1 },
   ]);
 });
+
+// ─── Where, how and why an error happened ─────────────────────────────────────
+
+/** Raised from a function of this repo, so its frame is "ours". */
+function failingLookup(name) {
+  throw new Error(`Entity ${name} not found`);
+}
+
+test("an error records its origin (repo file:line), a code frame and what ran before it", async () => {
+  const x = fakeExchange("t");
+  await x.handle(async () => {
+    query("select * from `entity` where `name` = ?", ["contact"], { rows: [] });
+    collector.recordLog("info", ["looking up contact"], { fn: "probe", file: "packages/x.js", line: 3, col: 1 });
+    try { failingLookup("contact"); } catch (e) { collector.recordError(e, { status: 500 }); }
+  });
+  const [err] = collector.errors("t").rows;
+  assert.equal(err.origin.file, "test/unit/debug-collector.test.js");
+  assert.equal(err.origin.fn, "failingLookup");
+  assert.ok(err.codeFrame.lines.some((l) => l.includes("not found")));
+  assert.ok(err.frames.length > 0);
+  assert.deepEqual(err.trail.map((t) => t.kind), ["sql", "log"]);
+  assert.equal(err.trail[1].site, "packages/x.js:3");
+  assert.equal(err.route.document, "Invoice");
+  assert.equal(err.user, "tester");
+});
+
+test("err.cause chains are kept; the same error object is recorded once", async () => {
+  const x = fakeExchange("t");
+  await x.handle(async () => {
+    const inner = new Error("ENOENT: app folder missing");
+    const outer = new Error("Uninstall failed", { cause: inner });
+    collector.recordError(outer, { status: 500 });
+    collector.recordError(outer, { status: 500 });
+    collector.recordLog("error", ["logged again", outer]);
+  });
+  const { total, rows } = collector.errors("t");
+  assert.equal(total, 1);
+  assert.deepEqual(rows[0].causes.map((c) => c.text), ["ENOENT: app folder missing"]);
+  const log = collector.logs("t").rows.find((l) => l.text.startsWith("logged again"));
+  assert.equal(log.errorId, rows[0].id);
+});
+
+test("console.error / console.warn of an Error is recorded under Errors", async () => {
+  await fakeExchange("t").handle(async () => {
+    collector.recordLog("warn", [new TypeError("caught and warned")]);
+    collector.recordLog("error", ["plain text only"]);
+  });
+  const { rows } = collector.errors("t", {});
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].source, "console");
+  assert.equal(rows[0].level, "warning");
+  assert.equal(rows[0].name, "TypeError");
+});
+
+test("work inside a background job is attributed to the job, not to the request that started it", async () => {
+  let job = null;
+  collector.setJobResolver(() => job);
+  const x = fakeExchange("t");
+  await x.handle(async () => {
+    job = { id: "j1", kind: "uninstall", title: "Uninstall pwl", user: "Administrator", tenant: "t" };
+    query("delete from `app` where `name` = ?", ["pwl"], { rows: 1 });
+    collector.recordLog("debug", ["[jobs] step"]);
+    collector.recordError(new Error("job broke"), { source: "job" });
+    job = null;
+  });
+  const [req] = collector.requests("t").rows;
+  assert.equal(req.queryCount, 0);
+  assert.equal(req.errorCount, 0);
+  const [err] = collector.errors("t").rows;
+  assert.equal(err.job.title, "Uninstall pwl");
+  assert.equal(err.requestId, null);
+  assert.equal(err.user, "Administrator");
+  assert.deepEqual(err.trail.map((t) => t.kind), ["sql", "log"]);
+  assert.equal(collector.logs("t").rows.find((l) => l.text === "[jobs] step").jobId, "j1");
+  collector.setJobResolver(null);
+});
+
+test("recording raises Node's stack depth so our frames survive express/knex/async hops", () => {
+  assert.ok(Error.stackTraceLimit >= DEBUG_LIMITS.stackFrames);
+});

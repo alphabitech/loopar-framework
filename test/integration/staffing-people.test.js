@@ -301,7 +301,27 @@ test("the update moves positions, settings, workers, documents, openings, applic
     assert.equal((await q()("Permission").select("document")).filter((p) => ["Staffing Shift", "Staffing Timesheet", "Staffing Job Opening", "Staffing Worker Document"].includes(p.document)).length, 0);
     const wf = await loopar.db.getRow("Workflow", "Timesheet", ["id"]);
     const approve = await q()("Workflow Transition").where({ parent_document: "Workflow", parent_id: wf.id, action: "Approve" }).first();
-    assert.equal(approve.allowed_roles, "ERP Manager, HR Manager, Staffing Manager");
+    assert.equal(approve.allowed_roles, "ERP Manager, HR Manager", "the erp workflow names no staffing role");
+
+    // The agency's manager runs the erp's manager moves through its permissions; a supervisor doesn't.
+    const { PermissionManager, workflowFor, invalidateWorkflows } = await import("loopar");
+    const { userTransitions } = await import(path.join(root, "packages", "loopar", "core", "document", "workflow.js"));
+    // What an earlier version wrote into the erp workflow is taken back by the update.
+    await q()("Workflow Transition").where({ id: approve.id }).update({ allowed_roles: "ERP Manager, HR Manager, Staffing Manager" });
+    invalidateWorkflows();
+    await new Installer({ app_name: "staffing" }).install(true);
+    assert.equal((await q()("Workflow Transition").where({ id: approve.id }).first()).allowed_roles, "ERP Manager, HR Manager");
+
+    for (const [user, role] of [["boss@pwl.test", "Staffing Manager"], ["sup@pwl.test", "Staffing Supervisor"]]) {
+      await loopar.db.insertRow("User", { name: user, email: user, disabled: 0 });
+      await loopar.db.insertRow("User Role", { name: `${user}-role`, user, role });
+      await PermissionManager.reload(user);
+    }
+    const timesheets = await workflowFor("Timesheet");
+    const actions = async (user) => (await userTransitions(timesheets, user)).map((t) => t.action);
+    assert.deepEqual(await actions("boss@pwl.test"), ["Submit", "Approve", "Reject", "Mark exported"]);
+    assert.deepEqual(await actions("sup@pwl.test"), ["Submit"]);
+    assert.equal(PermissionManager.grantedExactly("Timesheet", "transition:Approve", "sup@pwl.test"), false);
 
     // The old worker keeps working: its erp rates and the agency's default bill rate.
     const { timeRates } = await erp("hr", "employees.js");

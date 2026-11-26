@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import knexFactory from 'knex';
 
 const BATCH = 500;
@@ -102,13 +102,52 @@ const decodeRow = (row) => {
   return out;
 };
 
+/** Is this command installed here? (`cmd --version` runs). */
+export function hasCommand(cmd) {
+  try { return spawnSync(cmd, ['--version'], { stdio: 'ignore' }).status === 0; } catch { return false; }
+}
+
 /**
- * Dump the tenant database into `outDir`.
- * @returns {Promise<{ dialect, file }>}  file name relative to outDir
+ * What a native backup of each engine needs to be made and restored. A
+ * Loopar-format backup needs nothing: it is read and written with Knex.
  */
-export async function dumpDatabase(root, tenant, outDir) {
+export const NATIVE_REQUIRES = {
+  sqlite: [],
+  mysql: [],
+  postgres: ['pg_dump', 'pg_restore'],
+};
+
+/** The format a backup of `dialect` is made in: `requested` (auto | native | loopar). */
+export function chooseFormat(dialect, requested = 'auto') {
+  if (requested === 'loopar' || requested === 'native') return requested;
+  // Native whenever this server can make it (a SQLite copy always can).
+  return NATIVE_REQUIRES[dialect]?.every(hasCommand) ? 'native' : 'loopar';
+}
+
+/**
+ * Dump the tenant database into `outDir`, natively or in Loopar's format.
+ * @returns {Promise<{ dialect, format, file, requires }>}  file (or folder) relative to outDir
+ */
+export async function dumpDatabase(root, tenant, outDir, { format = 'auto', onStep = () => {} } = {}) {
   const cfg = readDbConfig(root, tenant);
   const dialect = dialectOf(cfg);
+  const chosen = chooseFormat(dialect, format);
+
+  if (chosen === 'loopar') {
+    const { exportDatabase } = await import('../db-migration/portable.js');
+    const knex = openKnex(root, tenant, { readonly: true });
+    try {
+      await exportDatabase(knex, dialect, path.join(outDir, 'loopar'), { onStep });
+    } finally {
+      await knex.destroy();
+    }
+    return { dialect, format: 'loopar', file: 'loopar', requires: [] };
+  }
+  const native = await dumpNative(root, tenant, outDir, cfg, dialect);
+  return { ...native, format: 'native', requires: NATIVE_REQUIRES[dialect] ?? [] };
+}
+
+async function dumpNative(root, tenant, outDir, cfg, dialect) {
 
   if (dialect === 'sqlite') {
     const src = sqlitePath(root, tenant);

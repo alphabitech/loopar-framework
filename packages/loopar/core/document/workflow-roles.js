@@ -36,10 +36,13 @@ async function setRoles(workflow, next) {
 /**
  * Lets `roles` run transitions of a workflow that are narrowed to roles:
  * `grantWorkflowRoles('Purchase Order', { Approve: ['Warehouse Manager'] })`.
+ * Roles are added, never removed; a transition open to everyone (no roles)
+ * stays open. Idempotent.
  *
- * For an app built on another: its own roles act on that app's documents,
- * whose workflows can't name them. Roles are added, never removed; a
- * transition open to everyone (no roles) stays open. Idempotent.
+ * Only for roles of the workflow's own app. The rows it writes are the ones
+ * the app's installer is rebuilt from, so another app's role would end up in
+ * that app's source: an app built on another gives its roles the permission
+ * `{ document, action: 'transition:<Action>' }` instead (see workflow.js).
  */
 export async function grantWorkflowRoles(workflow, grants = {}) {
   return await setRoles(workflow, (action, current) => {
@@ -47,6 +50,20 @@ export async function grantWorkflowRoles(workflow, grants = {}) {
     if (!add?.length || !current.length) return null;
     const next = [...new Set([...current, ...add])];
     return next.length === current.length ? null : next;
+  });
+}
+
+/**
+ * Takes roles out of the transitions that name them:
+ * `revokeWorkflowRoles('Purchase Order', { Approve: ['Warehouse Manager'] })`.
+ * A transition is never left open by it: its last role stays. Idempotent.
+ */
+export async function revokeWorkflowRoles(workflow, revoked = {}) {
+  return await setRoles(workflow, (action, current) => {
+    const drop = revoked[action];
+    if (!drop?.length) return null;
+    const next = current.filter((role) => !drop.includes(role));
+    return next.length && next.length !== current.length ? next : null;
   });
 }
 

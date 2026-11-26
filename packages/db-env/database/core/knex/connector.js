@@ -21,6 +21,13 @@ import knex from "knex";
 import Core from "./core.js";
 import { serverConnectionOptions } from "./server-connection.js";
 
+
+/** IANA zone of this process (TZ or the system's), or null when unusable in SQL. */
+function processTimeZone() {
+  const zone = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  return /^[A-Za-z0-9_+\-\/]+$/.test(zone) ? zone : null;
+}
+
 export default class Connector extends Core {
   /**
    * The configured server can't be reached: stay without a connection. The
@@ -113,7 +120,19 @@ export default class Connector extends Core {
           // surprises everyone. Provide an explicit fallback to `postgres`.
           database: database || dbConfig.database || "postgres",
         },
-        pool: { min: 0, max: 5, acquireTimeoutMillis: 30_000, idleTimeoutMillis: 10_000 },
+        pool: {
+          min: 0, max: 5, acquireTimeoutMillis: 30_000, idleTimeoutMillis: 10_000,
+          // date_time values are written as this process's local wall time
+          // ('YYYY-MM-DD HH:mm:ss', see dynamic-field) into timestamptz
+          // columns, which read that text in the SESSION's time zone. A
+          // server set to another zone (UTC in most containers) shifted
+          // every stored time by the offset. The session follows Node.
+          afterCreate: (conn, done) => {
+            const zone = processTimeZone();
+            if (!zone) return done(null, conn);
+            conn.query(`SET TIME ZONE '${zone}'`, (err) => done(err, conn));
+          },
+        },
         ...dbConfig.options,
       });
 

@@ -33,7 +33,7 @@ const READ_ACTIONS = new Set([
  * only touches the tenant's database — that is how a deploy reaches a tenant.
  */
 const EXTRA_ALLOWED = {
-  appmanager: new Set(["status", "diff", "gitaccounts", "install", "update", "reinstall", "uninstall", "testconnection"]),
+  appmanager: new Set(["status", "diff", "gitaccounts", "install", "update", "reinstall", "uninstall", "testconnection", "job", "jobs", "dependents", "deskmenu", "migrations"]),
 };
 
 /**

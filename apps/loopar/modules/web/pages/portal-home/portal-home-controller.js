@@ -24,6 +24,13 @@ const STATUS_FIELD = 'status';
  *
  * The action must be granted to the role too; the row link is
  * `/portal/<Entity>/<action>?name=…` (a GET that usually redirects).
+ *
+ * A page joins the home as a card when its controller declares
+ *
+ *   static portalLink = { label: 'Workforce', description: '…' };
+ *   static async portalVisible(user) { return true; } // optional
+ *
+ * and opens at `/portal/<Page>/view`.
  */
 export default class PortalHomeController extends PageController {
   static freeActions = ['view', 'summary'];
@@ -54,6 +61,7 @@ export async function portalSummary(user) {
   }
 
   return {
+    pages: await portalPages(user),
     account: {
       user,
       email: me?.email || null,
@@ -63,6 +71,25 @@ export async function portalSummary(user) {
     },
     sections,
   };
+}
+
+/** Pages whose controller declares `static portalLink` and shows it to `user`. */
+async function portalPages(user) {
+  if (!loopar.getRef('Page Builder', false)) return [];
+  const pages = [];
+  for (const { name } of await loopar.db.getAll('Page Builder', ['name'])) {
+    const Controller = await controllerOf(name);
+    const link = Controller?.portalLink;
+    if (!link) continue;
+    try {
+      if (typeof Controller.portalVisible === 'function' && !(await Controller.portalVisible(user))) continue;
+    } catch (e) {
+      console.warn(`[portal-home] ${name}:`, e?.message || e);
+      continue;
+    }
+    pages.push({ page: name, label: link.label || name, description: link.description || '', href: `/portal/${encodeURIComponent(name)}/view` });
+  }
+  return pages.sort((a, b) => a.label.localeCompare(b.label));
 }
 
 const can = (entity, action, user) => PermissionManager.scope(entity, action, user, { includePublic: false });

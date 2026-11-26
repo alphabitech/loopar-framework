@@ -31,6 +31,7 @@ import { loopar } from '../loopar.js';
 import { fileManage } from '../file-manage.js';
 import { coerceDocStatus } from '../global/audit.js';
 import { syncForeignKeys, dropForeignKeys } from '../document/foreign-keys.js';
+import { liveSource, tablesOf, family } from './portable.js';
 
 /** Engines a tenant can be moved to. */
 export const MIGRATION_TARGETS = ['postgres', 'mysql', 'mariadb'];
@@ -39,28 +40,13 @@ const MAX_ISSUES = 200;
 const MAX_PARAMS = 20_000;   // bind parameters per INSERT (PG caps at 65535)
 const READ_BATCH = 1_000;
 
-const family = (dialect) => {
-  const d = String(dialect || '').toLowerCase();
-  if (/sqlite/.test(d)) return 'sqlite';
-  if (/mysql|mariadb/.test(d)) return 'mysql';
-  if (/postgres|cockroach|redshift/.test(d)) return 'postgres';
-  return d;
-};
 
 const migrationError = (message, extra = {}) => Object.assign(new Error(message), extra);
 
 /* ------------------------------------------------------------------ tables */
 
-async function listTables(orm) {
-  const f = family(orm.dialect);
-  const sql = f === 'sqlite'
-    ? "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-    : f === 'mysql'
-      ? "SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'"
-      : "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'";
-  const rows = await orm.raw(sql);
-  return rows.map((r) => r.name ?? r.NAME ?? r.TABLE_NAME).filter(Boolean).sort();
-}
+/** Tables of a target database (KnexORM). */
+const listTables = (orm) => tablesOf(orm.knex, orm.dialect);
 
 /** Target columns with what the copy needs to convert values: type, length, nullability, default. */
 async function targetColumns(orm, table) {
@@ -126,7 +112,7 @@ async function buildStructure({ source, target, tables, created, onStep, warn })
   const generic = [];
   for (const [i, table] of tables.entries()) {
     onStep(`structure ${i + 1}/${tables.length}`);
-    const sourceCols = await source.getTableDescription(table);
+    const sourceCols = await source.describe(table);
     const doc = await entityFor(table, warn);
 
     if (doc) {
@@ -263,12 +249,9 @@ async function copyTable({ source, target, table, onStep, issues, warn }) {
   const byName = new Map(cols.map((c) => [c.name.toLowerCase(), c]));
   // Columns the target has and the source doesn't (framework columns a fresh
   // install adds, e.g. __version__) get no values: nothing to look at there.
-  const inSource = new Set((await source.getTableDescription(table)).map((c) => c.name.toLowerCase()));
-  const total = Number((await source.knex(table).count({ n: '*' }))[0]?.n ?? 0);
+  const inSource = new Set((await source.describe(table)).map((c) => c.name.toLowerCase()));
+  const total = await source.count(table);
   const perInsert = Math.max(1, Math.min(500, Math.floor(MAX_PARAMS / Math.max(1, cols.length))));
-  const hasId = byName.has('id');
-  const order = (q) => hasId ? q.orderBy('id')
-    : family(source.dialect) === 'sqlite' ? q.orderByRaw('rowid') : q;
 
   const tableIssues = [];
   const report = (issue) => {
@@ -283,11 +266,7 @@ async function copyTable({ source, target, table, onStep, issues, warn }) {
   for (const col of cols) {
     if (col.nullable || col.hasDefault || col.name.toLowerCase() === 'id') continue;
     let n = total;   // a column the source doesn't have: every record arrives without it
-    if (inSource.has(col.name.toLowerCase())) {
-      const q = source.knex(table).whereNull(col.name);
-      if (!isTextType(col.type)) q.orWhere(col.name, '');
-      n = Number((await q.count({ n: '*' }))[0]?.n ?? 0);
-    }
+    if (inSource.has(col.name.toLowerCase())) n = await source.countEmpty(table, col.name, isTextType(col.type));
     if (!n) continue;
     await target.knex.schema.alterTable(table, (t) => t.setNullable(col.name));
     col.nullable = true;
@@ -299,8 +278,7 @@ async function copyTable({ source, target, table, onStep, issues, warn }) {
   for (const col of cols) {
     const max = INT_MAX[col.type];
     if (!max || col.name.toLowerCase() === 'id' || !inSource.has(col.name.toLowerCase())) continue;
-    const [r] = await source.knex(table).max({ hi: col.name }).min({ lo: col.name });
-    const extreme = Math.max(Math.abs(Number(r?.hi) || 0), Math.abs(Number(r?.lo) || 0));
+    const extreme = await source.extreme(table, col.name);
     if (extreme <= max) continue;
     if (family(target.dialect) === 'postgres') {
       await target.knex.raw('ALTER TABLE ?? ALTER COLUMN ?? TYPE bigint', [table, col.name]);
@@ -326,8 +304,7 @@ async function copyTable({ source, target, table, onStep, issues, warn }) {
 
   let copied = 0;
   await target.knex.transaction(async (trx) => {
-    for (let offset = 0; offset < total; offset += READ_BATCH) {
-      const rows = await order(source.knex(table).select('*')).limit(READ_BATCH).offset(offset);
+    for await (const rows of source.batches(table, READ_BATCH)) {
       const out = [];
       for (const row of rows) {
         const record = {};
@@ -429,13 +406,17 @@ export function targetConfig({ dialect, connection = {}, database } = {}) {
  * db.config points to the target when it ends (the previous one is kept as
  * db.config.previous.json); the caller re-initializes the tenant.
  */
-export async function migrateDatabase({ target: targetCfg, test = false, onStep = () => {} } = {}) {
-  const source = loopar.db;
+export async function migrateDatabase({ target: targetCfg, from = null, test = false, apply = true, onStep = () => {} } = {}) {
+  // `from`: where the records come from — the tenant's own database (a move
+  // to another engine), or a database export (restoring a backup in
+  // Loopar's format: see portable.js). The tenant's entities shape the target
+  // either way.
+  const source = from || liveSource(loopar.db);
   const sourceCfg = structuredClone(loopar.getDbConfig() || {});
   const cfg = targetConfig(targetCfg);
 
   if (!loopar.__installed__) throw migrationError('Only an installed, up-to-date tenant can be migrated: open it once so it runs its pending update.', { status: 409 });
-  if (sameDatabase(sourceCfg, cfg)) throw migrationError('The target is the database the tenant already uses.', { status: 400 });
+  if (!from && sameDatabase(sourceCfg, cfg)) throw migrationError('The target is the database the tenant already uses.', { status: 400 });
 
   const warnings = [];
   const issues = [];
@@ -474,7 +455,7 @@ export async function migrateDatabase({ target: targetCfg, test = false, onStep 
       throw migrationError(`The database "${cfg.database}" already has tables. Use an empty database.`, { status: 409 });
     }
 
-    const tables = await listTables(source);
+    const tables = await source.tables();
 
     // 1. Structure, all of it before any record.
     const generic = await buildStructure({ source, target, tables, created: createdTables, onStep, warn });
@@ -509,7 +490,7 @@ export async function migrateDatabase({ target: targetCfg, test = false, onStep 
 
     const result = {
       test,
-      from: sourceCfg.dialect,
+      from: from ? `${source.dialect} (${source.kind})` : sourceCfg.dialect,
       to: cfg.dialect,
       database: cfg.database,
       tables: tables.length,
@@ -525,6 +506,9 @@ export async function migrateDatabase({ target: targetCfg, test = false, onStep 
     }
 
     await target.close();
+    // `apply: false` (a backup restore): the caller points the tenant at the
+    // new database itself, when it swaps the site.
+    if (!apply) return { ...result, config: cfg, previous: sourceCfg.database ?? null };
     await fileManage.setConfigFile('db.config.previous', sourceCfg);
     await loopar.setDbConfig(cfg);
     return result;

@@ -4,8 +4,11 @@ import { loopar, fileManage, Op } from "loopar";
 import BaseDocument from "../../../../../../core/document/base-document.js";
 import { readRenameRecords, applyRenameToDatabase } from "../../../../../../core/document/entity-rename.js";
 import { dropForeignKeys, syncForeignKeys } from "../../../../../../core/document/foreign-keys.js";
+// Progress for a background job (App Manager); no-ops outside one.
+import { jobStep, jobProgress, jobRange, jobLog, jobOnce } from "../../../../../../core/jobs/jobs.js";
+import { pendingMigrations, runMigrations, baselineMigrations } from "../../../../../../core/document/app-migrations.js";
 import { normalizeScope } from "../../../../../../core/auth/PermissionManager.js";
-import { readAppHeader, isTemplateHeader, isTemplateHostTenant, belongsToOtherTenant, parseRequires, loadInstaller } from "./template.js";
+import { readAppHeader, isTemplateHeader, isTemplateHostTenant, belongsToOtherTenant, parseRequires, loadInstaller, installedDependents } from "./template.js";
 
 /**
  * Requirement chain being installed (guards against cycles), one per tenant:
@@ -21,6 +24,22 @@ function requirementChain() {
 
 /** The framework app: its document names are reserved for every tenant. */
 const FRAMEWORK_APP = "loopar";
+
+/**
+ * Development only: makes an install or update fail on purpose, to try the
+ * way back (undo / snapshot). The file sites/<tenant>/.fail-install holds
+ * "<app> [n]": that app's install fails after writing n documents (half of
+ * them when n is left out). Read on every install: no restart needed.
+ */
+function injectedFailureAfter(appName, total) {
+  if (process.env.NODE_ENV === "production" || !loopar.tenantPath) return null;
+  const file = path.join(loopar.tenantPath, ".fail-install");
+  if (!fs.existsSync(file)) return null;
+  const [app, n] = fs.readFileSync(file, "utf8").trim().split(/\s+/);
+  if (!app || app !== appName) return null;
+  const after = Number.parseInt(n, 10);
+  return Number.isFinite(after) && after >= 0 ? after : Math.floor(total / 2);
+}
 
 function entryAppOwner(ent, entryKey) {
   if (ent.__app__ != null) return ent.__app__;
@@ -241,6 +260,7 @@ export default class Installer extends BaseDocument {
     if (this.app_name === 'loopar') {
       loopar.throw("You can't uninstall app Loopar");
     }
+    await this.#assertNoDependents();
 
     // installingApp short-circuits loopar.build(); a failure that doesn't go
     // through loopar.throw (e.g. a SqliteError) must not leave it stuck.
@@ -252,6 +272,9 @@ export default class Installer extends BaseDocument {
   }
 
   async #unInstall() {
+    // Uninstalling deletes the app's records: a snapshot first, as before an
+    // install. Once per job (a cascade uninstalls several apps).
+    if (loopar.tenantId) await this.#safetySnapshot("uninstalling");
 
     console.log("Uninstalling App", this.app_name);
     loopar.installingApp = this.app_name;
@@ -270,6 +293,7 @@ export default class Installer extends BaseDocument {
         if(entityData){
           const doc = await loopar.getDocument(constructor, name);
           console.warn([`Uninstalling ${constructor}:${name}`]);
+          jobLog(`Removed ${constructor}:${name}`);
           await doc.delete({ sofDelete: false, force: true });
         }else{
           console.log([`No data found for ${constructor}:${name}, skipping...`]);
@@ -286,13 +310,19 @@ export default class Installer extends BaseDocument {
       }
       if (await loopar.db.count(constructor, name)) {
         console.warn([`Deleting ${constructor}:${name}`]);
+        jobLog(`Deleted ${constructor}:${name}`);
         const doc = await loopar.getDocument(constructor, name);
         await doc.delete({ sofDelete: false, force: true, build: false });
       }
     }
 
-    for (const e of Object.keys(appData.documents).reverse()) {
+    const removalKeys = Object.keys(appData.documents).reverse();
+    let removedCount = 0;
+    jobStep(`Uninstalling ${this.app_name}: removing ${removalKeys.length} documents`, 5);
+    jobRange(5, 85);
+    for (const e of removalKeys) {
       const ent = appData.documents[e];
+      jobProgress(++removedCount, removalKeys.length, e);
       const owner = entryAppOwner(ent, e);
       if (owner && owner !== this.app_name) continue;
 
@@ -322,7 +352,8 @@ export default class Installer extends BaseDocument {
       }
     }
 
-    await loopar.unsetApp(this.name);
+    await loopar.unsetApp(this.app_name);
+    jobStep("Rebuilding references and foreign keys", 90);
     await loopar.buildRefs();
     await syncForeignKeys(loopar.db);
     console.log(`App ${this.app_name} uninstalled successfully!`);
@@ -377,16 +408,77 @@ export default class Installer extends BaseDocument {
     this.#assertInstallable(header);
     await this.#installRequirements(header);
 
+    // A fresh install (the app had nothing here) is undone when it fails; an
+    // update is not: the app already holds real data. Not for the framework
+    // itself (the setup wizard): there is no workspace to go back to.
+    const fresh = !!loopar.__installed__ && this.app_name !== FRAMEWORK_APP
+      && await loopar.appStatus(this.app_name) !== "installed";
+
     // An installed site gets a local snapshot first: an update that breaks
     // half-way has a point to go back to (Backups page / yarn backup restore).
+    let snapshot = null;
     if (loopar.__installed__ && loopar.tenantId) {
-      const { safetySnapshot } = await import("../../../../../../core/backup/core-ops.js");
-      await safetySnapshot(loopar.tenantId, `before installing ${this.app_name}`);
+      snapshot = await this.#safetySnapshot(reinstall ? "updating" : "installing");
     }
     try {
       return await this.#install(reinstall);
+    } catch (error) {
+      if (fresh) await this.#undoFailedInstall(error, snapshot);
+      else this.#explainFailedUpdate(error, snapshot);
+      throw error;
     } finally {
       loopar.installingApp = null;
+    }
+  }
+
+  /**
+   * The snapshot before changing the app (once per job): its file, or null
+   * when none could be taken. That is said in the job's log, so nobody
+   * counts on a way back that doesn't exist.
+   */
+  async #safetySnapshot(verb) {
+    const taken = await jobOnce("safety-snapshot", async () => {
+      jobStep(`Taking a safety snapshot before ${verb} ${this.app_name}`, 2);
+      const { safetySnapshot } = await import("../../../../../../core/backup/core-ops.js");
+      const result = await safetySnapshot(loopar.tenantId, `before ${verb} ${this.app_name}`);
+      if (result.error) jobLog(`No safety snapshot could be taken: ${result.error}`, "warn");
+      return result;
+    });
+    return taken?.file ?? null;
+  }
+
+  /**
+   * A fresh install that failed half-way is taken back out with the
+   * uninstall code: the tenant returns to where it was before. The
+   * requirements installed first stay (each finished its own install).
+   */
+  async #undoFailedInstall(error, snapshot) {
+    const reason = error?.message || String(error);
+    jobLog(`Install failed: ${reason}`, "error");
+    jobStep(`Undoing the partial install of ${this.app_name}`);
+    try {
+      await this.#unInstall();
+      loopar.installingApp = null;
+      await loopar.build();
+      jobLog(`The partial install of ${this.app_name} was undone`);
+      error.message = `${reason} The install was undone: the workspace is as it was before.`;
+    } catch (undoError) {
+      console.error(`[installer] undoing ${this.app_name} failed:`, undoError?.message || undoError);
+      error.message = snapshot
+        ? `${reason} Undoing it failed too (${undoError?.message || undoError}): restore the snapshot taken before the install (${path.basename(String(snapshot))}) from Backups.`
+        : `${reason} Undoing it failed too (${undoError?.message || undoError}), and there is no snapshot from before it.`;
+      if (snapshot) error.link = { label: "Open Backups", to: "/desk/Backups/view" };
+    }
+  }
+
+  /** An update that failed is left as it is: the way back is the caller's choice. */
+  #explainFailedUpdate(error, snapshot) {
+    const reason = error?.message || String(error);
+    if (snapshot) {
+      error.message = `${reason} Nothing was undone: retry the update, or restore the snapshot taken before it (${path.basename(String(snapshot))}) from Backups.`;
+      error.link = { label: "Open Backups", to: "/desk/Backups/view" };
+    } else {
+      error.message = `${reason} Nothing was undone, and no snapshot could be taken before it (see the log): retry the update.`;
     }
   }
 
@@ -427,6 +519,17 @@ export default class Installer extends BaseDocument {
     return true;
   }
 
+  /** Refuses to uninstall an app that other installed apps require. */
+  async #assertNoDependents() {
+    const dependents = await installedDependents(this.app_name);
+    if (dependents.length) {
+      loopar.throw({
+        status: 409, code: "APP_HAS_DEPENDENTS", title: "Uninstall",
+        message: `"${this.app_name}" can't be uninstalled: ${dependents.map((d) => `"${d}"`).join(", ")} ${dependents.length > 1 ? "require" : "requires"} it. Uninstall ${dependents.length > 1 ? "them" : "it"} first.`,
+      });
+    }
+  }
+
   /** Installs the apps listed in the header's `requires` that aren't installed yet. */
   async #installRequirements(header) {
     const installingRequirements = requirementChain();
@@ -443,6 +546,7 @@ export default class Installer extends BaseDocument {
       installingRequirements.add(required);
       try {
         console.log(`[installer] ${this.app_name} requires ${required}: installing it first`);
+        jobStep(`${this.app_name} requires ${required}: installing it first`);
         const model = await loadInstaller(required);
         await model.install(false);
       } finally {
@@ -466,13 +570,35 @@ export default class Installer extends BaseDocument {
     // Install data comes in the installer's order, not the links': the
     // database keys are dropped here and rebuilt by loopar.build() below.
     if (loopar.__installed__) await dropForeignKeys(loopar.db);
+    jobStep(`${reinstall ? "Updating" : "Installing"} ${this.app_name}`, 5);
+    // The refs serve installed apps only: the app being installed joins them
+    // now, so its documents can name its own entities (a Print Format's
+    // entity, a link) while they are written.
+    await loopar.buildRefs();
     await this.installData(reinstall);
+    // Data migrations (core/document/app-migrations.js): after the entities,
+    // so the tables already have their new columns. An update runs the ones
+    // this tenant hasn't applied; a fresh install has no old data to move.
+    if (reinstall) {
+      const pending = await pendingMigrations(this.app_name);
+      if (pending.length) {
+        jobStep(`Running ${pending.length} data migration${pending.length > 1 ? "s" : ""}`, 82);
+        await runMigrations(this.app_name, {
+          log: (line) => jobLog(line),
+          onEach: ({ index, total, description }) => jobProgress(index, total, description),
+        });
+      }
+    } else {
+      await baselineMigrations(this.app_name);
+    }
+    jobStep("Seeding roles", 86);
     await this.seedRoles();
 
     loopar.installingApp = null;
     
     await loopar.setApp({[this.app_name]: true});
     
+    jobStep("Rebuilding the workspace: references, integrity checks, foreign keys", 90);
     await loopar.build();
     console.log(`App ${this.app_name} installed successfully!`);
     return `App ${this.app_name} installed successfully!`;
@@ -598,6 +724,18 @@ export default class Installer extends BaseDocument {
         const entityData = await this.getDocumentData(name, entryRoot(ent, e));
         // getConfigFile answers {} for a missing file: that is "no data", not
         // an empty document (it would insert a row with a NULL name).
+        // The file declares which builder owns it. An entry under another
+        // constructor (a stale snapshot listing `Entity:X` next to
+        // `Page Builder:X`) would open it with the wrong class and generate
+        // its model/controller under the wrong type folder (entities/ instead
+        // of pages/): skip it.
+        const declared = entityData?.__ENTITY__;
+        if (declared && String(declared).toLowerCase() !== String(constructor).toLowerCase()) {
+          console.warn(`[installer] skipping ${e}: its file declares "${declared}", not "${constructor}" (stale installer.json entry)`);
+          jobLog(`Skipped ${e}: declared as ${declared}`, 'warn');
+          return;
+        }
+
         if(entityData && Object.keys(entityData).length){
           let doc = await loopar.getDocument(constructor, name, entityData, { ifNotFound: null });
           const wasFound = !!doc;
@@ -613,7 +751,10 @@ export default class Installer extends BaseDocument {
           if (!doc) doc = await loopar.newDocument(constructor, entityData);
 
           console.log([reclaimed ? "Reclaiming......." : wasFound ? "Updating......." : "Installing.......", constructor, name]);
-          (!wasFound || reinstall || reclaimed) && await doc.save({ validate: false, reload: false });
+          if (!wasFound || reinstall || reclaimed) {
+            jobLog(`${reclaimed ? "Reclaimed" : wasFound ? "Updated" : "Installed"} ${constructor}:${name}`);
+            await doc.save({ validate: false, reload: false });
+          }
         }else{
           console.log([`No data found for ${constructor}:${name}, skipping...`]);
         }
@@ -640,14 +781,17 @@ export default class Installer extends BaseDocument {
 
       if (!existing) {
         console.log([`Inserting ${constructor}:${name}`]);
+        jobLog(`Inserted ${constructor}:${name}`);
         const doc = await loopar.newDocument(constructor, { ...cleanEnt, __document_status__: "Active" });
         doc.name = name;
         await doc.save({ validate: false });
       } else if (reclaimed) {
         console.log([`Reclaiming ${constructor}:${name} from ${previousOwner}`]);
+        jobLog(`Reclaimed ${constructor}:${name} from ${previousOwner}`);
         await existing.save({ validate: false, forceChildren: true });
       } else if (reinstall || postInstall) {
         console.log([`Updating ${constructor}:${name}`]);
+        jobLog(`Updated ${constructor}:${name}`);
         await existing.save({ validate: false, forceChildren: postInstall });
       }
     }
@@ -742,8 +886,22 @@ export default class Installer extends BaseDocument {
       });
     }
 
-    for (const e of Object.keys(appData.documents)) {
+    // A name the app now ships under another type (a page turned into an
+    // entity…): drop the old record before installing the new one.
+    if (reinstall) await this.replaceRetyped(appData);
+
+    const documentKeys = Object.keys(appData.documents);
+    let installed = 0;
+    // Overall progress (background job): the documents fill 8-70%.
+    jobStep(`Writing ${documentKeys.length} documents`, 8);
+    jobRange(8, 70);
+    const failAfter = injectedFailureAfter(this.app_name, documentKeys.length);
+    for (const e of documentKeys) {
       const ent = appData.documents[e];
+      if (failAfter != null && installed >= failAfter) {
+        throw new Error(`Injected failure after ${installed} documents (sites/${loopar.tenantId}/.fail-install).`);
+      }
+      jobProgress(++installed, documentKeys.length, e);
 
       if (!ent || (typeof ent === 'object' && Object.keys(ent).length === 0)) continue;
 
@@ -758,9 +916,14 @@ export default class Installer extends BaseDocument {
     }
 
     if(appData.postInstaller){
-      for(const e of Object.keys(appData.postInstaller)){
+      const linkKeys = Object.keys(appData.postInstaller);
+      let linked = 0;
+      jobStep("Linking documents", 70);
+      jobRange(70, 80);
+      for(const e of linkKeys){
         let ent = appData.postInstaller[e];
         if(ent == 'link') ent = appData.documents[e];
+        jobProgress(++linked, linkKeys.length, e);
 
         if(!ent) continue;
 
@@ -778,7 +941,10 @@ export default class Installer extends BaseDocument {
     await this.ensureFrameworkColumns();
 
     // An update also takes away what the app no longer ships.
-    if (reinstall) await this.pruneRemoved(appData);
+    if (reinstall) {
+      jobStep("Removing what the app no longer ships", 82);
+      await this.pruneRemoved(appData);
+    }
 
     const topLevelVersion = appData?.App?.version;
     if (topLevelVersion) {
@@ -794,6 +960,50 @@ export default class Installer extends BaseDocument {
     }
 
     return `App ${this.app_name} installed successfully!`;
+  }
+
+  /**
+   * Structure documents (entities and builder records) of this app whose name
+   * the installer.json now ships under another type — e.g. the App Manager
+   * page that became a virtual entity. Names are unique per tenant, and
+   * pruneRemoved keeps any record whose name is still on disk, so the record
+   * of the old type is removed here, before the new one is installed.
+   * Returns the removed `Constructor:Name` keys.
+   */
+  async replaceRetyped(appData) {
+    const key = (v) => loopar.utils.toEntityKey(String(v ?? ''));
+    const shippedAs = new Map();
+    for (const [k, ent] of Object.entries(appData?.documents || {})) {
+      if (!entryRoot(ent, k)) continue;
+      const [constructor, ...name] = String(k).split(':');
+      shippedAs.set(key(name.join(':')), key(constructor));
+    }
+    if (!shippedAs.size) return [];
+
+    const modules = (await loopar.db.getAll('Module', ['name'], { app_name: this.app_name })).map((m) => m.name);
+    if (!modules.length) return [];
+
+    const types = ['Entity'];
+    if (loopar.getRef('Builder', false)) {
+      for (const b of await loopar.db.getAll('Builder', ['name'])) types.push(b.name);
+    }
+
+    const removed = [];
+    for (const type of [...new Set(types)]) {
+      const ref = loopar.getRef(type, false);
+      if (!ref || !(ref.__FIELDS__ || []).includes('module')) continue;
+      const rows = await loopar.db.getAll(type, ['name'], { module: { [Op.in]: modules } });
+      for (const row of rows) {
+        const now = shippedAs.get(key(row.name));
+        if (!now || now === key(type)) continue;
+        // Only the row: the document's delete() would resolve the name to the
+        // new type (refs are keyed by name) and rewrite the old files on disk.
+        console.warn([`[installer] ${this.app_name} now ships "${row.name}" as another type: removing its ${type} record`]);
+        await loopar.db.deleteRow(type, row.name, { force: true });
+        removed.push(`${type}:${row.name}`);
+      }
+    }
+    return removed;
   }
 
   /**

@@ -7,14 +7,15 @@
  * polling.
  */
 
-import { getTenantInstance, getOrCreateTenantInstance, evictTenantInstance } from '../loopar.js';
+import { loopar, getTenantInstance, getOrCreateTenantInstance, evictTenantInstance } from '../loopar.js';
 import { hookManager } from '../HookManager.js';
 import { PermissionManager } from '../auth/PermissionManager.js';
 import { requestContext } from '../server/router/request-context.js';
 import { tenantRegistry } from '../server/tenant-registry.js';
 import { createBackup, restoreBackup, listLocalBackups } from './engine.js';
 import { readSettingsBare } from './settings.js';
-import { migrateDatabase } from '../db-migration/migrate.js';
+import { migrateDatabase, MIGRATION_TARGETS } from '../db-migration/migrate.js';
+import { fileSource } from '../db-migration/portable.js';
 
 const maintenance = new Map(); // tenant → why it is closed ('restore' | 'migrate')
 const jobs = new Map(); // tenant → { id, type, step, startedAt, finishedAt, ok, error, result }
@@ -84,6 +85,27 @@ export function startBackupJob({ root = process.cwd(), tenant, settings, kind = 
 export function startRestoreJob({ root = process.cwd(), tenant, file, passphrase, settings }) {
   return startJob(tenant, 'restore', (onStep) => restoreBackup({
     root, tenant, file, passphrase, settings, mode: 'replace', requireMadeHere: true, onStep,
+    // Loopar's format: copied into a new database of the tenant's engine by
+    // the same code that moves a tenant between engines (the export is the
+    // source), while the tenant still runs on its current database.
+    restorePortable: async (dir, { onStep: step }) => {
+      const inst = await getOrCreateTenantInstance(tenant);
+      if (inst && inst.__restoredAt === undefined) inst.__restoredAt = tenantRegistry.get(tenant)?.restoredAt ?? null;
+      return await requestContext.run({ tenant: { name: tenant } }, async () => {
+        const current = loopar.getDbConfig() || {};
+        const dialect = String(current.dialect || '').toLowerCase();
+        if (!MIGRATION_TARGETS.includes(dialect)) {
+          throw Object.assign(new Error(`A backup in Loopar's format restores into ${MIGRATION_TARGETS.join(', ')}; "${tenant}" uses ${dialect || 'an unknown engine'}.`), { status: 400 });
+        }
+        const result = await migrateDatabase({
+          from: fileSource(dir),
+          target: { dialect, connection: current.connection || {} },
+          apply: false,
+          onStep: step,
+        });
+        return { config: result.config, database: result.database, previous: result.previous };
+      });
+    },
     beforeSwap: async (t) => {
       maintenance.set(t, 'restore');
       await new Promise((r) => setTimeout(r, DRAIN_MS));
@@ -138,20 +160,23 @@ export function startMigrationJob({ root = process.cwd(), tenant, target, test =
 const SAFETY_WINDOW_MS = 10 * 60 * 1000;
 
 /**
- * Local snapshot of a tenant before an app is installed or updated
- * (Installer.install). One per 10 minutes: an update installs several apps
- * in a row. A failure never blocks the update — it is logged.
+ * Local snapshot of a tenant before an app is installed, updated or
+ * uninstalled (Installer). One per 10 minutes: an update installs several
+ * apps in a row. A failure never blocks the operation; it is returned
+ * (`{ file, error }`) so the caller can say there is no snapshot to go back to.
  */
 export async function safetySnapshot(tenant, note = null, root = process.cwd()) {
   try {
     const recent = listLocalBackups(root, tenant).find((b) => b.kind === 'pre-update');
-    if (recent && Date.now() - recent.date.getTime() < SAFETY_WINDOW_MS) return recent.file;
+    if (recent && Date.now() - recent.date.getTime() < SAFETY_WINDOW_MS) return { file: recent.file, error: null };
     const settings = await readSettingsBare(root, tenant);
-    const result = await createBackup({ root, tenant, kind: 'pre-update', settings, upload: false, note });
+    // A snapshot must not fail for a missing dump tool: "native" falls back to Loopar's format here.
+    const format = settings.db_format === 'loopar' ? 'loopar' : 'auto';
+    const result = await createBackup({ root, tenant, kind: 'pre-update', settings, upload: false, note, format });
     console.log(`[backup] snapshot before update: ${result.file}`);
-    return result.file;
+    return { file: result.file, error: null };
   } catch (e) {
     console.warn(`[backup] snapshot before update failed (continuing): ${e.message}`);
-    return null;
+    return { file: null, error: e.message || String(e) };
   }
 }

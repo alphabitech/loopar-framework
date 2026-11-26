@@ -99,7 +99,13 @@ export function TableSearch(props){
                 },
                 ...c.data,
                 required: 0,
-                description: ""
+                description: "",
+                // A filter is always typed in, whatever the field's own policy
+                // on the record (display_only, readonly, computed…).
+                readonly: 0,
+                write_policy: "editable",
+                formula: undefined,
+                virtual: undefined,
               };
 
               data.name = c.data.name;

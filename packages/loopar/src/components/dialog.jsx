@@ -212,7 +212,8 @@ const MetaDialog = (props) => {
                 <div className="h-full">{content}</div>
               )
             }
-            <div className="fixed bottom-5 right-5 z-0 opacity-5" style={{zIndex:"-1"}}><Icon type={props.type} size={130}/></div>
+            {/* Only dialogs with a type carry its sign; untyped ones (progress, forms) stay plain. */}
+            {props.type && <div className="fixed bottom-5 right-5 z-0 opacity-5" style={{zIndex:"-1"}}><Icon type={props.type} size={130}/></div>}
             </div>
           </DialogDescription>
           {props.hasFooter !== false && (

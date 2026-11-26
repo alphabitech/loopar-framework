@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@cn/lib/utils";
 import { AlertTriangleIcon, CopyIcon, DatabaseIcon, RepeatIcon, TimerIcon, XIcon } from "lucide-react";
 import {
-  debugCall, useDebugData, useDebugStream, prependRows, fmtTime, fmtMs, statusTone, durationTone,
+  debugCall, useDebugData, useDebugStream, prependRows, fmtTime, fmtDateTime, fmtMs, statusTone, durationTone,
   Pill, Panel, Empty, KeyValues, Select, fieldClass,
 } from "./shared.jsx";
 import { SqlCode, SqlToggle, Console } from "./code.jsx";
@@ -261,20 +261,38 @@ export function RequestDetail({ id, onClose }) {
 
 const LEVEL_COLOR = { error: "text-red-400", warn: "text-amber-300", info: "text-sky-300", debug: "text-zinc-500", log: "text-zinc-400" };
 
-/** Console-style log tail: time, level, text (multi-line kept), link to the request. */
+const shortFile = (file) => String(file || "").split("/").slice(-2).join("/");
+const siteLabel = (s) => (s?.file ? `${shortFile(s.file)}:${s.line}` : null);
+const siteTitle = (s) => (s?.file ? `${s.fn ? `${s.fn} · ` : ""}${s.file}:${s.line}:${s.col}` : undefined);
+
+/** Console-style log tail: time, level, text (multi-line kept), where it was logged from, link to the request. */
 export function LogLines({ rows, onOpenRequest }) {
   return (
     <div className="min-w-0 max-w-full overflow-hidden rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-xs leading-relaxed text-zinc-200">
-      {rows.map((l, i) => (
-        <div key={i} className="flex gap-3 border-b border-zinc-900 py-0.5 last:border-0">
-          <span className="shrink-0 select-none text-zinc-500">{fmtTime(l.at)}</span>
-          <span className={cn("w-10 shrink-0 select-none uppercase", LEVEL_COLOR[l.level])}>{l.level}</span>
-          <span className={cn("min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]", l.level === "error" && "text-red-300")}>{l.text}</span>
-          {onOpenRequest && l.requestId && (
-            <button type="button" className="shrink-0 text-sky-400 hover:underline" onClick={() => onOpenRequest(l.requestId)}>{__("request")}</button>
-          )}
-        </div>
-      ))}
+      {rows.map((l, i) => <LogLine key={i} l={l} onOpenRequest={onOpenRequest} />)}
+    </div>
+  );
+}
+
+function LogLine({ l, onOpenRequest }) {
+  const [open, setOpen] = useState(false);
+  const site = siteLabel(l.site);
+  return (
+    <div className="border-b border-zinc-900 py-0.5 last:border-0">
+      <div className="flex gap-3">
+        <span className="shrink-0 select-none text-zinc-500">{fmtTime(l.at)}</span>
+        <span className={cn("w-10 shrink-0 select-none uppercase", LEVEL_COLOR[l.level])}>{l.level}</span>
+        <span className={cn("min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]", l.level === "error" && "text-red-300")}>{l.text}</span>
+        {l.stack && (
+          <button type="button" className="shrink-0 text-amber-300 hover:underline" onClick={() => setOpen((o) => !o)}>{open ? __("hide stack") : __("stack")}</button>
+        )}
+        {site && <span className="max-w-[16rem] shrink-0 truncate text-zinc-500" title={siteTitle(l.site)}>{site}</span>}
+        {l.jobId && <span className="shrink-0 text-violet-300" title={l.job || l.jobId}>{__("job")}</span>}
+        {onOpenRequest && l.requestId && (
+          <button type="button" className="shrink-0 text-sky-400 hover:underline" onClick={() => onOpenRequest(l.requestId)}>{__("request")}</button>
+        )}
+      </div>
+      {open && l.stack && <StackView stack={l.stack} className="my-1" />}
     </div>
   );
 }
@@ -287,25 +305,158 @@ export function ErrorList({ rows, onOpenRequest }) {
   );
 }
 
+/** Source lines around the origin, the failing line marked. */
+function CodeFrame({ frame }) {
+  if (!frame?.lines?.length) return null;
+  const width = String(frame.start + frame.lines.length - 1).length;
+  return (
+    <Console
+      maxHeight="max-h-72"
+      lines={frame.lines.map((text, i) => {
+        const n = frame.start + i;
+        const hit = n === frame.line;
+        return {
+          prefix: `${hit ? ">" : " "} ${String(n).padStart(width, " ")}`,
+          text,
+          className: hit ? "bg-red-500/15 text-red-200" : "text-zinc-400",
+        };
+      })}
+    />
+  );
+}
+
+const INTERNAL_FRAME = /node:internal|node_modules|\(node:|^\s+at .*\(<anonymous>\)/;
+
+/** A stack with framework/Node internals folded away (one click shows them). */
+function StackView({ stack, className }) {
+  const [all, setAll] = useState(false);
+  const lines = String(stack || "").split("\n");
+  const hidden = lines.filter((l) => /^\s+at\s/.test(l) && INTERNAL_FRAME.test(l)).length;
+  const shown = all ? lines : lines.filter((l) => !(/^\s+at\s/.test(l) && INTERNAL_FRAME.test(l)));
+  return (
+    <div className={className}>
+      <Console lines={shown} />
+      {hidden > 0 && (
+        <button type="button" className="mt-1 text-[11px] text-muted-foreground hover:text-foreground hover:underline" onClick={() => setAll((a) => !a)}>
+          {all ? __("Hide internal frames") : `${__("Show internal frames")} (${hidden})`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function OriginLine({ origin }) {
+  if (!origin?.file) return null;
+  return (
+    <div className="font-mono text-xs">
+      <span className="text-muted-foreground">{origin.reportedFrom ? __("reported from") : __("at")} </span>
+      <span className="text-foreground" title={siteTitle(origin)}>{origin.file}:{origin.line}:{origin.col}</span>
+      {origin.fn && <span className="text-muted-foreground"> · {origin.fn}</span>}
+    </div>
+  );
+}
+
+/** What ran before the error in the same request / job: SQL and log lines, oldest first. */
+function Trail({ events, e }) {
+  if (!events?.length) return <Empty>{__("Nothing recorded before the error in this context.")}</Empty>;
+  const t0 = Date.parse(events[0].at);
+  const rel = (at) => {
+    const t = Date.parse(at);
+    return Number.isFinite(t) && Number.isFinite(t0) ? `+${fmtMs(t - t0)}` : fmtTime(at);
+  };
+  const lines = events.map((ev) => ({
+    prefix: `${rel(ev.at).padStart(10, " ")} ${ev.kind === "sql" ? "SQL " : (ev.level || "log").toUpperCase().padEnd(4, " ")}`,
+    text: ev.kind === "sql"
+      ? `${ev.text.replace(/\s+/g, " ")}${ev.durationMs != null ? `  · ${fmtMs(ev.durationMs)}` : ""}${ev.rows != null ? ` · ${ev.rows} rows` : ""}${ev.error ? `\n✖ ${ev.error}` : ""}`
+      : `${ev.text}${ev.site ? `   ← ${ev.site}` : ""}`,
+    className: ev.error || ev.level === "error" ? "text-red-300" : ev.kind === "sql" ? "text-sky-200" : ev.level === "warn" ? "text-amber-300" : "text-zinc-300",
+  }));
+  lines.push({ prefix: `${rel(e.at).padStart(10, " ")} ✖   `, text: `${e.name ? `${e.name}: ` : ""}${e.text}`, className: "font-semibold text-red-400" });
+  return <Console lines={lines} maxHeight="max-h-96" />;
+}
+
+const ERROR_TABS = ["Origin", "Trail", "Stack", "Causes", "Context"];
+
+function ErrorDetail({ e, onOpenRequest }) {
+  const [tab, setTab] = useState(e.origin || e.codeFrame ? "Origin" : "Stack");
+  const counts = { Trail: e.trail?.length, Causes: e.causes?.length };
+  const tabs = ERROR_TABS.filter((t) => t !== "Causes" || e.causes?.length);
+  const route = e.route ? [e.route.workspace, e.route.document, e.route.action, e.route.name].filter(Boolean).join(" › ") : null;
+
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="flex gap-1 border-b border-border">
+        {tabs.map((t) => (
+          <button key={t} type="button" onClick={() => setTab(t)}
+            className={cn("-mb-px border-b-2 px-3 py-1 text-xs", tab === t ? "border-primary font-semibold text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
+            {__(t)}{counts[t] ? ` (${counts[t]})` : ""}
+          </button>
+        ))}
+      </div>
+
+      {tab === "Origin" && (
+        <div className="space-y-2">
+          {e.origin ? <OriginLine origin={e.origin} /> : <Empty>{__("No frame of the project's code in the stack.")}</Empty>}
+          <CodeFrame frame={e.codeFrame} />
+          {e.title && <div className="text-xs text-muted-foreground">{__("title:")} {e.title}</div>}
+          {e.code && <div className="text-xs text-muted-foreground">{__("code:")} <span className="font-mono">{e.code}</span></div>}
+        </div>
+      )}
+
+      {tab === "Trail" && <Trail events={e.trail} e={e} />}
+
+      {tab === "Stack" && (e.stack ? <StackView stack={e.stack} /> : <Console lines={[e.text]} />)}
+
+      {tab === "Causes" && (
+        <ol className="space-y-3">
+          {e.causes.map((c, i) => (
+            <li key={i} className="space-y-1">
+              <div className="text-xs font-medium text-foreground"><span className="text-muted-foreground">{__("caused by")} </span>{c.name ? `${c.name}: ` : ""}{c.text}</div>
+              <OriginLine origin={c.origin} />
+              <CodeFrame frame={c.codeFrame} />
+              {c.stack && <StackView stack={c.stack} />}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {tab === "Context" && (
+        <KeyValues data={{
+          source: e.source,
+          status: e.status,
+          at: fmtDateTime(e.at),
+          user: e.user || "guest",
+          request: e.url ? `${e.method} ${e.url}` : null,
+          route,
+          job: e.job ? `${e.job.title} (${e.job.kind})` : null,
+          "error id": e.id,
+        }} />
+      )}
+
+      <div className="flex gap-3 text-xs">
+        <span className="text-muted-foreground">{__("source:")} {e.source}</span>
+        {e.job && <span className="text-violet-500">{__("job:")} {e.job.title}</span>}
+        {onOpenRequest && e.requestId && <button type="button" className="text-primary hover:underline" onClick={() => onOpenRequest(e.requestId)}>{__("open request")}</button>}
+      </div>
+    </div>
+  );
+}
+
 function ErrorItem({ e, onOpenRequest }) {
   const [open, setOpen] = useState(false);
+  const where = siteLabel(e.origin);
   return (
     <li className="rounded-md border border-border p-2">
       <button type="button" className="flex w-full flex-wrap items-center gap-2 text-left" onClick={() => setOpen((o) => !o)}>
         <Pill tone={e.level === "error" ? "danger" : "warning"}>{e.status}</Pill>
         <span className="font-mono text-[11px] text-muted-foreground">{fmtTime(e.at)}</span>
         <span className="flex-1 truncate text-xs font-medium text-foreground">{e.name ? `${e.name}: ` : ""}{e.text}</span>
-        {e.url && <span className="max-w-[16rem] truncate font-mono text-[11px] text-muted-foreground">{e.method} {e.url}</span>}
+        {where && <span className="max-w-[18rem] truncate font-mono text-[11px] text-amber-600 dark:text-amber-300" title={siteTitle(e.origin)}>{where}</span>}
+        {e.job ? (
+          <span className="max-w-[16rem] truncate text-[11px] text-violet-500">{__("job")} · {e.job.title}</span>
+        ) : e.url && <span className="max-w-[16rem] truncate font-mono text-[11px] text-muted-foreground">{e.method} {e.url}</span>}
       </button>
-      {open && (
-        <div className="mt-2 space-y-2">
-          <Console lines={String(e.stack || e.text).split("\n")} />
-          <div className="flex gap-3 text-xs">
-            <span className="text-muted-foreground">{__("source:")} {e.source}</span>
-            {onOpenRequest && e.requestId && <button type="button" className="text-primary hover:underline" onClick={() => onOpenRequest(e.requestId)}>{__("open request")}</button>}
-          </div>
-        </div>
-      )}
+      {open && <ErrorDetail e={e} onOpenRequest={onOpenRequest} />}
     </li>
   );
 }

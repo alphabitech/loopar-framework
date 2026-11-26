@@ -1,0 +1,19 @@
+{
+  "name": "App Manager",
+  "module": "developer",
+  "default_list_view": "Grid",
+  "is_single": 0,
+  "is_static": 0,
+  "is_virtual": 1,
+  "include_in_installer": 0,
+  "is_child": 0,
+  "is_builder": 0,
+  "enable_history": 0,
+  "enable_comments": 0,
+  "require_login_to_comment": 0,
+  "doc_structure": "[{\"node\":\"appm_name\",\"element\":\"input\",\"data\":{\"name\":\"name\",\"label\":\"Name\",\"write_policy\":\"display_only\",\"in_list_view\":1,\"searchable\":1}},{\"node\":\"appm_description\",\"element\":\"input\",\"data\":{\"name\":\"description\",\"label\":\"Description\",\"write_policy\":\"display_only\",\"in_list_view\":1}},{\"node\":\"appm_version\",\"element\":\"input\",\"data\":{\"name\":\"version\",\"label\":\"Version\",\"write_policy\":\"display_only\",\"in_list_view\":1}},{\"node\":\"appm_installed_version\",\"element\":\"input\",\"data\":{\"name\":\"installed_version\",\"label\":\"Installed version\",\"write_policy\":\"display_only\",\"in_list_view\":1}},{\"node\":\"appm_installed\",\"element\":\"switch\",\"data\":{\"name\":\"installed\",\"label\":\"Installed\",\"write_policy\":\"display_only\",\"in_list_view\":1,\"searchable\":1}},{\"node\":\"appm_is_template\",\"element\":\"switch\",\"data\":{\"name\":\"is_template\",\"label\":\"Template\",\"write_policy\":\"display_only\",\"in_list_view\":1,\"searchable\":1}},{\"node\":\"appm_requires\",\"element\":\"input\",\"data\":{\"name\":\"requires\",\"label\":\"Requires\",\"write_policy\":\"display_only\",\"in_list_view\":1}},{\"node\":\"appm_icon\",\"element\":\"icon_input\",\"data\":{\"name\":\"icon\",\"label\":\"Icon\",\"write_policy\":\"display_only\"}}]",
+  "search_fields": "name",
+  "title_fields": "name",
+  "resources": [],
+  "__ENTITY__": "Entity"
+}

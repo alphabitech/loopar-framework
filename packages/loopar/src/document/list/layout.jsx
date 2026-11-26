@@ -13,7 +13,8 @@ import { MapListView } from "./map";
 /** Desk list: chrome + List/Grid/Tree/Kanban/Calendar/Map/Report (view picked from the list layer). */
 export const ListLayout = defineLayout("ListLayout", ({ ctrl, children }) => {
   const { viewType, viewTypeToggle, setViewType, applyView } = useList();
-  const { hasSearchForm = true, onlyGrid, onlyList } = useViewOptions();
+  const { hasSearchForm = true, onlyGrid, onlyList, customViews } = useViewOptions();
+  const custom = customViews?.[viewType];
   // Tree, Kanban, Calendar, Map and Report only on full lists, never on embedded ones.
   const special = onlyGrid !== true && !onlyList;
   const showList = (onlyGrid === true ? "Grid" : viewType) === "List" || onlyList;
@@ -21,7 +22,9 @@ export const ListLayout = defineLayout("ListLayout", ({ ctrl, children }) => {
   return (
     <DeskUI docRef={ctrl} viewTypeToggle={viewTypeToggle} setViewType={setViewType} viewType={viewType} applyView={special ? applyView : undefined}>
       {children}
-      {viewType === "Tree" && special ? (
+      {custom && special ? (
+        custom.render(ctrl)
+      ) : viewType === "Tree" && special ? (
         <TreeView ctrl={ctrl} />
       ) : viewType === "Kanban" && special ? (
         <KanbanBoard ctrl={ctrl} />

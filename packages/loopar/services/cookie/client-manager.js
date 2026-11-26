@@ -41,8 +41,15 @@ export default class ClientManager {
     const date = new Date();
     date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
 
+    // Cookies hold strings only: objects go as JSON (callers parse them) and every
+    // value is URI-encoded so `;`, `=` or spaces can't break the cookie. `get`
+    // already decodes. Before this, objects were written as "[object Object]".
+    const serialized = value !== null && typeof value === 'object'
+      ? JSON.stringify(value)
+      : String(value);
+
     const chunks = [
-      `${name}=${value}`,
+      `${name}=${encodeURIComponent(serialized)}`,
       `expires=${date.toUTCString()}`,
       'path=/'
     ].join('; ');

@@ -16,9 +16,18 @@ let _ready = false;
 
 const OWNER_FIELD = '__created_by__';
 
+/** Public keys arrive packed as `[[docs], [actions]]` pairs (PermissionManager `compactKeys`). */
+function expandKeys(groups) {
+  const keys = new Set();
+  for (const [docs, actions] of groups ?? []) {
+    for (const doc of docs) for (const action of actions) keys.add(`${doc}:${action}`);
+  }
+  return keys;
+}
+
 function initSets({ private: priv, public: pub, denied = [], scopes = {} } = {}) {
   _permSet = priv === null ? null : new Set(priv ?? []);
-  _publicSet = new Set(pub ?? []);
+  _publicSet = expandKeys(pub);
   _deniedSet = new Set(denied);
   _scopes = scopes ?? {};
 }
@@ -104,9 +113,23 @@ export function AuthProvider({ permissions: initialPermissions, userId, children
     }
   }, [userId]);
 
-  useRealtime(`permissionsChanged`, () => {
-    refreshPermissions();
-  });
+  // One read per burst of events: a read already queued covers later events,
+  // and one in flight is followed by a single re-read.
+  const refreshState = useRef({ timer: null, running: false, again: false });
+  const scheduleRefresh = useCallback(() => {
+    const st = refreshState.current;
+    if (st.running) { st.again = true; return; }
+    if (st.timer) return;
+    st.timer = setTimeout(async () => {
+      st.timer = null;
+      st.running = true;
+      await refreshPermissions();
+      st.running = false;
+      if (st.again) { st.again = false; scheduleRefresh(); }
+    }, 300);
+  }, [refreshPermissions]);
+
+  useRealtime(`permissionsChanged`, scheduleRefresh);
 
   const award = useCallback((document, action) => {
     return checkPermission(document, action);

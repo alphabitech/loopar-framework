@@ -141,7 +141,6 @@ export default class WorkspaceController extends AuthController {
     if (workspace === "desk") {
       const sites = await websiteApps();
       WORKSPACE.menu_data =  await WorkspaceController.sidebarData(undefined, sites);
-      WORKSPACE.search_index = WorkspaceController.deskSearchIndex(undefined, sites);
       // Pages the user pinned to the shortcuts menu (null: never saved, the menu shows its defaults).
       WORKSPACE.desk_pins = await readDeskPins();
       // Base + extra languages of the tenant's websites (translation editors).
@@ -368,6 +367,20 @@ export default class WorkspaceController extends AuthController {
    * PermissionManager.canAccessModule), the home only if the user may open
    * it, and only apps with at least one such module. Administrator sees all.
    */
+  /** The desk's menu and search index, fresh: for a desk that must redraw its sidebar (apps installed/removed). */
+  /** The current user's command palette / shortcuts index. The desk asks for it after loading (see search-index.js). */
+  static async searchIndex() {
+    return WorkspaceController.deskSearchIndex(undefined, await websiteApps());
+  }
+
+  static async deskMenu() {
+    const sites = await websiteApps();
+    return {
+      menu_data: await WorkspaceController.sidebarData(undefined, sites),
+      search_index: WorkspaceController.deskSearchIndex(undefined, sites),
+    };
+  }
+
   static async sidebarData(username = loopar.auth.user(), sites = null) {
     const all = loopar.deskMenu || [];
     // Dashboards are records (not part of the built menu): read per request.
