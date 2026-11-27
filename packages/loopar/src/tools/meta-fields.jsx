@@ -106,6 +106,13 @@ export const getMetaFields = (element) => {
           element: IMAGE_INPUT,
           data: { label: "Background", height: 150 },
         },
+        background_priority: {
+          element: SWITCH,
+          data: {
+            label: "Priority Background",
+            description: "Turn on for a background visible on first load (hero, banner): the browser downloads it right away.",
+          },
+        },
         background_color: {
           element: COLOR_PICKER,
           data: { label: "Color" },

@@ -4,6 +4,7 @@ import { elementsDict } from "@global/element-definition";
 import fileManager from "@global/file-manager.js";
 import {loopar} from "loopar";
 import {useMemo} from "react";
+import { preload } from "react-dom";
 
 import { useDesigner } from "@context/designer-context";
 
@@ -86,6 +87,11 @@ export function prepareMeta(metaProps) {
       };
 
       out.imageProps = { src: imageUrl };
+      // Above-the-fold images (an image marked "Load Immediately", a
+      // background marked "Priority"): announced in <head> so the browser
+      // fetches them before it reaches the element (an inline-style
+      // background is otherwise found only at layout).
+      if (out.element === "image" ? data.eager : data.background_priority) out.priorityImage = imageUrl;
 
       if (out.element === "image") {
         out.imageProps.alt = data.alt || data.label || "";
@@ -114,7 +120,7 @@ export function prepareMeta(metaProps) {
 export const useBuildMetaProps = (props) => {
   const { designerMode } = useDesigner();
 
-  return useMemo(() => {
+  const mp = useMemo(() => {
     const mp = prepareMeta(props.meta);
     if (designerMode) {
       return designElementProps(mp);
@@ -122,6 +128,10 @@ export const useBuildMetaProps = (props) => {
  
     return mp;
   }, [designerMode, props.meta]);
+
+  if (mp.priorityImage && !designerMode) preload(mp.priorityImage, { as: "image", fetchPriority: "high" });
+
+  return mp;
 };
 
 export { evaluateCondition, extractFieldNames } from "@global/condition";

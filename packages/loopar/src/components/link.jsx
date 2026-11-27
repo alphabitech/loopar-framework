@@ -1,5 +1,5 @@
 import loopar from "loopar";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Link as ReactLink } from 'react-router';
 import { cn } from "@cn/lib/utils";
 import { buttonVariants } from "@cn/components/ui/button";
@@ -14,6 +14,33 @@ import { currentLanguage, localizePath } from "@global/i18n";
 import { DynamicIcon } from "@icon";
 
 const HEADER_OFFSET = 15;
+
+/** Pointer resting this long on a link counts as intent (a pass over it doesn't). */
+const PREFETCH_HOVER_MS = 80;
+
+/**
+ * Handlers that request the link's page before the click: after a short
+ * hover, on keyboard focus, or right away on press (mouse/touch/pen down
+ * comes ~100 ms before the click). A click that arrives while the request is
+ * in flight waits for it instead of asking again.
+ */
+const usePrefetchHandlers = (url, enabled) => {
+  const { prefetch } = useWorkspace();
+  const timer = useRef(null);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  return useMemo(() => {
+    if (!enabled || !prefetch || !url) return {};
+    const now = () => prefetch(url);
+    return {
+      onMouseEnter: () => { clearTimeout(timer.current); timer.current = setTimeout(now, PREFETCH_HOVER_MS); },
+      onMouseLeave: () => clearTimeout(timer.current),
+      onFocus: now,
+      onPointerDown: () => { clearTimeout(timer.current); now(); },
+    };
+  }, [url, enabled, prefetch]);
+};
 
 const parseParams = (pathname, workspaceName = 'desk') =>
   RouteParsing.parseParams(pathname, workspaceName);
@@ -115,6 +142,8 @@ export function Link({
   // `_target` is the designer's field name (see metaFields); "_modal" is ours,
   // never a DOM target.
   _target,
+  // false: never request the page before the click.
+  prefetch: prefetchProp = true,
   ...props
 }) {
   const { setOpenNav, currentPage, workspace, award, navigate: wsNavigate, isModal } = useWorkspace();
@@ -160,6 +189,12 @@ export function Link({
     onClick?.(e);
     if (workspace === "web") setOpenNav(false);
   }, [isHashLink, scrollToSection, onClick, workspace, setOpenNav]);
+
+  const opensBlank = (targetProp || _target) === "_blank";
+  const prefetchHandlers = usePrefetchHandlers(
+    url,
+    prefetchProp && !designing && canRender && !isAbsolute && !isHashLink && !notControlled && !inModal && !opensBlank && !props.disabled && !onClick,
+  );
 
   const isActive = useMemo(() => {
     if (activeProp) return true;
@@ -282,8 +317,9 @@ export function Link({
   return (
     <ReactLink
       {...commonProps}
+      {...prefetchHandlers}
       to={url}
-      {...((targetProp || _target) === "_blank" ? { target: "_blank" } : {})}
+      {...(opensBlank ? { target: "_blank" } : {})}
       onClick={handleClick}
       key={renderizableProps.key || url}
     >

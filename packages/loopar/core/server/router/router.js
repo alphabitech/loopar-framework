@@ -5,6 +5,7 @@ import { loopar } from '../../loopar.js';
 const PORTAL_HOME = 'Portal Home';
 import { fileManage } from "../../file-manage.js";
 import multer from "multer";
+import { pageCacheMiddleware } from "../page-cache.js";
 import { RouterUtils } from './router-utils.js';
 import { merge } from 'es-toolkit/object';
 import { Middleware } from "./middleware.js";
@@ -84,6 +85,8 @@ export default class Router extends Middleware {
       this.setupSystemMiddleware(),
       this.setupRateLimitMiddleware(),
       this.setupWorkspaceMiddleware(),
+      // Anonymous website pages answered from memory (core/server/page-cache.js).
+      pageCacheMiddleware(),
       this.setupControllerMiddleware(),
       this.setupFinalMiddleware()
     );

@@ -22,6 +22,33 @@ const CROSS_LOAD_KEY = "loopar:cross-workspace-load";
  * same target within a few seconds goes on as a normal fetch instead of
  * reloading in a loop.
  */
+/** How long a page requested ahead of a click is reused. */
+const PREFETCH_TTL_MS = 10_000;
+
+/**
+ * Pages worth requesting before the click: same-site paths whose GET only
+ * reads. Desk routes are limited to their read views; anything that sounds
+ * like it does something (logout, delete, export…) is never requested early.
+ */
+const PREFETCH_DESK_ACTIONS = new Set(["", "list", "view", "update"]);
+const PREFETCH_NEVER = /(^|\/)(logout|login|signout|delete|remove|download|export|print|pdf|unsubscribe|verify|confirm|reset)(\/|$)/i;
+
+function isPrefetchable(url, workspace) {
+  if (!url.startsWith("/") || url.startsWith("//") || url.includes("#")) return false;
+  const path = url.split("?")[0];
+  if (PREFETCH_NEVER.test(path) || /^\/(api|assets|auth)(\/|$)/.test(path)) return false;
+  if (workspace === "desk") {
+    const [, ws, doc, action = ""] = path.split("/");
+    return ws === "desk" && !!doc && PREFETCH_DESK_ACTIONS.has(action);
+  }
+  return true;
+}
+
+function takePrefetch(cache, url) {
+  const hit = cache.get(url);
+  return hit && Date.now() - hit.at < PREFETCH_TTL_MS ? hit.promise : null;
+}
+
 function leavesWorkspace(path, current) {
   const target = getWorkspaceName(path);
   if (target === current || !SHELL_WORKSPACES.includes(target)) return false;
@@ -158,6 +185,8 @@ export function WorkspaceProvider({
   }
   const lastFetchedPath = useRef(null);
   const fetchIdRef = useRef(0);
+  // Documents requested ahead of a click (link hover/focus/touch): url → { at, promise }.
+  const prefetchRef = useRef(new Map());
   const isInitialMount = useRef(true);
 
   const location = useLocation();
@@ -366,14 +395,23 @@ export function WorkspaceProvider({
     // The ONLY request that names a workspace (as a parameter) — RPCs never send one.
     const queryParams = Object.fromEntries(new URLSearchParams(targetSearch));
 
+    // A response requested on hover is this navigation's, if still fresh. The
+    // rest of the prefetched pages belong to the page being left.
+    const prefetched = attempt === 0 && !forceMeta ? takePrefetch(prefetchRef.current, raw) : null;
+    prefetchRef.current.clear();
+
     return new Promise((resolve) => {
-      loopar.fetchDocument(targetPath, {
+      const request = (handlers) => loopar.fetchDocument(targetPath, {
         workspace: __WORKSPACE_NAME__,
         query: { ...queryParams, preloaded: preloadedMeta },
         // A background refresh (loopar.refresh({ freeze: false })) shows no overlay.
         ...(freeze === false ? { freeze: false } : {}),
         // The error view below is the UI for a failed navigation — no toast.
         notifyError: false,
+        ...handlers,
+      });
+
+      const handlers = {
         success: r => {
           if (currentFetchId !== fetchIdRef.current) return resolve();
 
@@ -419,9 +457,51 @@ export function WorkspaceProvider({
           goToErrorView(e, currentFetchId);
           resolve();
         }
-      });
+      };
+
+      if (!prefetched) return request(handlers);
+      navTrace('prefetch-hit', { path: raw });
+      // A failed prefetch says nothing about now: ask again.
+      prefetched.then(res => (res.ok ? handlers.success(res.data) : request(handlers)));
     });
   }, [setDocument, goToErrorView, __WORKSPACE_NAME__, primary]);
+
+  /**
+   * Request a page before it is clicked (link hover, focus, touch), so the
+   * click finds the document — and the code of its view — already here. Same
+   * request a navigation makes; kept PREFETCH_TTL_MS, then asked again.
+   */
+  const prefetch = useCallback((url) => {
+    if (!primary || versionWatch.isOutdated) return;
+    const raw = String(url ?? '');
+    if (!isPrefetchable(raw, __WORKSPACE_NAME__) || raw === pathname) return;
+    const [rawPath, rawSearch = ''] = raw.split('?');
+    if (leavesWorkspace(rawPath, __WORKSPACE_NAME__)) return;
+
+    const cache = prefetchRef.current;
+    const hit = cache.get(raw);
+    if (hit && Date.now() - hit.at < PREFETCH_TTL_MS) return;
+
+    const meta = metaCacheRef.current;
+    const preloadedMeta = !!meta[loopar.utils.urlInstance({ pathname: rawPath })];
+    const promise = new Promise((resolve) => {
+      loopar.fetchDocument(rawPath, {
+        workspace: __WORKSPACE_NAME__,
+        query: { ...Object.fromEntries(new URLSearchParams(rawSearch)), preloaded: preloadedMeta },
+        freeze: false,
+        notifyError: false,
+        success: r => {
+          resolve({ ok: true, data: r });
+          // Download the view's code too; nothing is rendered or cached here.
+          const known = r?.instance && meta[r.instance];
+          const warm = known ? { ...known, Document: { ...known.Document, ...r } } : { key: r?.key, Document: r };
+          if (warm.key) Promise.all([AppSourceLoader(warm.Document), DocumentComponentsLoader(warm)]).catch(() => {});
+        },
+        error: () => resolve({ ok: false }),
+      });
+    });
+    cache.set(raw, { at: Date.now(), promise });
+  }, [primary, pathname, __WORKSPACE_NAME__]);
 
   /**
    * Re-fetch the active document. force:true clears the meta cache so the
@@ -429,6 +509,7 @@ export function WorkspaceProvider({
    * default keeps it and gets lightweight data + shallow merge (`loopar.refresh()`).
    */
   const refresh = useCallback((opts = {}) => {
+    prefetchRef.current.clear();
     if (opts.force) metaCacheRef.current = {};
     fetchDocument(pathname, { freeze: opts.freeze }).then(() => {
       setRefreshFlag(prev => !prev);
@@ -528,6 +609,7 @@ export function WorkspaceProvider({
     award,
     user,
     navigate,
+    prefetch,
     isModal: !primary,
     onClose
   }), [
@@ -546,7 +628,8 @@ export function WorkspaceProvider({
     isPending,
     pathname,
     award,
-    user
+    user,
+    prefetch
   ]);
 
   return (

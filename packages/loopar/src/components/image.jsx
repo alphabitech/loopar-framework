@@ -40,6 +40,7 @@ export function FallbackImage(props) {
           alt={imageProps.alt || ""}
           {...(imageProps.title ? { title: imageProps.title } : {})}
           loading={data.eager ? "eager" : "lazy"}
+          {...(data.eager ? { fetchPriority: "high" } : {})}
           decoding="async"
           onError={() => setFailedSrc(src)}
           className={cn(

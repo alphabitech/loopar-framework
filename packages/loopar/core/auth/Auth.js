@@ -88,6 +88,13 @@ export default class Auth {
   }
 
   async killSession(res) {
+    // Nothing to clear (an anonymous visit): sending expired cookies anyway
+    // made every public page set cookies, so no cache could keep it.
+    const has = (name) => {
+      try { return loopar.cookie.get(name) != null; } catch { return true; }
+    };
+    if (![this.tokenName, this.loggedCookieName, CSRF_COOKIE_NAME].some(has)) return null;
+
     const optsExpire = { httpOnly: true, path: '/', expires: new Date(0) };
 
     try {

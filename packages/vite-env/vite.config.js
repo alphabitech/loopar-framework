@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react';
 import { readdirSync, lstatSync, realpathSync } from 'fs';
+import { createRequire } from 'module';
 import { resolve } from 'pathe';
 import { compression, defineAlgorithm } from 'vite-plugin-compression2';
 import { constants } from 'zlib';
@@ -8,6 +9,14 @@ import tailwindcss from '@tailwindcss/vite';
 import svgr from 'vite-plugin-svgr';
 
 const framework = process.cwd();
+
+// React Compiler (automatic memoization) through oxc, when `oxc-transform-react`
+// is installed; without it the build stays as before. REACT_COMPILER=0 turns it off.
+const hasReactCompiler = (() => {
+  if (process.env.REACT_COMPILER === '0') return false;
+  // Resolved from here (vite-env, where @vitejs/plugin-react lives), as the plugin itself does.
+  try { createRequire(import.meta.url).resolve('oxc-transform-react'); return true; } catch { return false; }
+})();
 
 // Workspace packages are symlinked into node_modules. Aliases must point at
 // their REAL folder: for an alias that goes through node_modules/, Vite's dev
@@ -94,6 +103,7 @@ export default defineConfig(({ command }) => {
       tailwindcss(),
       react({
         devTarget: "esnext",
+        ...(hasReactCompiler && { compiler: true }),
       }),
       svgr(),
 

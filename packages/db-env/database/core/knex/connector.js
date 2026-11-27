@@ -51,7 +51,27 @@ export default class Connector extends Core {
         client: "better-sqlite3",
         connection: { filename: dbPath },
         useNullAsDefault: true,
-        pool: { min: 1, max: 1 },
+        pool: {
+          min: 1, max: 1,
+          // WAL: a write appends to the -wal file instead of rewriting a
+          // rollback journal, and reads never wait on it (backups, the TUI).
+          // NORMAL is durable in WAL mode (a crash loses at most the last
+          // transactions, never corrupts). Backups use the online backup API,
+          // which includes the -wal content.
+          afterCreate: (db, done) => {
+            try {
+              db.pragma('journal_mode = WAL');
+              db.pragma('synchronous = NORMAL');
+              db.pragma('busy_timeout = 5000');
+              db.pragma('cache_size = -32000');     // 32 MB of page cache
+              db.pragma('mmap_size = 134217728');   // 128 MB memory-mapped reads
+              db.pragma('temp_store = MEMORY');
+              done(null, db);
+            } catch (err) {
+              done(err, db);
+            }
+          },
+        },
       });
     } catch (e) {
       loopar.throw("SQLite database not possible to connect");
