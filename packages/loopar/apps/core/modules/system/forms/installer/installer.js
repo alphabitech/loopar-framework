@@ -776,6 +776,7 @@ export default class Installer extends BaseDocument {
       }
     }
 
+    const insertOnly = (doc) => Number(doc?.__ENTITY__?.installer_insert_only) === 1;
     const installDocument = async (e, ent, postInstall=false) => {
       const [constructor, name] = e.split(':');
 
@@ -802,6 +803,10 @@ export default class Installer extends BaseDocument {
         console.log([`Reclaiming ${constructor}:${name} from ${previousOwner}`]);
         jobLog(`Reclaimed ${constructor}:${name} from ${previousOwner}`);
         await existing.save({ validate: false, forceChildren: true });
+      } else if (insertOnly(existing)) {
+        // Seed data (entity flagged "Installer: insert only"): the workspace's
+        // own values (prices, settings) are never overwritten by an update.
+        return;
       } else if (reinstall || postInstall) {
         console.log([`Updating ${constructor}:${name}`]);
         jobLog(`Updated ${constructor}:${name}`);

@@ -1,7 +1,7 @@
 {
   "App": {
     "name": "loopar",
-    "version": "7.7.2"
+    "version": "7.8.0"
   },
   "documents": {
     "Entity:Module": {
@@ -20,7 +20,7 @@
     "App:loopar": {
       "name": "loopar",
       "description": "Loopar",
-      "version": "7.7.2",
+      "version": "7.8.0",
       "autor": "Administrator",
       "icon": "SiInfinityfree",
       "is_template": 0,
