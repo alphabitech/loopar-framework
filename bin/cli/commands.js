@@ -12,7 +12,7 @@ import {
   corePort,
   projectName,
   CORE_PROCESS_NAME,
-} from './pm2.js';
+} from 'loopar/bin/pm2.js';
 const {yellow, green, cyan, red, gray, white} = chalk;
 const log = console.log;
 

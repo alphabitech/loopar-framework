@@ -15,7 +15,8 @@ import { browserLanguage } from './i18n.js';
  * SSR again — the full HTML of a first visit and the JSON of a client
  * navigation (link click, hover prefetch) alike.
  *
- *   - Only GET navigations of the `web` workspace, with no session cookie.
+ *   - Only navigations of the `web` workspace (a GET page visit, or the
+ *     client's bodiless navigation POST), with no session cookie.
  *   - Only 200 responses that set no cookie.
  *   - Key: tenant, host, URL (query included), HTML vs JSON, language, the
  *     visitor's cookies (theme, carousel position…) and the public files stamp.
@@ -69,6 +70,11 @@ function hasSession(req, tenant) {
   );
 }
 
+function hasBody(req) {
+  const body = req.body;
+  return body != null && typeof body === 'object' ? Object.keys(body).length > 0 : !!body;
+}
+
 function cookieFingerprint(req) {
   const cookies = req.cookies || {};
   const kept = Object.keys(cookies).filter(k => !IGNORED_COOKIES.test(k)).sort().map(k => `${k}=${cookies[k]}`);
@@ -107,8 +113,11 @@ function store(key, entry) {
 
 export function pageCacheMiddleware() {
   return (req, res, next) => {
-    if (!enabled() || req.method !== 'GET') return next();
-    if (req.__ROUTE_MODE__ !== 'navigation' || req.__WORKSPACE_NAME__ !== 'web') return next();
+    if (!enabled() || req.__ROUTE_MODE__ !== 'navigation' || req.__WORKSPACE_NAME__ !== 'web') return next();
+    // A page visit is a GET; the client's navigation fetch (link click,
+    // prefetch) is a POST that only names the workspace — a read as well.
+    const isNavigationPost = req.method === 'POST' && req.__IS_AJAX__ && !hasBody(req);
+    if (req.method !== 'GET' && !isNavigationPost) return next();
     const tenant = loopar.requestTenantId;
     if (!tenant || !loopar.__installed__ || hasSession(req, tenant)) return next();
 

@@ -2,8 +2,9 @@
 
 import fs from 'fs';
 import path from 'path';
-import { BaseDocument, loopar, fileManage } from 'loopar';
+import { BaseDocument, loopar, fileManage, tenant } from 'loopar';
 import { statusApp, getRemoteUrl } from './git-actions.js';
+import { headSource, installedSources } from 'loopar/apps/core/modules/system/forms/installer/app-source.js';
 import {
   isTemplateHeader, isTemplateHostTenant, belongsToOtherTenant, defaultDemoDomain, parseRequires,
 } from 'loopar/apps/core/modules/system/forms/installer/template.js';
@@ -74,12 +75,18 @@ export default class AppManager extends BaseDocument {
 
   /** Remote and working-tree state of the given rows (in place). */
   static async withGitStatus(rows) {
+    const installed = installedSources();
     await Promise.all(rows.map(async (app) => {
+      // What this tenant's database was installed from (sites/<tenant>/config/app-sources.json).
+      app.installed_source = installed[app.name] || null;
       if (!app.has_git && !app.is_framework) {
         app.remote_url = '';
         app.repo_status = null;
+        app.source = null;
         return;
       }
+      // Where the code is: its commit, and the version tag when pinned to one.
+      app.source = await headSource(app.name).catch(() => null);
       try {
         app.remote_url = (await getRemoteUrl(app.name)) || app.git_repo || '';
       } catch {
@@ -128,6 +135,10 @@ export default class AppManager extends BaseDocument {
       fields: fields || this.getFieldListNames(),
       rows: pageRows,
       dependencies: AppManager.graph(all),
+      // Where code work (git, versions, Get App) runs: the other tenants point there.
+      control_plane: tenant.controlPlaneTenants().map((name) => ({
+        name, domain: tenant.readTenant(name)?.domain || `${name}.localhost`,
+      })),
       pagination: { page, pageSize: PAGE_SIZE, totalPages, totalRecords, sortBy: 'name', sortOrder: 'asc', __ENTITY__: entityName },
       q,
     });

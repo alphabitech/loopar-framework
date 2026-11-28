@@ -20,9 +20,11 @@ const PREFETCH_HOVER_MS = 80;
 
 /**
  * Handlers that request the link's page before the click: after a short
- * hover, on keyboard focus, or right away on press (mouse/touch/pen down
- * comes ~100 ms before the click). A click that arrives while the request is
- * in flight waits for it instead of asking again.
+ * hover or focus, or right away on press (mouse/touch/pen down comes ~100 ms
+ * before the click). Focus waits like hover: menu items (Radix) take focus
+ * as the pointer crosses them, so sweeping a menu must not request every
+ * page on the way. A click that arrives while the request is in flight waits
+ * for it instead of asking again.
  */
 const usePrefetchHandlers = (url, enabled) => {
   const { prefetch } = useWorkspace();
@@ -33,11 +35,14 @@ const usePrefetchHandlers = (url, enabled) => {
   return useMemo(() => {
     if (!enabled || !prefetch || !url) return {};
     const now = () => prefetch(url);
+    const later = () => { clearTimeout(timer.current); timer.current = setTimeout(now, PREFETCH_HOVER_MS); };
+    const cancel = () => clearTimeout(timer.current);
     return {
-      onMouseEnter: () => { clearTimeout(timer.current); timer.current = setTimeout(now, PREFETCH_HOVER_MS); },
-      onMouseLeave: () => clearTimeout(timer.current),
-      onFocus: now,
-      onPointerDown: () => { clearTimeout(timer.current); now(); },
+      onMouseEnter: later,
+      onMouseLeave: cancel,
+      onFocus: later,
+      onBlur: cancel,
+      onPointerDown: () => { cancel(); now(); },
     };
   }, [url, enabled, prefetch]);
 };

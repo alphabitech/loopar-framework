@@ -2,6 +2,8 @@
 
 import {KnexORM, addQueryProbe} from 'db-env';
 import { debugCollector } from './debug/collector.js';
+import { installTenantLogPrefix, onTenantLog } from './server/tenant-log-prefix.js';
+import { debuggerRowsOf } from './logging/debugger-logs.js';
 import { testRuns } from './debug/test-runner.js';
 import sha1 from "sha1";
 import * as Helpers from "./global/helper.js";
@@ -612,6 +614,13 @@ export async function startCore() {
     wants: (tenant) => RealtimeManager.hasListeners(tenant, 'debug'),
     publish: (tenant, action, payload) => RealtimeManager.emit(tenant, 'debug', action, payload),
   };
+  // Stamp console output with the tenant it belongs to (the TUI filters the
+  // core's log files on it). Before the Debugger's capture, which wraps it.
+  installTenantLogPrefix();
+  // The Debugger's live Logs: each tenant message as it is written to the files.
+  onTenantLog((tenant, message) => {
+    for (const row of debuggerRowsOf(message)) debugCollector.publishLog(tenant, row);
+  });
   debugCollector.install({
     addQueryProbe,
     resolveUser: () => loopar.auth?.user?.() ?? null,

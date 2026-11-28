@@ -2,6 +2,7 @@
 
 import { BaseDocument, fileManage, loopar, tenant } from 'loopar';
 import { buildInstaller } from './builder.js';
+import { recordDevelopment } from 'loopar/apps/core/modules/system/forms/installer/app-source.js';
 import { themeCSS } from '../../../settings/entities/system-settings/theme-css.js';
 import fs from 'fs';
 import path from 'path';
@@ -134,6 +135,9 @@ export default class App extends BaseDocument {
     this.version = version.join('.');
     await this.save(false);
     await this.buildInstaller();
+    // This tenant's database is now at the new version (made here, not installed from a commit).
+    await recordDevelopment(this.name, this.version)
+      .catch((e) => console.warn(`[app] could not record the version of ${this.name}: ${e.message}`));
 
     return true;
   }

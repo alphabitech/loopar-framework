@@ -3,7 +3,9 @@
 
 import { SystemController, loopar } from 'loopar';
 
-import { pullApp, pushApp, commitApp, discardApp, publishApp, statusApp, getDiff, cloneRepo } from './git-actions.js';
+import { pullApp, pushApp, commitApp, discardApp, publishApp, statusApp, getDiff, cloneRepo, switchVersion, getCwdForApp } from './git-actions.js';
+import { listVersions, headSource, installedSources } from 'loopar/apps/core/modules/system/forms/installer/app-source.js';
+import { onOwnerTenant } from 'loopar/core/auth/source-lock.js';
 import { enqueueBuild, setEmitter } from '../../build-service.js';
 import { listGitAccounts } from './git-accounts.js';
 import AppManager from './app-manager.js';
@@ -212,28 +214,79 @@ export default class AppManagerController extends SystemController {
       ? ` ${result.files_changed} file(s) changed.`
       : ' Already up to date.';
 
-    let buildNote = '';
-    const buildOnPull = !['0', 'false'].includes(String(process.env.LOOPAR_BUILD_ON_PULL ?? '1'));
-    const changed = result.files_changed > 0 || result.needs_restart;
-
-    if (buildOnPull && changed) {
-      const q = enqueueBuild({
-        scope: 'all',
-        cwd: loopar.pathRoot,
-        initiator: loopar.tenantId,
-      });
-      result.build_queued = q.queued;
-      result.build_job = q.job || null;
-      buildNote = q.queued
-        ? ' Full build started.'
-        : ' A build is already in progress.';
-    }
+    const buildNote = this.#buildIfChanged(result);
 
     return await this.success(result, {
       notify: {
         type: 'success',
         message: `Pulled ${app_name}.${changesNote}${restartNote}${buildNote}`
       }
+    });
+  }
+
+  /** New code on disk (pull, version switch): a full build, unless turned off. Returns the note. */
+  #buildIfChanged(result) {
+    const buildOnPull = !['0', 'false'].includes(String(process.env.LOOPAR_BUILD_ON_PULL ?? '1'));
+    const changed = result.files_changed > 0 || result.needs_restart;
+    if (!buildOnPull || !changed) return '';
+
+    const q = enqueueBuild({
+      scope: 'all',
+      cwd: loopar.pathRoot,
+      initiator: loopar.tenantId,
+    });
+    result.build_queued = q.queued;
+    result.build_job = q.job || null;
+    return q.queued ? ' Full build started.' : ' A build is already in progress.';
+  }
+
+  /**
+   * The app's versions (its `<app>@<version>` tags), where its code is now
+   * (latest branch, or pinned to a version) and what this tenant's database
+   * was installed from.
+   */
+  async actionVersions() {
+    await this.assertCanManageInstalls();
+    const app_name = this.#requireAppName();
+    const { isFramework } = getCwdForApp(app_name);
+    return {
+      app_name,
+      is_framework: isFramework,
+      can_switch: onOwnerTenant(),
+      versions: await listVersions(app_name),
+      head: await headSource(app_name),
+      installed: installedSources()[app_name] || null,
+    };
+  }
+
+  /**
+   * Move the app's code to a version (`target` = its tag) or back to the
+   * latest one (`target` = "latest"). The code is the server's, shared by its
+   * tenants: each one then aligns its database with Update / Rollback.
+   */
+  async actionSwitchVersion() {
+    await this.assertCanManageInstalls();
+    // The code is the server's: one tenant brings it (pull, version) and
+    // builds it; the others only install, update or uninstall — always, not
+    // only under the production source lock.
+    if (!onOwnerTenant()) {
+      loopar.throw({
+        status: 403, code: 'NOT_OWNER_TENANT', title: 'Versions',
+        message: "An app's version is chosen on the server owner's tenant (control plane or template host): it changes the code for every site. Here, align this site with Update / Rollback.",
+      });
+    }
+    const app_name = this.#requireAppName();
+    const target = (this.body && this.body.target) || (this.query && this.query.target);
+    if (!target) loopar.throw({ status: 400, title: 'Versions', message: 'Choose a version.' });
+
+    const result = await switchVersion(app_name, String(target));
+    const buildNote = this.#buildIfChanged(result);
+    const alignNote = result.needs_restart
+      ? ` Then align this site's database with ${result.pinned ? 'Rollback / Update' : 'Update'} (v${result.version}).`
+      : '';
+
+    return await this.success(result, {
+      notify: { type: 'success', message: `${result.message}${buildNote}${alignNote}` },
     });
   }
 

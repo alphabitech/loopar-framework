@@ -107,7 +107,8 @@ export function DatabasePanel({ live, refreshKey, onOpenRequest }) {
   );
 }
 
-const LEVELS = ["error", "warn", "info", "log", "debug"];
+// What the log files can tell apart: stderr errors / warnings, stdout lines.
+const LEVELS = ["error", "warn", "log"];
 
 export function LogsPanel({ live, refreshKey, onOpenRequest }) {
   const [levels, setLevels] = useState(new Set(LEVELS));
@@ -132,7 +133,9 @@ export function LogsPanel({ live, refreshKey, onOpenRequest }) {
         </>
       )}
     >
-      {!data?.rows?.length ? <Empty>{__("No log lines.")}</Empty> : <div className="max-h-[70vh] overflow-auto"><LogLines rows={data.rows} onOpenRequest={onOpenRequest} /></div>}
+      {!data?.rows?.length
+        ? <Empty>{data && data.source === null ? __("The server's log files are not available (the core is not running under pm2).") : __("No log lines.")}</Empty>
+        : <div className="max-h-[70vh] overflow-auto"><LogLines rows={data.rows} onOpenRequest={onOpenRequest} /></div>}
     </Panel>
   );
 }

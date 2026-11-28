@@ -1,6 +1,6 @@
 'use strict';
 
-import { ListLayout } from '@loopar/list';
+import { ListLayout, useList } from '@loopar/list';
 import loopar from "loopar";
 import { useEffect, useRef, useState } from "react";
 
@@ -35,10 +35,20 @@ import {
   MoreHorizontalIcon,
   NetworkIcon,
   DatabaseZapIcon,
+  HistoryIcon,
+  PinIcon,
+  TagIcon,
 } from 'lucide-react';
 import { AppDependencies } from './app-dependencies';
 import { openJobProgress, useJobEvents, isActiveJob, shouldPoll } from '@@components/job-progress';
 import { __ } from "loopar";
+import { award } from "@context/auth-context";
+
+/**
+ * Code work (git, versions, Get App, migrations) runs only on the control
+ * plane tenant; elsewhere the server denies it and these hide (cosmetic).
+ */
+const canDo = (action) => award('App Manager', action);
 
 const fieldClass = "w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground";
 
@@ -190,6 +200,15 @@ function AppCard({app, action}) {
   const branch = status?.branch || '';
   const isDirty = dirtyCount > 0;
   const tracksUpstream = hasRemote && status?.upstream !== false;
+  // The code pinned to a version (detached at an `<app>@<version>` tag).
+  const source = app.source || null;
+  const pinned = !!source?.pinned;
+  const pinnedLabel = pinned ? (source.version ? `v${source.version}` : source.short) : '';
+  // Choosing the code's version is the server owner's tenant's job (control
+  // plane / template host); other sites only align their database with it.
+  const canSwitchVersion = canDo('switchVersion') && !isFramework;
+  const canPull = canDo('pull'), canCommit = canDo('commit'), canPush = canDo('push');
+  const canPublish = canDo('publish');
 
   // A mismatched folder can't be resolved by any app operation, so it gets no git/lifecycle actions.
   const repoMode =
@@ -205,6 +224,7 @@ function AppCard({app, action}) {
         ? { label: __('Rollback available'), tone: 'yellow' }
         : { label: __('Update available'), tone: 'orange' };
     }
+    if (pinned && canSwitchVersion) return { label: `${__('Pinned')} ${pinnedLabel}`, tone: 'violet' };
     if (isDirty) return { label: `${dirtyCount} ${__('uncommitted')}`, tone: 'amber' };
     if (behind > 0) return { label: `${behind} ${__('behind')}`, tone: 'yellow' };
     if (ahead > 0) return { label: `${ahead} ${__('unpushed')}`, tone: 'blue' };
@@ -217,9 +237,10 @@ function AppCard({app, action}) {
 
   const discard = () => action(app.name, 'discard', repoMode === 'full' ? true : { wasInstalled: app.installed });
   const menu = [
-    (repoMode === 'full' || repoMode === 'local') && { key: 'discard', label: __('Discard local changes'), icon: RotateCcwIcon, onSelect: discard },
+    (repoMode === 'full' || repoMode === 'local') && canSwitchVersion && { key: 'versions', label: __('Versions'), icon: HistoryIcon, tone: 'default', onSelect: () => openVersions(app) },
+    (repoMode === 'full' || repoMode === 'local') && canDo('discard') && { key: 'discard', label: __('Discard local changes'), icon: RotateCcwIcon, onSelect: discard },
     // Development: a data migration to ship with the app's next version (app-migrations.js).
-    hasGitDir && !app.template_locked && { key: 'migration', label: __('New data migration'), icon: DatabaseZapIcon, onSelect: () => newMigration(app.name) },
+    hasGitDir && !app.template_locked && canDo('newMigration') && { key: 'migration', label: __('New data migration'), icon: DatabaseZapIcon, onSelect: () => newMigration(app.name) },
     app.installed && !isFramework && { key: 'uninstall', label: __('Uninstall'), icon: Trash2Icon, onSelect: () => action(app.name, 'uninstall') },
   ].filter(Boolean);
 
@@ -267,7 +288,11 @@ function AppCard({app, action}) {
         {hasGitDir && !mismatch && (
           <>
             <span className="text-border">•</span>
-            {branch && (
+            {pinned ? (
+              <span className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-violet-400" title={`${__("Pinned to")} ${source.tag || source.short}`}>
+                <PinIcon className="h-3 w-3" />{source.tag || source.short}
+              </span>
+            ) : branch && (
               <span className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-foreground/80">
                 <GitBranchIcon className="h-3 w-3" />{branch}
               </span>
@@ -304,7 +329,7 @@ function AppCard({app, action}) {
       )}
 
       <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-border/60 px-3 py-2">
-        {!!app.template_host && !mismatch && (
+        {!!app.template_host && !mismatch && canDo('publishDemo') && (
           <Button size="sm" variant="primeblue" className="h-8" onClick={() => publishDemo(app)}
             title={__("Install this template here (if needed) and serve it on its own domain")}>
             <LayoutTemplateIcon className="mr-1.5 h-4 w-4" /> {__("Publish demo")}
@@ -331,30 +356,37 @@ function AppCard({app, action}) {
           </Button>
         )}
 
-        {repoMode === 'full' && (
+        {pinned && canSwitchVersion && !mismatch && (
+          <Button size="sm" variant="ghost" className="h-8 text-violet-400 hover:bg-violet-500/10 hover:text-violet-300"
+            title={__("Move the code back to the latest version")} onClick={() => switchVersion(app, 'latest')}>
+            <ArrowUpFromLineIcon className="mr-1.5 h-4 w-4" /> {__("Latest")}
+          </Button>
+        )}
+
+        {repoMode === 'full' && (canPull || canCommit || canPush) && (
           <div className="inline-flex divide-x divide-border overflow-hidden rounded-md ring-1 ring-inset ring-border">
-            <GitSegment icon={ArrowDownToLineIcon} label={__("Pull")} tone="yellow" active={behind > 0}
+            {canPull && <GitSegment icon={ArrowDownToLineIcon} label={__("Pull")} tone="yellow" active={behind > 0}
               title={isFramework ? 'Pull framework from remote' : 'Pull from remote'}
-              onClick={() => action(app.name, 'pull')} />
-            <GitSegment icon={GitCommitHorizontalIcon} label={__("Commit")} tone="amber" active={isDirty}
+              onClick={() => action(app.name, 'pull')} />}
+            {canCommit && <GitSegment icon={GitCommitHorizontalIcon} label={__("Commit")} tone="amber" active={isDirty}
               title={isFramework ? 'Commit framework changes' : 'Commit local changes'}
-              onClick={() => action(app.name, 'commit')} />
-            <GitSegment icon={ArrowUpFromLineIcon} label={__("Push")} tone="blue" active={ahead > 0}
+              onClick={() => action(app.name, 'commit')} />}
+            {canPush && <GitSegment icon={ArrowUpFromLineIcon} label={__("Push")} tone="blue" active={ahead > 0}
               title={isFramework ? 'Push framework to remote' : 'Push to remote'}
-              onClick={() => action(app.name, 'push')} />
+              onClick={() => action(app.name, 'push')} />}
           </div>
         )}
 
-        {repoMode === 'local' && (
+        {repoMode === 'local' && (canCommit || canPublish) && (
           <div className="inline-flex divide-x divide-border overflow-hidden rounded-md ring-1 ring-inset ring-border">
-            <GitSegment icon={GitCommitHorizontalIcon} label={__("Commit")} tone="amber" active={isDirty}
-              title={__("Commit local changes")} onClick={() => action(app.name, 'commit')} />
-            <GitSegment icon={CloudUploadIcon} label={__("Publish")} tone="violet" active
-              title={__("Connect to a remote and push existing history")} onClick={() => action(app.name, 'publish')} />
+            {canCommit && <GitSegment icon={GitCommitHorizontalIcon} label={__("Commit")} tone="amber" active={isDirty}
+              title={__("Commit local changes")} onClick={() => action(app.name, 'commit')} />}
+            {canPublish && <GitSegment icon={CloudUploadIcon} label={__("Publish")} tone="violet" active
+              title={__("Connect to a remote and push existing history")} onClick={() => action(app.name, 'publish')} />}
           </div>
         )}
 
-        {repoMode === 'none' && (
+        {repoMode === 'none' && canPublish && (
           <Button size="sm" variant="ghost" className="h-8 text-violet-400 hover:bg-violet-500/10 hover:text-violet-300"
             title={__("Initialize git, link to a remote, and push the initial commit")}
             onClick={() => action(app.name, 'publish')}>
@@ -389,7 +421,8 @@ function AppCard({app, action}) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {menu.map((m) => (
-                  <DropdownMenuItem key={m.key} onSelect={m.onSelect} className="gap-2 text-destructive focus:text-destructive [&_svg]:size-4">
+                  <DropdownMenuItem key={m.key} onSelect={m.onSelect}
+                    className={cn("gap-2 [&_svg]:size-4", m.tone !== 'default' && "text-destructive focus:text-destructive")}>
                     <m.icon />{m.label}
                   </DropdownMenuItem>
                 ))}
@@ -460,6 +493,120 @@ function newMigration(appName) {
   });
 }
 
+const shortDate = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+/**
+ * The app's versions (its `<app>@<version>` tags, created when a commit ships
+ * a new installer version): where the code is, what this site was installed
+ * from, and a way to move the code to any of them.
+ */
+function VersionsList({ data, onPick }) {
+  const { versions = [], head, installed, can_switch: canSwitch } = data;
+  const sameVersion = (v) => installed && (installed.commit ? installed.commit === v.commit : installed.version === v.version);
+
+  return (
+    <div className="space-y-3 text-left">
+      <div className="space-y-1 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        <div>
+          {__("Code on this server")}:{' '}
+          {head
+            ? head.pinned
+              ? <span className="font-mono text-violet-400">{__("pinned to")} {head.tag || head.short}</span>
+              : <span className="font-mono text-foreground/80">{head.branch} ({head.short}){head.tag ? ` · ${head.tag}` : ''}</span>
+            : <span className="italic">{__("unknown")}</span>}
+        </div>
+        <div>
+          {__("This site's database")}:{' '}
+          {installed
+            ? <span className="font-mono text-foreground/80">v{installed.version}{installed.commit ? ` (${installed.commit.slice(0, 7)})` : ''}</span>
+            : <span className="italic">{__("no recorded source yet (recorded from its next install or update)")}</span>}
+        </div>
+      </div>
+
+      {head?.pinned && canSwitch && (
+        <Button size="sm" variant="secondary" className="w-full" onClick={() => onPick('latest')}>
+          <ArrowUpFromLineIcon className="mr-1.5 h-4 w-4" /> {__("Return to the latest version")}
+        </Button>
+      )}
+
+      {versions.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {__("No versions yet. A version is tagged when a commit ships a new installer version.")}
+        </p>
+      ) : (
+        <div className="max-h-80 divide-y divide-border overflow-y-auto rounded-md ring-1 ring-inset ring-border">
+          {versions.map((v) => {
+            const isCode = head?.commit === v.commit;
+            return (
+              <div key={v.tag} className="flex items-center gap-3 px-3 py-2 text-sm">
+                <TagIcon className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                <span className="font-mono font-medium">v{v.version}</span>
+                <span className="font-mono text-xs text-muted-foreground">{v.short}</span>
+                <span className="text-xs text-muted-foreground">{shortDate(v.date)}</span>
+                <span className="ml-auto flex items-center gap-1.5">
+                  {isCode && <Pill tone="violet">{__("code")}</Pill>}
+                  {sameVersion(v) && <Pill tone="green">{__("this site")}</Pill>}
+                  {!isCode && canSwitch && (
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onPick(v.tag)}>
+                      {__("Use")}
+                    </Button>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function openVersions(app) {
+  loopar.call('App Manager', 'versions', { query: { app_name: app.name } })
+    .then((data) => {
+      const id = `versions-${app.name}`;
+      loopar.dialog({
+        id,
+        type: "info",
+        title: `${__("Versions")} · ${app.name}`,
+        content: <VersionsList data={data} onPick={(target) => {
+          loopar.closeDialog(id);
+          switchVersion(app, target);
+        }} />,
+        size: "lg",
+        buttons: [{ name: "close", text: __("Close"), variant: "secondary", dismiss: true, onClick: () => {} }],
+      });
+    })
+    .catch(() => {}); // error already toasted by http.jsx
+}
+
+/**
+ * Moves the app's code to a version (or back to the latest): every site on
+ * this server runs it after the build; each site then aligns its database.
+ */
+function switchVersion(app, target) {
+  const latest = target === 'latest';
+  loopar.confirm({
+    title: latest ? `${app.name}: ${__("return to the latest version")}?` : `${app.name}: ${__("use")} ${target}?`,
+    content: `${__("The code of")} <strong>${app.name}</strong> ${__("changes for every site on this server, and a full build runs.")}`
+      + `<br/><br/>${__("Then align each site's database with")} <strong>${latest ? __("Update") : __("Rollback / Update")}</strong>. `
+      + `${__("A safety snapshot is taken first.")}`
+      + (latest ? '' : `<br/><br/><span class='text-amber-500'>${__("Going back: entities the older version doesn't ship are removed with their data, and data migrations are not undone. To get the data back, restore the snapshot from Backups.")}</span>`),
+    ok: () => {
+      loopar.call('App Manager', 'switchVersion', { body: { app_name: app.name, target }, query: { app_name: app.name } })
+        .then((r) => {
+          if (r?.build_job) openJobProgress(r.build_job, { entity: 'App Manager' });
+          setTimeout(() => loopar.refresh(), 600);
+        })
+        .catch(() => {}); // error already toasted by http.jsx
+    },
+  });
+}
+
 function cloneApp() {
   loopar.prompt({
     title: "Get App",
@@ -521,9 +668,8 @@ function sendAppAction(appName, action, optsOrSlide = false) {
       const files = Array.isArray(diff.files) ? diff.files : [];
 
       if (files.length === 0) {
-        return loopar.confirm(
-          `Nothing to commit in ${isFramework ? 'monorepo' : appName}. Working tree is already clean.`,
-          () => {}
+        return loopar.alert(
+          `Nothing to commit in ${isFramework ? 'monorepo' : appName}. Working tree is already clean.`
         );
       }
 
@@ -793,8 +939,8 @@ const actions = () => ({
     label: __("Add App"), icon: PlusIcon, primary: true,
     to: "/desk/App/create", inModal: true, onSaved: () => loopar.refresh(),
   },
-  // Get App only needs the repository URL: a prompt, not a form.
-  getApp: { label: __("Get App"), icon: DownloadIcon, onClick: () => cloneApp() },
+  // Get App only needs the repository URL: a prompt, not a form. Control plane only.
+  ...(canDo('clone') ? { getApp: { label: __("Get App"), icon: DownloadIcon, onClick: () => cloneApp() } } : {}),
 });
 
 const gridTemplate = (app) => <AppCard app={app} action={sendAppAction} />;
@@ -813,9 +959,29 @@ export const config = {
   },
 };
 
+/** On a tenant that isn't the control plane: where code work happens instead. */
+function ControlPlaneNote() {
+  const { ctrl } = useList();
+  if (canDo('pull')) return null;
+  const planes = ctrl?.Document?.control_plane || [];
+  return (
+    <div className="mb-4 flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground ring-1 ring-inset ring-border">
+      <InfinityIcon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-violet-400" />
+      <p className="min-w-0">
+        {__("Code work (git, versions, Get App) runs on the control plane, for every site on this server")}
+        {planes.length > 0 && <>: {planes.map((p, i) => (
+          <span key={p.name}>{i > 0 && ', '}<a className="font-mono text-foreground/80 hover:underline" href={`//${p.domain}/desk/App%20Manager/list`}>{p.domain}</a></span>
+        ))}</>}
+        {'. '}{__("Here you install, update or uninstall the apps for this site.")}
+      </p>
+    </div>
+  );
+}
+
 export default function AppManagerList() {
   return (
     <ListLayout actions={actions()} gridTemplate={gridTemplate} gridMinWidth="24rem">
+      <ControlPlaneNote />
       <ActiveJobs />
     </ListLayout>
   );

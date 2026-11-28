@@ -440,7 +440,7 @@ function migrationFinished(name, job) {
   }
   if (job.issues?.length) {
     loopar.dialog({
-      type: "alert",
+      type: "error",
       title: `${name}: ${test ? __("migration test failed") : __("migration failed")}`,
       content: <IssueList message={job.error} issues={job.issues} />,
       size: "lg",

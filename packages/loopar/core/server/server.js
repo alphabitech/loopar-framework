@@ -20,6 +20,7 @@ import { installAssetsVersion } from "./assets-version.js";
 import { buildIdMiddleware, buildEndpoint, previousAssetsMiddleware, isBuildAsset, IMMUTABLE_CACHE } from "./build-info.js";
 import { debugCollector } from "../debug/collector.js";
 import { isRestoring, maintenanceReason, unplugTenant } from "../backup/core-ops.js";
+import { installBackupIpc } from "../backup/ipc.js";
 import { PermissionManager } from "../auth/PermissionManager.js";
 
 /** What a tenant closed for maintenance answers (see backup/core-ops.js). */
@@ -376,6 +377,9 @@ export class Server extends Router {
     // HOST comes from config/core.json `host` (core-config coreEnvVars). Behind
     // Caddy, "127.0.0.1" keeps the core off the public interfaces.
     const host = process.env.HOST || undefined;
+    // The terminal Tenant Manager asks this core to run restores (pm2 messages).
+    installBackupIpc();
+
     httpServer.listen(port, host, () => {
       console.log(`Core server listening on ${host ? `${host}:` : ''}${port} — turn tenants On to serve them.` + installMessage);
     });

@@ -33,6 +33,10 @@ export const isSensitiveParam = (name) => isSensitiveName(name) || SENSITIVE_PAR
 const TEXT_SECRETS = [
   // ?token=…&code=… in URLs and query strings
   [/([?&;](?:[\w.-]*(?:token|secret|password|passwd|pwd|api_?key|signature|hmac|code|state|otp|jwt)[\w.-]*)=)[^&\s"'#<>]+/gi, '$1[redacted]'],
+  // "password": "…" in JSON / logged objects
+  [/("(?:[\w.-]*(?:token|secret|password|passwd|pwd|api_?key|private_?key|signature|hmac|jwt|credential)[\w.-]*)"\s*:\s*")[^"]*/gi, '$1[redacted]'],
+  // password=… / token: … in free text (log lines); `code`/`state` stay out — ordinary words here
+  [/((?:^|[\s,;(])(?:[\w.-]*(?:token|secret|password|passwd|pwd|api_?key|private_?key|signature|hmac|jwt|credential)[\w.-]*)\s*[=:]\s*)(?!\[redacted\])[^\s"',;)]+/gi, '$1[redacted]'],
   // JWTs, debug tokens, password hashes, common provider keys
   [/eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]*/g, REDACTED],
   [/ldbg_[0-9a-f]{12}_[\w-]{43}/g, REDACTED],

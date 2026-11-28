@@ -145,6 +145,7 @@ export function togglePick() {
 
 export function scrollDetail(delta) {
   const t = T();
+  if (delta < 0) t.follow = false; // reading back pauses following; render resumes it at the bottom
   t.detailScroll = Math.max(0, t.detailScroll + delta);
   render();
 }

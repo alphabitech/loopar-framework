@@ -168,6 +168,7 @@ export class DebugCollector {
   #stream = null;
   #outbox = new Map();   // tenant → { requests: [], logs: [], errors: [] }
   #flushTimer = null;
+  #publishing = false;
 
   /** Requests to these documents are not recorded (the debugger watching itself). */
   ignoreDocuments = new Set(['debugger']);
@@ -267,6 +268,18 @@ export class DebugCollector {
     try { return this.#stream.wants ? !!this.#stream.wants(tenant) : true; } catch { return false; }
   }
 
+  /**
+   * Stream a log row to the tenant's Debugger watchers. The rows come from
+   * what the core writes to its log files (core/logging/debugger-logs.js), so
+   * the live Logs and their history (actionLogs) are one source.
+   */
+  publishLog(tenant, row) {
+    // Lines written while a batch is being published (the transport's own
+    // output) are not streamed back — that would feed itself.
+    if (!tenant || !this.#stream || this.#publishing) return;
+    this.#enqueue(tenant, 'logs', row);
+  }
+
   #enqueue(tenant, kind, item) {
     if (!this.#wants(tenant)) return;
     let box = this.#outbox.get(tenant);
@@ -281,6 +294,7 @@ export class DebugCollector {
     this.#outbox.clear();
     // Anything the transport logs while publishing is not news to stream.
     this.#capturing = true;
+    this.#publishing = true;
     try {
       for (const [tenant, box] of boxes) {
         for (const kind of ['requests', 'logs', 'errors']) {
@@ -288,7 +302,7 @@ export class DebugCollector {
         }
       }
     } catch { /* a closed socket never breaks the collector */ }
-    finally { this.#capturing = false; }
+    finally { this.#capturing = false; this.#publishing = false; }
   }
 
   #context() {
@@ -475,8 +489,9 @@ export class DebugCollector {
       if (err?.stack && !text.includes(String(err.stack).split('\n')[1] ?? '\u0000')) {
         rec.stack = clip(scrubText(String(err.stack).replace(ANSI, '')), DEBUG_LIMITS.stackChars);
       }
+      // Kept for the request it belongs to; the live Logs stream comes from
+      // the log files' source instead (publishLog, see core/logging).
       this.#bucket(tenant).logs.push(rec);
-      this.#enqueue(tenant, 'logs', rec);
       if (entry) {
         if (entry.logs.length < DEBUG_LIMITS.logsPerRequest) entry.logs.push(rec);
         else entry.droppedLogs++;

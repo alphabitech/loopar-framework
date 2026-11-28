@@ -33,7 +33,7 @@ const READ_ACTIONS = new Set([
  * only touches the tenant's database — that is how a deploy reaches a tenant.
  */
 const EXTRA_ALLOWED = {
-  appmanager: new Set(["status", "diff", "gitaccounts", "install", "update", "reinstall", "uninstall", "testconnection", "job", "jobs", "dependents", "deskmenu", "migrations"]),
+  appmanager: new Set(["status", "diff", "gitaccounts", "versions", "install", "update", "reinstall", "uninstall", "testconnection", "job", "jobs", "dependents", "deskmenu", "migrations"]),
 };
 
 /**
@@ -44,7 +44,22 @@ const EXTRA_ALLOWED = {
  * are development work and stay locked everywhere.
  */
 const CONTROL_PLANE_ALLOWED = {
-  appmanager: new Set(["pull", "clone", "publishdemo"]),
+  appmanager: new Set(["pull", "clone", "publishdemo", "switchversion"]),
+};
+
+/**
+ * Code work: what reads, writes or replaces the shared apps folder (git, the
+ * version the code is at, new migration files) and builds it. It runs only on
+ * the server owner's tenant (control plane or template host), in development
+ * too — not only under the production lock: one tenant brings the code and
+ * builds it, the others only install, update or uninstall. That is also the
+ * tenant that holds the Git Accounts.
+ */
+const OWNER_ONLY = {
+  appmanager: new Set([
+    "pull", "clone", "publishdemo", "switchversion", "versions",
+    "commit", "push", "discard", "publish", "gitaccounts", "diff", "newmigration",
+  ]),
 };
 
 /** Writes the client hides on locked documents (cosmetic: the server enforces). */
@@ -53,14 +68,18 @@ const CLIENT_DENIED_ACTIONS = [
   "changeprotected", "transition", "bulktransition",
 ];
 const CLIENT_DENIED_EXTRA = {
-  appmanager: ["pull", "clone", "publishdemo", "commit", "push", "discard", "publish"],
+  appmanager: ["pull", "clone", "publishdemo", "switchversion", "commit", "push", "discard", "publish"],
 };
 
 const normDoc = (d) => String(d ?? "").toLowerCase().replaceAll(" ", "");
 const normAct = (a) => String(a ?? "").toLowerCase();
 
-/** Is the request's tenant one of the server owner's (control plane or template host)? */
-const onOwnerTenant = () => {
+/**
+ * Is the request's tenant one of the server owner's (control plane or template
+ * host)? The tenant that brings code to the server (pull, version switch) and
+ * builds it; the others only install, update or uninstall.
+ */
+export const onOwnerTenant = () => {
   try {
     const name = loopar.requestTenantId;
     return !!name && (tenant.isControlPlane(name) || tenant.isTemplateHost(name));
@@ -86,15 +105,24 @@ export function isSourceLocked(document) {
   return sourceLockEnabled() && isSourceDocument(document);
 }
 
-/** Would `action` on `document` change app source while the lock is on? */
+/** Is `action` on `document` code work refused on this tenant (not the server owner's)? */
+export function isOwnerOnlyAction(document, action) {
+  return !!OWNER_ONLY[normDoc(document)]?.has(normAct(action)) && !onOwnerTenant();
+}
+
+/** Would `action` on `document` change app source while the lock is on (or is it owner-only code work here)? */
 export function isSourceLockedAction(document, action) {
+  if (isOwnerOnlyAction(document, action)) return true;
   if (!isSourceLocked(document)) return false;
   return !allowedWhileLocked(normDoc(document), normAct(action));
 }
 
 /** Permission keys (`doc:action`) the client must treat as denied, for every user. */
 export function sourceLockedKeys() {
-  if (!sourceLockEnabled()) return [];
+  // Code work, on a tenant that isn't the server owner's: lock or not.
+  const ownerOnly = onOwnerTenant() ? [] : Object.entries(OWNER_ONLY)
+    .flatMap(([doc, acts]) => [...acts].map((act) => `${doc}:${act}`));
+  if (!sourceLockEnabled()) return ownerOnly;
   const docs = new Set(SOURCE_DOCUMENTS);
   for (const ref of Object.values(loopar.getRefs?.() ?? {})) {
     if (ref?.is_builder) docs.add(normDoc(ref.__NAME__));
@@ -105,12 +133,15 @@ export function sourceLockedKeys() {
       if (!allowedWhileLocked(doc, act)) keys.push(`${doc}:${act}`);
     }
   }
-  return keys;
+  return [...new Set([...keys, ...ownerOnly])];
 }
 
 /** Message for a refused write. */
 export const sourceLockedMessage = (document, action) => {
   const doc = normDoc(document), act = normAct(action);
+  if (OWNER_ONLY[doc]?.has(act) && !onOwnerTenant()) {
+    return `${document} → ${action}: code work runs only on the control plane tenant (it changes the apps for every site). Here, install, update or uninstall.`;
+  }
   if (CONTROL_PLANE_ALLOWED[doc]?.has(act)) {
     return `${document} → ${action}: in production it runs only on the server owner's tenant (control plane or template host).`;
   }

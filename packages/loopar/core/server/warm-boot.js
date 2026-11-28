@@ -16,7 +16,7 @@
  * they hit the same ESM cache entries at request time.
  *
  * Only after the warm-up does the process tell PM2 it is ready
- * (wait_ready in bin/cli/pm2.js), so a reload hands traffic to a worker that
+ * (wait_ready in packages/loopar/bin/pm2.js), so a reload hands traffic to a worker that
  * already serves every tenant without a cold first request.
  */
 

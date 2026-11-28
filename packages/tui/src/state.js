@@ -9,7 +9,7 @@ export const state = {
   rows: [], // [{ name, port, domain, env, url, status }]
   selected: 0,
   scroll: 0,
-  view: "tenants", // tenants | logs | tests | backups (full-screen tabs)
+  view: "tenants", // tenants | logs | tests (full-screen tabs; backups live in the tenants panel)
   mode: "list", // list | create (wizard) | destroy | confirm
   danger: null, // "destroy" | "reset" while the name-confirm modal is open
   input: "",
@@ -26,14 +26,26 @@ export const state = {
   // Tests tab (managed by tests.js): { files, cursor, scroll, picked:Set, handle, detailScroll, listH }
   tests: null,
   testRowStart: 0, // first terminal row (1-based) of the test file list
+  backupRowStart: 0, // first terminal row (1-based) of the backups tree (tenants panel)
 
-  // Backups tab (managed by backups.js): { tenant, rows, cursor, scroll, listH, destination, remoteError, loading }
+  // Backups of the selected tenant (managed by backups.js, one cached state per tenant):
+  // { tenant, rows, cursor, scroll, listH, destination, remoteError, loading, loaded, head, lineage, tree }
   backups: null,
 
   // Set by render() on every frame; read by the mouse handler.
   rowRegionStart: 0, // first terminal row (1-based) of the tenant table
-  buttonRegions: [], // [{ x1, x2, y, action }] — footer buttons AND header tabs
-  urlCol: null, // { x1, x2 } — x-range of the URL column (click → open)
+  buttonRegions: [], // [{ x1, x2, y, y1?, y2?, action }] — footer buttons AND header tabs
+  pressed: null, // action of the button under a mouse press (fires on release)
+  focus: "sidebar", // tenants view: "sidebar" (tenants) | "panel" (the selected tenant's children)
+  panelTab: "backups", // tenants panel body: "backups" | "logs" (the tenant's own log lines)
+  panelLogRowStart: 0, // set by render: 1-based first row of the panel's log lines
+  sidebarW: 0, // set by render: width of the tenants sidebar
+  panelX: 0, // set by render: 1-based first column of the panel
   tableH: 10, // rows per table page (set by render; PgUp/PgDn use it)
-  colOff: 0, // first non-frozen column shown (←/→ horizontal window)
 };
+
+/** Button/tab under (x, y). Regions may span several rows (y1..y2). */
+export function findButton(x, y) {
+  return state.buttonRegions.find((r) =>
+    y >= (r.y1 ?? r.y) && y <= (r.y2 ?? r.y) && x >= r.x1 && x <= r.x2) || null;
+}

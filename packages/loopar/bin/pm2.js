@@ -1,11 +1,11 @@
 /**
- * Shared PM2 for the CLI commands.
+ * Shared PM2 for the CLI commands, the TUI (loopar-tui) and the build.
  *
  * Single-core model: PM2 supervises ONE process — the core (`loopar-core`),
  * which serves every tenant in-process. No per-tenant processes. Namespace =
  * basename(cwd); the core's config comes from config/core.json.
  */
-import "loopar/bin/pm2-home.js";
+import "./pm2-home.js";
 import { execSync } from 'child_process';
 import path from 'path';
 import os from 'os';
@@ -62,6 +62,7 @@ import { corePort, coreEnv, coreEnvVars } from 'loopar/core/config/core-config.j
 export { corePort, coreEnv };
 
 export const CORE_PROCESS_NAME = 'loopar-core';
+export const LOG_DATE_FORMAT = 'YYYY-MM-DD HH:mm:ss.SSS';
 
 /**
  * PM2 config for THE core process — the generator. One process, tenant-less,
@@ -81,6 +82,10 @@ export function coreConfig() {
     // active tenants (see core/server/warm-boot.js). listen_timeout caps the
     // wait if a tenant hangs; kill_timeout lets the old worker drain.
     wait_ready: true,
+    // Every log line carries its time (ms): the TUI merges stdout and stderr
+    // back into one chronological stream from the files. Format must match
+    // the TUI's parser (packages/tui/src/logs.js STAMP_RE).
+    log_date_format: LOG_DATE_FORMAT,
     listen_timeout: 60000,
     kill_timeout: 10000,
     env: coreEnvVars(),
@@ -136,9 +141,12 @@ export const restartCoreProcess = async () => {
   const config = coreConfig();
   const env = (await describeCore())?.pm2_env;
 
+  // A reload keeps the running process' log options: a new log_date_format
+  // needs the full restart below (once).
   const reloadable = env?.status === 'online'
     && env.exec_mode === `${config.exec_mode}_mode`
-    && env.wait_ready === true;
+    && env.wait_ready === true
+    && env.log_date_format === config.log_date_format;
 
   if (reloadable) {
     // PM2 only overlaps old/new workers in cluster mode; in fork mode (dev)

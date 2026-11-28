@@ -8,6 +8,7 @@ import { dropForeignKeys, syncForeignKeys } from "../../../../../../core/documen
 import { jobStep, jobProgress, jobRange, jobLog, jobOnce } from "../../../../../../core/jobs/jobs.js";
 import { pendingMigrations, runMigrations, baselineMigrations } from "../../../../../../core/document/app-migrations.js";
 import { normalizeScope } from "../../../../../../core/auth/PermissionManager.js";
+import { recordInstall, forgetInstall } from "./app-source.js";
 import { readAppHeader, isTemplateHeader, isTemplateHostTenant, belongsToOtherTenant, parseRequires, loadInstaller, installedDependents } from "./template.js";
 
 /**
@@ -353,6 +354,7 @@ export default class Installer extends BaseDocument {
     }
 
     await loopar.unsetApp(this.app_name);
+    await forgetInstall(this.app_name).catch((e) => console.warn(`[installer] could not forget the source of ${this.app_name}: ${e.message}`));
     jobStep("Rebuilding references and foreign keys", 90);
     await loopar.buildRefs();
     await syncForeignKeys(loopar.db);
@@ -597,6 +599,8 @@ export default class Installer extends BaseDocument {
     loopar.installingApp = null;
     
     await loopar.setApp({[this.app_name]: true});
+    // The commit this tenant's database now matches (the app's versions are git tags).
+    await recordInstall(this.app_name).catch((e) => console.warn(`[installer] could not record the source of ${this.app_name}: ${e.message}`));
     
     jobStep("Rebuilding the workspace: references, integrity checks, foreign keys", 90);
     await loopar.build();

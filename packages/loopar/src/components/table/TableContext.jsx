@@ -246,7 +246,7 @@ export const TableProvider = ({
   const bulkRemove = (onServer=false) => {
     if (!selectedRows.length) {
       return loopar.dialog({
-        type: "alert",
+        type: "warning",
         title: "Warning",
         message: "Please select at least one row to delete.",
       });

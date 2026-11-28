@@ -110,7 +110,7 @@ A full tenant manager in your terminal, with mouse support (click rows and butto
 
 First-boot fast path: when there is exactly one tenant and it's stopped (the state right after a fresh install), the TUI starts it automatically on open — `yarn install && yarn start` lands on a running site with zero decisions. With several tenants it never starts anything on its own.
 
-The TUI, the CLI and the Tenant Manager UI all share the same underlying layer (`tenant-builder` + `tenant-service`), so they manage the same processes interchangeably. It runs in "bare mode" — no tenant, Entity or database needed — which makes it the rescue tool of choice when a tenant won't boot. Use `node bin/tui/index.js --list` for a JSON dump in scripts.
+The TUI, the CLI and the Tenant Manager UI all share the same underlying layer (`tenant-builder` + `tenant-service`), so they manage the same processes interchangeably. It runs in "bare mode" — no tenant, Entity or database needed — which makes it the rescue tool of choice when a tenant won't boot. Use `yarn tui --list` for a JSON dump in scripts.
 
 ## Inspection
 

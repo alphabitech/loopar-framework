@@ -9,6 +9,10 @@ import { versionWatch } from "@@tools/version/version-watch";
 import animation from "./loopar/animation.js";
 import { __, currentLanguage } from "@global/i18n";
 import { ClientDatabase } from "./loopar/ClientDatabase.js";
+import { isValidElement } from "react";
+
+const ALERT_TYPES = ["info", "success", "warning", "error"];
+const ALERT_TITLES = { info: "Information", success: "Done", warning: "Warning", error: "Error" };
 export { useRealtime } from "./loopar/useRealtime.js";
 
 let promptSeq = 0;
@@ -101,12 +105,33 @@ class Loopar {
     });
   }
 
-  alert(message, callback) {
+  /**
+   * An informative message with a single OK button.
+   *   loopar.alert("Saved");                                 // info
+   *   loopar.alert("Done", () => next());                    // ok callback
+   *   loopar.alert("Disk is full", { type: "error" });       // info | success | warning | error
+   *   loopar.alert({ title, content, type, ok, size });      // full form
+   */
+  alert(message, options) {
+    const opts = typeof options === "function" ? { ok: options } : { ...(options || {}) };
+    const dialog = typeof message === "object" && message !== null && !isValidElement(message)
+      ? { ...message, ...opts }
+      : { content: message, ...opts };
+
+    const type = ALERT_TYPES.includes(dialog.type) ? dialog.type : "info";
+    let done = false;
+    const ok = () => {
+      if (done) return;
+      done = true;
+      dialog.ok?.();
+    };
+
     this.dialog({
-      type: "alert",
-      title: "Loopar",
-      content: message,
-      callback: callback,
+      ...dialog,
+      type,
+      title: dialog.title ?? ALERT_TITLES[type],
+      ok,
+      onClose: () => setTimeout(ok, 0),
     });
   }
 

@@ -12,16 +12,18 @@
  * Modules:
  *   term.js    ANSI, screen lifecycle, quit
  *   state.js   shared mutable state
- *   render.js  frame drawing + clickable regions (tenants + logs tabs)
+ *   render.js  frame drawing + clickable regions (tabs, sidebar + panel, modals)
  *   actions.js tenant actions, dispatcher, wizard/confirm flows
  *   logs.js    log-tail tab (fs tail of PM2_HOME/logs, no pm2 bus to read)
  *   tests.js   tests tab (node:test in a child process, live results)
- *   backups.js backups tab (list, back up, restore, delete — no framework needed)
+ *   backups.js the selected tenant's backups (tenants panel: tree, back up, restore, delete)
+ *   backup-tree.js lineage tree (same model as the desk's Backups page)
+ *   core-ipc.js asks the running core to restore (pm2 messages)
  *   input.js   keyboard + SGR mouse decoding
  *
  * Usage:
- *   node bin/tui/index.js          interactive TUI (or: yarn start / yarn tui)
- *   node bin/tui/index.js --list   print tenants as JSON and exit (no TTY)
+ *   loopar-tui          interactive TUI (or: yarn start / yarn tui)
+ *   loopar-tui --list   print tenants as JSON and exit (no TTY)
  *
  * Env:
  *   LOOPAR_TUI_NO_PM2=1   never touch PM2 (statuses show as "n/a")
@@ -45,7 +47,7 @@ const { state, NO_PM2 } = await import("./state.js");
 const { render } = await import("./render.js");
 const { loadRows, actions } = await import("./actions.js");
 const { onData } = await import("./input.js");
-const { withPm2, startCoreProcess, coreProcessStatus } = await import("../cli/pm2.js");
+const { withPm2, startCoreProcess, coreProcessStatus } = await import("loopar/bin/pm2.js");
 
 if (bootTimer) {
   clearInterval(bootTimer);
@@ -121,7 +123,7 @@ async function main() {
     await loadRows();
     state.busy = false;
   } else {
-    state.message = "ready · [o] open · [l] logs · [L] all logs · [T] tests · [B] backups · [p] prod/dev";
+    state.message = "";
     state.messageKind = "info";
   }
   render();

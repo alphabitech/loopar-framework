@@ -26,22 +26,18 @@ const CROSS_LOAD_KEY = "loopar:cross-workspace-load";
 const PREFETCH_TTL_MS = 10_000;
 
 /**
- * Pages worth requesting before the click: same-site paths whose GET only
- * reads. Desk routes are limited to their read views; anything that sounds
- * like it does something (logout, delete, export…) is never requested early.
+ * Pages worth requesting before the click: website pages (the `web`
+ * workspace only), same-site paths whose GET only reads. Anything that
+ * sounds like it does something (logout, delete, export…) is never
+ * requested early.
  */
-const PREFETCH_DESK_ACTIONS = new Set(["", "list", "view", "update"]);
 const PREFETCH_NEVER = /(^|\/)(logout|login|signout|delete|remove|download|export|print|pdf|unsubscribe|verify|confirm|reset)(\/|$)/i;
 
 function isPrefetchable(url, workspace) {
+  if (workspace !== "web") return false;
   if (!url.startsWith("/") || url.startsWith("//") || url.includes("#")) return false;
   const path = url.split("?")[0];
-  if (PREFETCH_NEVER.test(path) || /^\/(api|assets|auth)(\/|$)/.test(path)) return false;
-  if (workspace === "desk") {
-    const [, ws, doc, action = ""] = path.split("/");
-    return ws === "desk" && !!doc && PREFETCH_DESK_ACTIONS.has(action);
-  }
-  return true;
+  return !PREFETCH_NEVER.test(path) && !/^\/(api|assets|auth|desk|portal)(\/|$)/.test(path);
 }
 
 function takePrefetch(cache, url) {
@@ -490,7 +486,11 @@ export function WorkspaceProvider({
         query: { ...Object.fromEntries(new URLSearchParams(rawSearch)), preloaded: preloadedMeta },
         freeze: false,
         notifyError: false,
+        // A prefetch never moves the page or shows anything: a redirect,
+        // toast or refresh in the answer is left for the click to act on.
+        silent: true,
         success: r => {
+          if (!r || r.redirect || r.refresh) return resolve({ ok: false });
           resolve({ ok: true, data: r });
           // Download the view's code too; nothing is rendered or cached here.
           const known = r?.instance && meta[r.instance];

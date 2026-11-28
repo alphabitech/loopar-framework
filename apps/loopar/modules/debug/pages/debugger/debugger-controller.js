@@ -4,6 +4,7 @@ import {
   PageController,
   loopar,
   debugCollector,
+  tenantLogs,
   frameworkStatus,
   testRuns,
   listTestFiles,
@@ -149,8 +150,9 @@ export default class DebuggerController extends PageController {
     return { queries: debugCollector.queries(this.tenant, this.input) };
   }
 
+  /** The tenant's lines from the core's log files — the same source the terminal Tenant Manager reads. */
   async actionLogs() {
-    return debugCollector.logs(this.tenant, this.input);
+    return tenantLogs(this.tenant, this.input);
   }
 
   async actionErrors() {

@@ -6,6 +6,7 @@ import fs from 'fs';
 import { loopar } from 'loopar';
 import { resolveGitAccount, loadGitAccount, getAskpassScript } from './git-accounts.js';
 import { getRepository, createRepository } from './github-api.js';
+import { tagName, versionAt } from 'loopar/apps/core/modules/system/forms/installer/app-source.js';
 
 const execFile = promisify(execFileCb);
 
@@ -100,6 +101,88 @@ async function accountFor(cwd) {
   return await resolveGitAccount(url);
 }
 
+/** A working tree pinned to a version (detached HEAD) has no branch to commit to or pull into. */
+async function pinnedAt(cwd) {
+  try {
+    await execFile('git', ['symbolic-ref', '-q', 'HEAD'], { cwd });
+    return null;
+  } catch {
+    try {
+      const { stdout } = await execFile('git', ['describe', '--tags', '--exact-match', 'HEAD'], { cwd });
+      return stdout.trim() || 'a fixed commit';
+    } catch {
+      return 'a fixed commit';
+    }
+  }
+}
+
+async function failIfPinned(cwd, name, verb) {
+  const at = await pinnedAt(cwd);
+  if (at) {
+    fail(409, 'PINNED',
+      `apps/${name} is pinned to ${at}. Return it to the latest version (Versions → Latest) before you ${verb}.`,
+      'Versions');
+  }
+}
+
+async function hasOrigin(cwd) {
+  try {
+    await execFile('git', ['remote', 'get-url', 'origin'], { cwd });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function tagExists(cwd, tag) {
+  try {
+    await execFile('git', ['rev-parse', '-q', '--verify', `refs/tags/${tag}`], { cwd });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A commit that ships a new installer version is that version: it gets the
+ * annotated tag `<app>@<version>` (pushed with the commits). A commit at an
+ * already tagged version is just history. Returns the new tag, or null.
+ */
+async function tagVersion(name, cwd, account) {
+  const version = await versionAt(name, 'HEAD');
+  if (!version) return null;
+  const tag = tagName(name, version);
+  if (await tagExists(cwd, tag)) return null;
+  await git(cwd, ['tag', '-a', tag, '-m', `${name} ${version}`], account);
+  return tag;
+}
+
+/** The branch a pinned app returns to: origin's default, else main/master. */
+async function defaultBranch(cwd) {
+  try {
+    const { stdout } = await execFile('git', ['symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD'], { cwd });
+    const ref = stdout.trim();
+    if (ref) return ref.replace(/^origin\//, '');
+  } catch {}
+  for (const branch of ['main', 'master']) {
+    try {
+      await execFile('git', ['rev-parse', '-q', '--verify', `refs/heads/${branch}`], { cwd });
+      return branch;
+    } catch {}
+  }
+  fail(409, 'NO_BRANCH', 'Could not tell which branch holds the latest version (no origin/HEAD, main or master).', 'Versions');
+}
+
+async function changedFiles(cwd, before, after) {
+  if (before === after) return 0;
+  try {
+    const { stdout } = await git(cwd, ['diff', '--name-only', `${before}..${after}`]);
+    return stdout ? stdout.split('\n').filter(Boolean).length : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * Clone `repoUrl` into `cwd/dest` with the acting user's Git Account for that
  * repository (same resolution as push/publish). Without an account git can
@@ -161,18 +244,14 @@ export async function pullApp(name) {
       `Commit/push them, or 'git reset --hard' to discard.`);
   }
 
-  const pullOut = await git(cwd, ['pull', '--ff-only'], await accountFor(cwd));
+  await failIfPinned(cwd, name, 'pull');
+
+  // With the tags: they are the app's versions (Versions lists them).
+  const pullOut = await git(cwd, ['pull', '--ff-only', '--tags'], await accountFor(cwd));
 
   const after = (await git(cwd, ['rev-parse', 'HEAD'])).stdout;
   const changed = before !== after;
-
-  let filesChanged = 0;
-  if (changed) {
-    try {
-      const { stdout } = await git(cwd, ['diff', '--name-only', `${before}..${after}`]);
-      filesChanged = stdout ? stdout.split('\n').filter(Boolean).length : 0;
-    } catch {}
-  }
+  const filesChanged = await changedFiles(cwd, before, after);
 
   return {
     is_framework: isFramework,
@@ -203,7 +282,8 @@ export async function pushApp(name) {
   }
 
   // No upstream yet (first push, or a publish whose push failed): set it.
-  const pushOut = await git(cwd, status.upstream ? ['push'] : ['push', '-u', 'origin', status.branch], await accountFor(cwd));
+  // --follow-tags: the version tags of the pushed commits go with them.
+  const pushOut = await git(cwd, status.upstream ? ['push', '--follow-tags'] : ['push', '--follow-tags', '-u', 'origin', status.branch], await accountFor(cwd));
 
   return {
     is_framework: isFramework,
@@ -227,14 +307,19 @@ export async function commitApp(name, message) {
     };
   }
 
+  await failIfPinned(cwd, name, 'commit');
+
+  const account = await accountFor(cwd);
   await git(cwd, ['add', '.']);
-  const commitOut = await git(cwd, ['commit', '-m', message.trim()], await accountFor(cwd));
+  const commitOut = await git(cwd, ['commit', '-m', message.trim()], account);
 
   const sha = (await git(cwd, ['rev-parse', 'HEAD'])).stdout;
+  const tag = await tagVersion(name, cwd, account);
 
   return {
     is_framework: isFramework,
     sha,
+    tag,
     files_committed: status.files.length,
     message: commitOut.stdout || `Committed ${status.files.length} file(s).`,
   };
@@ -353,7 +438,8 @@ export async function publishApp(name, { account, owner, repo, isPrivate = true,
       branch = (await git(appPath, ['symbolic-ref', '--short', 'HEAD'])).stdout || 'main';
     } catch {}
 
-    await git(appPath, ['push', '-u', 'origin', branch], acc);
+    await tagVersion(name, appPath, acc);
+    await git(appPath, ['push', '--follow-tags', '-u', 'origin', branch], acc);
 
     return {
       remote_url: url,
@@ -444,4 +530,58 @@ export async function statusApp(name) {
   const { cwd, isFramework } = getCwdForApp(name);
   const status = await getStatus(cwd);
   return { ...status, is_framework: isFramework };
+}
+
+/**
+ * Move an app's code to one of its versions (a `<app>@<version>` tag, the
+ * working tree pinned there) or back to the latest one (`latest`: its branch,
+ * pulled). Like a pull, it changes the code of every tenant on this server:
+ * each tenant then aligns its database with the app's Update / Rollback.
+ */
+export async function switchVersion(name, target) {
+  const { cwd, isFramework } = getCwdForApp(name);
+  if (isFramework) {
+    fail(409, 'IS_FRAMEWORK',
+      'The framework moves with the whole monorepo and the running core: its versions are not switched from here.',
+      'Versions');
+  }
+
+  const status = await getStatus(cwd);
+  if (!status.clean) {
+    fail(409, 'DIRTY',
+      `Uncommitted changes in apps/${name} (${status.files.length} file${status.files.length === 1 ? '' : 's'}): ` +
+      `commit or discard them before changing its version.`, 'Versions');
+  }
+
+  const account = await accountFor(cwd);
+  const remote = await hasOrigin(cwd);
+  const before = (await git(cwd, ['rev-parse', 'HEAD'])).stdout;
+  let label;
+
+  if (target === 'latest') {
+    const branch = await defaultBranch(cwd);
+    await git(cwd, ['checkout', branch]);
+    if (remote) await git(cwd, ['pull', '--ff-only', '--tags'], account);
+    label = `the latest version (${branch})`;
+  } else {
+    const tag = String(target || '').trim();
+    if (!tag.startsWith(`${name}@`)) fail(400, 'BAD_VERSION', `"${tag}" is not a version of ${name}.`, 'Versions');
+    if (!(await tagExists(cwd, tag)) && remote) await git(cwd, ['fetch', '--tags'], account);
+    if (!(await tagExists(cwd, tag))) fail(404, 'NO_VERSION', `Version ${tag} doesn't exist.`, 'Versions');
+    await git(cwd, ['-c', 'advice.detachedHead=false', 'checkout', '--detach', `refs/tags/${tag}`]);
+    label = tag;
+  }
+
+  const after = (await git(cwd, ['rev-parse', 'HEAD'])).stdout;
+  const filesChanged = await changedFiles(cwd, before, after);
+
+  return {
+    before_sha: before,
+    after_sha: after,
+    files_changed: filesChanged,
+    needs_restart: before !== after,
+    version: getAppVersion(name),
+    pinned: target !== 'latest',
+    message: before === after ? `apps/${name} is already at ${label}.` : `apps/${name} is now at ${label}.`,
+  };
 }

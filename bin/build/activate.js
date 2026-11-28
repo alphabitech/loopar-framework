@@ -23,8 +23,7 @@ import path from 'pathe';
 import { promisify } from 'util';
 import pm2 from 'pm2';
 import { ROOT, RELEASES_DIR, readTag, clearTag } from './lib/release.js';
-
-const CORE_PROCESS_NAME = 'loopar-core';
+import { CORE_PROCESS_NAME } from 'loopar/bin/pm2.js';
 
 // Current + 2 previous: rollback targets AND the source of hashed chunks for
 // tabs still running an older client (core/server/build-info.js).

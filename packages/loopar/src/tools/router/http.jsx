@@ -148,6 +148,9 @@ export default class HTTP {
    * @param {Function} [options.error]
    * @param {Function} [options.always]
    * @param {boolean}  [options.freeze=true]
+   * @param {boolean}  [options.silent=false] - A background read (link
+   *   prefetch): no navigation (redirects, followed 3xx, error redirects), no
+   *   toast, no refresh. `success` gets the raw payload, redirect included.
    * @param {boolean}  [options.followRedirect=true] - Pass `false` to keep a
    *   server `redirect` payload OUT of the router: no navigation happens and
    *   `success` receives the full response (redirect included) so the caller
@@ -191,6 +194,7 @@ export default class HTTP {
           // followed anyway, the body belongs to ANOTHER url and rendering it
           // would show that page under the current URL. Make it a real
           // navigation to where the server sent us instead.
+          if (response.redirected && options.silent) throw { status: 302, code: 302, message: 'Redirected' };
           if (response.redirected && typeof window !== 'undefined') {
             const finalUrl = new URL(response.url, window.location.origin);
             const dest = this.#withReturnUrl(finalUrl.pathname + finalUrl.search);
@@ -209,6 +213,11 @@ export default class HTTP {
               title: response.statusText || 'Request Error',
               message: response.statusText || `Request failed with status ${response.status}`
             });
+          }
+
+          if (options.silent) {
+            options.success?.(data);
+            return data;
           }
 
           if (data?.redirect && options.followRedirect !== false) {
@@ -249,7 +258,7 @@ export default class HTTP {
       // Cancelled by the caller: not a failure, nothing to show or report.
       if (error?.name === 'AbortError') return;
 
-      if (error?.redirect) {
+      if (error?.redirect && !options.silent) {
         const dest = this.#withReturnUrl(error.redirect);
         // /auth/* is another workspace: never a soft (in-SPA) navigation.
         const hard = !!error.hardRedirect || /^\/auth(\/|\?|$)/.test(String(dest));

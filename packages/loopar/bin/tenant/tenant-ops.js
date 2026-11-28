@@ -67,11 +67,15 @@ export async function createTenant(data, { activate: doActivate = false } = {}) 
   if (!name) throw new Error('name is required');
   if (getTenantData(name, null)) throw new Error(`Tenant "${name}" already exists`);
 
+  // The first tenant of a server runs its control plane (code work: git,
+  // versions, builds), as `dev` does on a fresh development install.
+  const firstOperator = tenant.controlPlaneTenants().length === 0;
   await tenant.saveTenant({
     ...extra,
     NAME: name,
     DOMAIN: domain || undefined,
     STATUS: doActivate ? 'active' : 'suspended',
+    ...(firstOperator ? { controlPlane: true } : {}),
   });
 
   await refreshCaddy();

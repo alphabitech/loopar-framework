@@ -138,6 +138,7 @@ import {tenant} from './bin/tenant/tenant-builder.js';
 import { ActionScanner } from "./core/auth/ActionScanner.js";
 import { Op, opByDescription, isOpSymbol } from 'db-env';
 import { debugCollector, DEBUG_LIMITS } from "./core/debug/collector.js";
+import { tenantLogs } from "./core/logging/debugger-logs.js";
 import { frameworkStatus } from "./core/debug/status.js";
 import { testRuns, listTestFiles, testsAllowed, TEST_SUITES } from "./core/debug/test-runner.js";
 
@@ -276,6 +277,7 @@ export {
   getRequest,
   // Debugger (core/debug): collector, status snapshot, test runs.
   debugCollector,
+  tenantLogs,
   DEBUG_LIMITS,
   frameworkStatus,
   testRuns,

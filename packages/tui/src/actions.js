@@ -9,11 +9,12 @@ import { tenantList, isLocalDomain } from "loopar/bin/tenant/tenant-builder.js";
 import * as tenantOps from "loopar/bin/tenant/tenant-ops.js";
 import { coreEnv, setCoreMode, corePort } from "loopar/core/config/core-config.js";
 import { distIsReady } from "loopar/core/server/runtime-mode.js";
-import { withPm2, restartCoreProcess, coreProcessStatus, CORE_PROCESS_NAME } from "../cli/pm2.js";
+import { withPm2, restartCoreProcess, coreProcessStatus, CORE_PROCESS_NAME } from "loopar/bin/pm2.js";
 import { silenced, quit } from "./term.js";
 import { state, NO_PM2 } from "./state.js";
 import { render } from "./render.js";
 import { openLogs } from "./logs.js";
+import { forgetBackups } from "./backups.js";
 
 let caddyState = null;
 
@@ -140,6 +141,21 @@ async function execute(action, name, ...args) {
   render();
 }
 
+async function restartServer() {
+  state.busy = true; render();
+  try {
+    await silenced(() => withPm2(() => restartCoreProcess()));
+    state.message = "server restarted";
+    state.messageKind = "ok";
+  } catch (err) {
+    state.message = err.message || String(err);
+    state.messageKind = "error";
+  }
+  await loadRows();
+  state.busy = false;
+  return render();
+}
+
 export async function run(action) {
   const sel = state.rows[state.selected];
 
@@ -157,6 +173,7 @@ export async function run(action) {
     ], (data) => {
       state.mode = "confirm";
       state.confirm = {
+        title: `New tenant · ${data.name}`,
         question: `Create "${data.name}" — turn it on now?`,
         onYes: () => createTenant(data, true),
         onNo: () => createTenant(data, false),
@@ -187,6 +204,7 @@ export async function run(action) {
     catch (err) { state.message = err.message; state.messageKind = "error"; return render(); }
     state.mode = "confirm";
     state.confirm = {
+      title: `Tenant · ${sel.name}`,
       question: on
         ? `Grant the control plane to "${sel.name}"? It will manage every tenant.`
         : `Revoke the control plane from "${sel.name}"?`,
@@ -195,20 +213,20 @@ export async function run(action) {
     return render();
   }
 
-  // GLOBAL: bring the core (generator) up / restart it — the header's "press c".
-  // Not tied to a selected tenant; the core serves them all.
-  if (action === "core") {
-    state.busy = true; render();
-    try {
-      await silenced(() => withPm2(() => restartCoreProcess()));
-      state.message = "core (re)started";
-      state.messageKind = "ok";
-    } catch (err) {
-      state.message = err.message || String(err);
-      state.messageKind = "error";
-    }
-    await loadRows();
-    state.busy = false;
+  // GLOBAL: bring the server (core process) up — the header's "press c" when
+  // it is down. Not tied to a selected tenant; the core serves them all.
+  if (action === "core") return restartServer();
+
+  // GLOBAL: Restart = restart the server. There is one core process for every
+  // tenant, so a per-tenant restart no longer exists (tenantOps.reload only
+  // re-asserted `active`).
+  if (action === "restart") {
+    state.mode = "confirm";
+    state.confirm = {
+      title: "Server",
+      question: "Restart the server? Every tenant disconnects for a moment.",
+      onYes: () => restartServer(),
+    };
     return render();
   }
 
@@ -226,6 +244,7 @@ export async function run(action) {
     if (sel.status === "stopped" || sel.status === "errored") {
       state.mode = "confirm";
       state.confirm = {
+        title: `Tenant · ${sel.name}`,
         question: `"${sel.name}" is off — turn it on and open?`,
         onYes: async () => {
           state.busy = true; render();
@@ -263,13 +282,14 @@ export async function run(action) {
     }
     state.mode = "confirm";
     state.confirm = {
-      question: `Switch the CORE ${cur} → ${next} and restart? All tenants disconnect briefly.`,
+      title: "Server",
+      question: `Switch the server from ${cur} to ${next} and restart it? Every tenant disconnects for a moment.`,
       onYes: async () => {
         state.busy = true; render();
         try {
           setCoreMode(next);
           await silenced(() => withPm2(() => restartCoreProcess()));
-          state.message = `core → ${next} (restarted)`;
+          state.message = `server → ${next} (restarted)`;
           state.messageKind = "ok";
         } catch (err) {
           state.message = err.message || String(err);
@@ -283,12 +303,13 @@ export async function run(action) {
     return render();
   }
 
-  // stop/restart/unregister change a serving tenant — ask first.
+  // stop/unregister take a serving tenant offline — ask first.
   // start is additive and runs directly.
-  if (["stop", "restart", "unregister"].includes(action)) {
+  if (["stop", "unregister"].includes(action)) {
     state.mode = "confirm";
     state.confirm = {
-      question: `${action[0].toUpperCase() + action.slice(1)} tenant "${sel.name}"?`,
+      title: `Tenant · ${sel.name}`,
+      question: `Turn off "${sel.name}"? Its site shows the suspended page until you start it again. Other tenants are not affected.`,
       onYes: () => execute(action, sel.name),
     };
     return render();
@@ -297,10 +318,15 @@ export async function run(action) {
   return execute(action, sel.name);
 }
 
-export function openWizard(title, steps, onDone) {
+/**
+ * Open the modal wizard. `opts`: { body, submitLabel, submitColor, border } —
+ * explanatory text above the field, the last step's button and the colors
+ * (defaults: the New-tenant look).
+ */
+export function openWizard(title, steps, onDone, opts = {}) {
   state.mode = "create";
   state.message = "";
-  state.wizard = { title, steps, idx: 0, onDone };
+  state.wizard = { title, steps, idx: 0, onDone, ...opts };
   state.input = steps[0].value || "";
   render();
 }
@@ -371,6 +397,7 @@ export async function submitModal() {
   try {
     state.message = await actions[action](target);
     state.messageKind = "ok";
+    if (action === "destroy") forgetBackups(target);
   } catch (err) {
     state.message = err.message; state.messageKind = "error";
   }

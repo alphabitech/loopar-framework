@@ -167,7 +167,7 @@ test("recordError never throws, whatever is thrown", () => {
   assert.doesNotThrow(() => collector.recordError(Object.create(null)));
 });
 
-test("live stream: recorded requests/logs/errors are pushed in batches to watched tenants only", async () => {
+test("live stream: requests and published log rows are pushed in batches to watched tenants only", async () => {
   collector.uninstall();
   const pushed = [];
   collector.install({
@@ -175,8 +175,12 @@ test("live stream: recorded requests/logs/errors are pushed in batches to watche
     addQueryProbe: (p) => { probe = p; return () => {}; },
     stream: { wants: (t) => t === "watched", publish: (tenant, kind, payload) => pushed.push({ tenant, kind, n: payload.rows.length }) },
   });
+  // Recorded console lines stay with their request; the live Logs come from
+  // the log files' source (publishLog), so a recorded line is not streamed.
   await fakeExchange("watched").handle(async () => { collector.recordLog("info", ["hi"]); });
   await fakeExchange("unwatched").handle(async () => { collector.recordLog("info", ["hi"]); });
+  collector.publishLog("watched", { at: new Date().toISOString(), level: "log", text: "hi", stream: "out" });
+  collector.publishLog("unwatched", { at: new Date().toISOString(), level: "log", text: "hi", stream: "out" });
   await new Promise((r) => setTimeout(r, 500));
   assert.deepEqual(pushed.sort((a, b) => a.kind.localeCompare(b.kind)), [
     { tenant: "watched", kind: "logs", n: 1 },

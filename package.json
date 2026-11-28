@@ -19,8 +19,8 @@
   "scripts": {
     "preinstall": "node packages/loopar/bin/check-node.js && node bin/setup/installer-clean.js",
     "postinstall": "node bin/setup/ensure-site.js",
-    "start": "node bin/tui/index.js",
-    "tui": "node bin/tui/index.js",
+    "start": "node packages/tui/src/index.js",
+    "tui": "node packages/tui/src/index.js",
     "serve": "node bin/cli/index.js serve",
     "prod": "node bin/cli/index.js prod",
     "tenant": "node bin/cli/index.js tenant",

@@ -1,16 +1,20 @@
 /**
- * Logs tab — realtime log stream, pm2-logs style. Two scopes:
+ * Logs — realtime log stream, pm2-logs style. Shown by the LOGS tab (the
+ * whole server) and, filtered to one tenant, by the "Logs" sub-tab of the
+ * Tenants panel (`embedded`). The core stamps a tenant's lines with
+ * "[<tenant>] " (core/server/tenant-log-prefix.js); continuation lines (a
+ * stack trace) belong to the line above them. Scopes:
  */
 import fs from "fs";
-import path from "path";
 import pm2 from "pm2";
-import { withPm2 } from "../cli/pm2.js";
+import { withPm2 } from "loopar/bin/pm2.js";
 import { silenced } from "./term.js";
 import { state, NO_PM2 } from "./state.js";
 import { render } from "./render.js";
+import { lineState, parseLine, unstamp, readTail, readStreams, coreLogFiles } from "loopar/core/logging/tenant-log.js";
 
-const LOGS_DIR = () => path.join(process.env.PM2_HOME || path.join(process.cwd(), ".pm2"), "logs");
 const TAIL_BYTES = 64 * 1024;
+const TAIL_BYTES_TENANT = 512 * 1024; // a tenant's lines are a fraction of the file
 const HIST_LINES = 300;
 const HIST_ALL = 12;
 const HIST_ALL_ERR = 4;
@@ -25,12 +29,21 @@ let lastSig = "";
 
 const meta = (text) => ({ s: "meta", text });
 
+// The ONE parser of the core's log files (shared with the desk Debugger's
+// Logs): pm2's time stamps, "[tenant] " stamps, continuation lines.
+const entryOf = (L, stream, raw, extra = {}) => {
+  const e = parseLine(L, stream, raw);
+  return e ? { s: e.s, text: e.text, t: e.t, ...(e.at ? { at: e.at } : {}), ...extra } : null;
+};
+
+const visible = (L) => !!L && (L.embedded ? state.view === "tenants" : state.view === "logs");
+
 function scheduleRender() {
   if (renderQueued) return;
   renderQueued = true;
   setTimeout(() => {
     renderQueued = false;
-    if (state.view === "logs") render();
+    if (visible(state.logs)) render();
   }, 80);
 }
 
@@ -64,50 +77,28 @@ async function listProcs() {
   }
 }
 
-function newestMatch(name, kind) {
-  try {
-    const dir = LOGS_DIR();
-    const re = new RegExp(`^${name}-${kind}(-\\d+)?\\.log$`);
-    const hits = fs.readdirSync(dir)
-      .filter((f) => re.test(f))
-      .map((f) => ({ f, m: fs.statSync(path.join(dir, f)).mtimeMs }))
-      .sort((a, b) => b.m - a.m);
-    return hits[0] ? path.join(dir, hits[0].f) : null;
-  } catch (_) {
-    return null;
-  }
-}
 
-function readTail(file) {
-  try {
-    const { size } = fs.statSync(file);
-    const start = Math.max(0, size - TAIL_BYTES);
-    const fd = fs.openSync(file, "r");
-    const buf = Buffer.alloc(size - start);
-    fs.readSync(fd, buf, 0, buf.length, start);
-    fs.closeSync(fd);
-    let lines = buf.toString("utf8").split("\n");
-    if (start > 0) lines = lines.slice(1); // first line is likely partial
-    if (lines[lines.length - 1] === "") lines.pop();
-    return lines;
-  } catch (_) {
-    return null;
-  }
-}
 
 function buildHistory(L) {
-  const out = (L.paths.out && readTail(L.paths.out)) || [];
-  const err = (L.paths.err && readTail(L.paths.err)) || [];
+  const bytes = L.tenant ? TAIL_BYTES_TENANT : TAIL_BYTES;
+  const r = readStreams(L, {
+    out: (L.paths.out && readTail(L.paths.out, bytes)) || [],
+    err: (L.paths.err && readTail(L.paths.err, bytes)) || [],
+  });
+  const show = (e) => ({ s: e.s, text: e.text, t: e.t, ...(e.at ? { at: e.at } : {}) });
+  if (!r.out.length && !r.err.length) {
+    return [meta(L.tenant ? `(nothing logged for ${L.tenant} yet)` : "(no log output yet)")];
+  }
+  // Timed lines: one chronological stream (stdout and stderr interleaved,
+  // newest at the bottom). Untimed files (before log_date_format): one block
+  // per stream, as pm2 wrote them.
+  if (r.timed) {
+    const merged = r.merged.slice(-HIST_LINES).map(show);
+    return [meta(`── last ${merged.length} lines ──`), ...merged];
+  }
   const lines = [];
-  if (out.length) {
-    lines.push(meta(`── stdout · last ${Math.min(out.length, HIST_LINES)} lines ──`));
-    lines.push(...out.slice(-HIST_LINES).map((t) => ({ s: "out", text: t })));
-  }
-  if (err.length) {
-    lines.push(meta(`── stderr · last ${Math.min(err.length, HIST_LINES)} lines ──`));
-    lines.push(...err.slice(-HIST_LINES).map((t) => ({ s: "err", text: t })));
-  }
-  if (!lines.length) lines.push(meta("(no log output yet)"));
+  if (r.out.length) lines.push(meta(`── stdout · last ${Math.min(r.out.length, HIST_LINES)} lines ──`), ...r.out.slice(-HIST_LINES).map(show));
+  if (r.err.length) lines.push(meta(`── stderr · last ${Math.min(r.err.length, HIST_LINES)} lines ──`), ...r.err.slice(-HIST_LINES).map(show));
   return lines;
 }
 
@@ -118,8 +109,8 @@ function buildHistoryAll(L) {
     const err = (p.err && readTail(p.err)) || [];
     if (!out.length && !err.length) continue;
     lines.push(meta(`── ${p.name} ──`));
-    lines.push(...out.slice(-HIST_ALL).map((t) => ({ s: "out", text: t, p: p.name })));
-    lines.push(...err.slice(-HIST_ALL_ERR).map((t) => ({ s: "err", text: t, p: p.name })));
+    lines.push(...out.slice(-HIST_ALL).map((t) => ({ s: "out", ...unstamp(L, "out", t), p: p.name })));
+    lines.push(...err.slice(-HIST_ALL_ERR).map((t) => ({ s: "err", ...unstamp(L, "err", t), p: p.name })));
   }
   if (!lines.length) lines.push(meta("(no pm2 processes with logs — is anything running?)"));
   return lines.slice(-MAX_LINES);
@@ -129,25 +120,35 @@ function buildHistoryAll(L) {
 
 function onPacket(kind, packet) {
   const L = state.logs;
-  if (!L || state.view !== "logs") return;
+  if (!L) return;
   const pname = packet?.process?.name;
-  if (L.name && pname !== L.name) return; // single-tenant scope filters
-  const at = packet.at || Date.now();
-  for (const text of String(packet.data ?? "").split("\n")) {
-    if (text === "") continue;
-    L.lines.push({ s: kind, text, at, p: L.name ? undefined : pname });
+  if (L.name && pname !== L.name) return; // one-process scope filters
+  for (const raw of String(packet.data ?? "").split("\n")) {
+    if (raw === "") continue;
+    const e = entryOf(L, kind, raw, { p: L.name ? undefined : pname });
+    if (e && !e.at) e.at = packet.at || Date.now();
+    if (e) L.lines.push(e);
   }
   if (L.lines.length > MAX_LINES) L.lines.splice(0, L.lines.length - MAX_LINES);
   scheduleRender();
 }
 
+/**
+ * The live stream gets its OWN pm2 client: the rest of the TUI talks to pm2
+ * through withPm2(), which disconnects the shared client after every call —
+ * the status refresh every few seconds used to cut the bus and the panel's
+ * logs stopped being live.
+ */
+let busClient = null;
+
 function startBus() {
   if (NO_PM2) return Promise.resolve(false);
   return new Promise((resolve) => {
-    pm2.connect((err) => {
+    busClient = new pm2.custom({ pm2_home: process.env.PM2_HOME });
+    busClient.connect((err) => {
       if (err) return resolve(false);
       busConnected = true;
-      pm2.launchBus((err2, b) => {
+      busClient.launchBus((err2, b) => {
         if (err2 || !b) return resolve(false);
         bus = b;
         bus.on("log:out", (p) => onPacket("out", p));
@@ -160,7 +161,7 @@ function startBus() {
 
 function pollFallback() {
   const L = state.logs;
-  if (!L || state.view !== "logs") return;
+  if (!visible(L)) return;
   const files = L.name
     ? [L.paths.out, L.paths.err]
     : L.procs.flatMap((p) => [p.out, p.err]);
@@ -174,12 +175,18 @@ function pollFallback() {
 }
 
 
-/** name = one tenant; null = every pm2 process, merged. */
-export async function openLogs(name = null) {
+/**
+ * name = one pm2 process (the core); null = every pm2 process, merged.
+ * opts.tenant: only that tenant's lines. opts.embedded: shown inside the
+ * Tenants panel (doesn't switch to the LOGS tab).
+ */
+export async function openLogs(name = null, { tenant = null, embedded = false } = {}) {
   closeLogs();
-  state.view = "logs";
+  if (!embedded) state.view = "logs";
   state.logs = {
     name, // null = all-processes scope
+    embedded,
+    ...lineState({ known: state.rows.map((r) => r.name), tenant }),
     lines: [meta("resolving log files...")],
     follow: true, // pinned to the tail; scrolling pauses, [f] resumes
     scroll: 0,
@@ -195,8 +202,8 @@ export async function openLogs(name = null) {
     const described = await describePaths(name);
     if (state.logs !== L) return; // user left the tab mid-await
     L.paths = {
-      out: described?.out || newestMatch(name, "out"),
-      err: described?.err || newestMatch(name, "error"),
+      out: described?.out || coreLogFiles({ name }).out,
+      err: described?.err || coreLogFiles({ name }).err,
     };
     L.lines = buildHistory(L);
   } else {
@@ -218,15 +225,18 @@ export async function openLogs(name = null) {
 }
 
 export function closeLogs() {
+  const wasEmbedded = !!state.logs?.embedded;
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   if (bus) { try { bus.close(); } catch (_) { /* already gone */ } bus = null; }
-  if (busConnected) { try { pm2.disconnect(); } catch (_) { /* already gone */ } busConnected = false; }
+  if (busConnected) { try { busClient?.disconnect(); } catch (_) { /* already gone */ } busConnected = false; }
+  busClient = null;
   lastSig = "";
   state.logs = null;
-  state.view = "tenants";
+  if (!wasEmbedded) state.view = "tenants";
 }
 
 /** F5 — re-resolve paths and rebuild history (restarts the live stream). */
 export function reloadLogs() {
-  if (state.logs) openLogs(state.logs.name || null);
+  const L = state.logs;
+  if (L) openLogs(L.name || null, { tenant: L.tenant, embedded: L.embedded });
 }

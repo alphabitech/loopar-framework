@@ -1,7 +1,7 @@
 import React, { useRef, useId , useEffect, useState} from "react";
 import loopar from "loopar";
 import {Button} from "@cn/components/ui/button";
-import { AlertCircle, InfoIcon, HelpCircle } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, InfoIcon, HelpCircle } from "lucide-react";
 import { cn } from "@cn/lib/utils"
 import { SlideButton } from "./button";
 
@@ -39,8 +39,11 @@ export const useDialogContext = () => {
 
 const Icon = ({type, size, ...props}) => {
   const icons = {
-    alert: [AlertCircle, "text-red-500"],
+    // "alert" is the plain one-button dialog: informative, not an error.
+    alert: [InfoIcon, "text-blue-500"],
     info: [InfoIcon, "text-blue-500"],
+    success: [CheckCircle2, "text-green-500"],
+    warning: [AlertTriangle, "text-amber-500"],
     confirm: [HelpCircle, "text-yellow-500"],
     error: [AlertCircle, "text-red-500"],
   }

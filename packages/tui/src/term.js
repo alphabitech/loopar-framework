@@ -58,6 +58,43 @@ export const stripAnsi = (s) => s
   .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "") // OSC (hyperlinks, titles)
   .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "");           // CSI (colors, cursor)
 
+/**
+ * Terminal cell width of plain text: combining marks/ZWJ/variation selectors
+ * are 0, East-Asian wide and emoji are 2, everything else 1. Used for click
+ * regions so they line up with what the terminal actually draws.
+ */
+export function displayWidth(str) {
+  let w = 0;
+  for (const ch of str) {
+    const c = ch.codePointAt(0);
+    if (c === 0x200d || (c >= 0xfe00 && c <= 0xfe0f) || (c >= 0x300 && c <= 0x36f)) continue;
+    if ((c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) || (c >= 0xac00 && c <= 0xd7a3)
+      || (c >= 0xf900 && c <= 0xfaff) || (c >= 0xfe30 && c <= 0xfe4f) || (c >= 0xff00 && c <= 0xff60)
+      || (c >= 0xffe0 && c <= 0xffe6) || (c >= 0x1f300 && c <= 0x1faff) || (c >= 0x20000 && c <= 0x3fffd)) w += 2;
+    else w += 1;
+  }
+  return w;
+}
+
+/**
+ * Clip an ANSI-colored line to `cols` terminal cells without cutting an
+ * escape sequence in half. A line wider than the terminal WRAPS, pushing every
+ * row below it down — and the mouse regions out of sync with what's drawn.
+ */
+export function clipLine(line, cols) {
+  if (displayWidth(stripAnsi(line)) <= cols) return line;
+  let out = "", w = 0, i = 0;
+  while (i < line.length) {
+    const esc = line.slice(i).match(/^(\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-9;?]*[a-zA-Z])/);
+    if (esc) { out += esc[0]; i += esc[0].length; continue; }
+    const ch = String.fromCodePoint(line.codePointAt(i));
+    const cw = displayWidth(ch);
+    if (w + cw > cols) break;
+    out += ch; w += cw; i += ch.length;
+  }
+  return out + "\x1b[0m";
+}
+
 export const pad = (s, n) => {
   const visible = stripAnsi(s);
   return visible.length >= n

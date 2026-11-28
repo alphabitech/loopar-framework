@@ -140,7 +140,7 @@ export const FileDrop = (props) => {
     }).catch((error) => {
       setLoaded(true);
       setDropping(false);
-      loopar.alert("An error occurred while reading the files. Please try again.");
+      loopar.alert("An error occurred while reading the files. Please try again.", { type: "error" });
     });
   }
   
@@ -225,7 +225,7 @@ export const FileDrop = (props) => {
             });
           };
           probe.onerror = () => {
-            loopar.alert("The URL did not resolve to a valid image.");
+            loopar.alert("The URL did not resolve to a valid image.", { type: "error" });
           };
           probe.src = url;
         },
