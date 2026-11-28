@@ -6,8 +6,13 @@ import * as simpleIcons from 'simple-icons';
 
 import { fileManage } from "../file-manage.js";
 
-/** The app under packages/loopar/apps: always served, it is the framework itself. */
-const CORE_APP = "core";
+/**
+ * The framework's own apps, always served: `core` (packages/loopar/apps —
+ * system pages, forms, controllers) and `loopar` (apps/loopar — the framework
+ * entities: Entity, User, App, Document History…). Without `loopar`'s refs a
+ * tenant can't even be installed: the Installer reads Entity's ref first.
+ */
+const FRAMEWORK_APPS = new Set(["core", "loopar"]);
 import { elementsDict, elementsDefinition } from "../global/element-definition.js";
 import { formulaFields, virtualFields, isVirtualField, fetchIfEmptyFields } from "../global/formula.js";
 import { calendarFields } from "../global/calendar.js";
@@ -129,10 +134,10 @@ export class Builder {
       || (app && this.installingApp && this.utils.compare(app, this.installingApp));
 
   
-    // The core app ships with the framework; any other app serves its
-    // entities only while this tenant has it installed (or is installing
-    // it): an uninstalled app's records stay in the database, unreachable.
-    const servesApp = (app) => String(app).toLowerCase() === CORE_APP || isMine(app);
+    // The framework's apps ship with it; any other app serves its entities
+    // only while this tenant has it installed (or is installing it): an
+    // uninstalled app's records stay in the database, unreachable.
+    const servesApp = (app) => FRAMEWORK_APPS.has(String(app).toLowerCase()) || isMine(app);
 
     for (const doc of Object.values(docs)) {
       if (doc.__deleted_at__) continue;
@@ -299,13 +304,16 @@ export class Builder {
         const fields = evalFields(
           this.utils.JSONparse(docJson.doc_structure, docJson.doc_structure)
         );
-        if (fields.length) refIcons[ref.__NAME__] = { fields, isSingle: ref.is_single };
+        if (fields.length) refIcons[ref.__NAME__] = { fields, isSingle: ref.is_single, isVirtual: ref.is_virtual };
       }
     });
   
     const iconImports = new Set();
     for (const [entity, ent] of Object.entries(refIcons)) {
-      if (!ent.isSingle) {
+      // Rows live in a table only for plain entities: a single keeps its
+      // values elsewhere and a virtual one has none (a table with its name can
+      // still be there, left from before it became virtual — without columns).
+      if (!ent.isSingle && !ent.isVirtual) {
         if (
           (await this.db.hasEntity(null, entity)) &&
           (await this.db.hasTable(entity))

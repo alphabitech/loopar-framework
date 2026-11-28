@@ -66,7 +66,11 @@ test("an employee lists the positions it can work, once each; its documents foll
     assert.equal((await timeRates({ employee: ana, job_position: "Driver", date: "2026-11-02" })).pay_rate, 20);
 
     await keep("Employee Document Type", { name: "Driver License", active: 1 });
-    const iso = (days) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    // Local dates, as the app counts them (a UTC date is "tomorrow" in the evening).
+    const iso = (days) => {
+      const d = new Date(Date.now() + days * 86400000);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
     const status = async (data) => {
       const doc = await loopar.newDocument("Employee Document", { employee: ana, document_type: "Driver License", ...data });
       await doc.save();

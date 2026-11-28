@@ -2,6 +2,7 @@
 
 import { Helpers, loopar } from "../../index.js";
 import { isEncryptedSecret } from '../global/secrets.js';
+import { getDateTime } from '../global/date-utils.js';
 
 const isSecretValue = (v) => isEncryptedSecret(v) || (typeof v === 'string' && v.startsWith('$argon2'));
 
@@ -83,7 +84,10 @@ function buildHistoryRow(loopar, { document, doc, action, extras = {} }) {
     document_name: doc?.name ?? doc?.data?.name ?? null,
     action,
     user: loopar.currentUser?.name ?? null,
-    event_at: new Date().toISOString(),
+    // A date_time column: written like every date_time field, as this
+    // process's local wall time 'yyyy-MM-dd HH:mm:ss' (MySQL rejects ISO
+    // strings with 'T'/'Z' there — every history write failed on MySQL tenants).
+    event_at: getDateTime(new Date(), 'DB'),
     diff: extras.diff ? JSON.stringify(extras.diff)     : null,
     metadata: extras.metadata ? JSON.stringify(extras.metadata) : null,
   };

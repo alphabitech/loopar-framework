@@ -25,7 +25,9 @@ before(async () => {
 });
 after(async () => { await t?.teardown(); });
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Local dates, as the app counts them (a UTC date is "tomorrow" in the evening).
+const localDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const today = () => localDate(new Date());
 let plan;
 let ana;
 let membership;
@@ -45,7 +47,7 @@ test("a plan bills with its own service item; enrollment has one too", async () 
     assert.equal(await billing.enrollmentItem(), "Enrollment");
     const range = await loopar.newDocument("Fiscal Range", {
       authorization: "TEST-AUTH", document_type: "Invoice", prefix: "000-001-01-", digits: 8, range_start: 1, range_end: 100, next_number: 1,
-      deadline: new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10), active: 1,
+      deadline: localDate(new Date(Date.now() + 90 * 864e5)), active: 1,
     });
     await range.save();
   });

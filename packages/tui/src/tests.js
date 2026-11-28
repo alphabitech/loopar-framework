@@ -15,6 +15,7 @@
 import { runTests, listTestFiles } from "loopar/core/debug/test-runner.js";
 import { state } from "./state.js";
 import { render } from "./render.js";
+import { notice, errText } from "./notice.js";
 
 let renderQueued = false;
 let exitHook = false;
@@ -64,16 +65,14 @@ export const testsRunning = () => state.tests?.handle?.run?.status === "running"
 function start(opts, label) {
   const t = T();
   if (testsRunning()) {
-    state.message = "a run is already in progress — x stops it";
-    state.messageKind = "error";
+    notice("A run is already in progress. Stop it first (x).", "info", "Tests");
     return render();
   }
   let handle;
   try {
     handle = runTests({ root: process.cwd(), ...opts, onEvent: scheduleRender });
   } catch (err) {
-    state.message = err.message || String(err);
-    state.messageKind = "error";
+    notice(errText(err), "error", "Tests");
     return render();
   }
   t.handle = handle;
@@ -113,8 +112,7 @@ export function runFailed() {
     .filter((f) => f.fail > 0 && f.file !== "(runner)")
     .map((f) => f.file);
   if (!failed.length) {
-    state.message = "no failed files in the last run";
-    state.messageKind = "info";
+    notice("The last run has no failed files.", "info", "Tests");
     return render();
   }
   start({ files: failed }, `${failed.length} failed file${failed.length > 1 ? "s" : ""}`);

@@ -390,16 +390,6 @@
     "Entity:Letterhead": {
       "__root__": "/apps/loopar/modules/core/entities/letterhead"
     },
-    "Letterhead:Clearwell Cleaning": {
-      "name": "Clearwell Cleaning",
-      "tagline": "Residential & Commercial Cleaning — Riverton",
-      "is_default": 1
-    },
-    "Letterhead:Oakline Floors": {
-      "name": "Oakline Floors",
-      "tagline": "Hardwood Installation & Refinishing — Riverton",
-      "is_default": 0
-    },
     "Entity:Post": {
       "__root__": "/apps/loopar/modules/web/entities/post"
     },

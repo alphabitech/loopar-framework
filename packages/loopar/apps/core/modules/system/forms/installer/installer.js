@@ -286,8 +286,16 @@ export default class Installer extends BaseDocument {
     const moduleRoute = loopar.makePath('apps', this.app_name);
     const appData = await fileManage.getConfigFile('installer', moduleRoute);
 
+    // The file says what the app ships, the database who owns it now: a
+    // record another app holds (a refused install that named it) stays.
+    const heldByOther = async (constructor, name) => {
+      const owner = await this.#recordOwner(constructor, name);
+      return !!owner && !loopar.utils.compare(owner, this.app_name);
+    };
+
     const unInstallEntity = async (e, ent) => {
       const [constructor, name] = e.split(':');
+      if (await heldByOther(constructor, name)) return;
 
       if(await loopar.db.hasEntity(constructor, name)){
         const entityData = await this.getDocumentData(name, entryRoot(ent, e));
@@ -309,6 +317,7 @@ export default class Installer extends BaseDocument {
         console.log([`[installer] ${constructor} not installed in this tenant, skipping ${e}`]);
         return;
       }
+      if (await heldByOther(constructor, name)) return;
       if (await loopar.db.count(constructor, name)) {
         console.warn([`Deleting ${constructor}:${name}`]);
         jobLog(`Deleted ${constructor}:${name}`);

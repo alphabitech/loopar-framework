@@ -1,4 +1,4 @@
-import { test, before, after } from "node:test";
+import { test, before, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import fs from "node:fs";
@@ -143,7 +143,10 @@ test("staff may open any customer's board; a desk user without customer access m
   await assert.rejects(as("clerk", () => page.boardCustomers(other)), (e) => e.code === 403);
 });
 
-test("the portal home shows the Workforce card to customers with shifts", async () => {
+test("the portal home shows the Workforce card to customers with shifts", async (ctx) => {
+  // The card follows the last week's shifts: seen from the demo's week, not the real today.
+  mock.timers.enable({ apis: ["Date"], now: NOW });
+  ctx.after(() => mock.timers.reset());
   await t.run(async () => {
     const withShifts = await home.portalSummary(demoUser);
     assert.deepEqual(withShifts.pages.map((p) => p.label), ["Workforce"]);

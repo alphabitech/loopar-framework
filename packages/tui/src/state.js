@@ -18,6 +18,8 @@ export const state = {
   message: "",
   messageKind: "info", // info | ok | error
   busy: false,
+  notice: null, // modal notice: { title, text, kind } (notice.js)
+  working: null, // blocking operation: { title, steps, startedAt, changedAt, hidden, frame } (working.js)
   coreStatus: null, // pm2 status of loopar-core: 'online' | 'stopped' | null (unknown)
 
   // Logs tab (managed by logs.js while view === "logs")

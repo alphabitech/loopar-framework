@@ -21,6 +21,8 @@ import { state } from "./state.js";
 import { render } from "./render.js";
 import { actions, openWizard, loadRows } from "./actions.js";
 import { silenced } from "./term.js";
+import { working } from "./working.js";
+import { notice, errText } from "./notice.js";
 
 const cache = new Map(); // tenant → its backups state
 
@@ -120,10 +122,11 @@ export async function backupNow() {
   render();
   try {
     const r = await silenced(() => createBackup({ tenant: b.tenant, kind: "manual", onStep: (s) => { state.message = `backing up ${b.tenant}: ${s}…`; render(); } }));
-    state.message = `✓ ${r.file}${r.remote.destination ? (r.remote.ok ? ` · copied to ${r.remote.destination}` : ` · NOT copied: ${r.remote.error}`) : ""}`;
-    state.messageKind = r.remote.ok === false ? "error" : "ok";
+    const where = !r.remote.destination ? ""
+      : r.remote.ok ? ` It was copied to ${r.remote.destination}.` : ` It was NOT copied to ${r.remote.destination}: ${r.remote.error}`;
+    notice(`Saved ${r.file}.${where}`, r.remote.ok === false ? "warn" : "ok", `Back up · ${b.tenant}`);
   } catch (e) {
-    state.message = e.message; state.messageKind = "error";
+    notice(errText(e), "error", `Back up · ${b.tenant}`);
   }
   state.busy = false;
   await reloadBackups({ keepMessage: true });
@@ -149,29 +152,24 @@ export async function restoreSelected() {
   if (row.encrypted && !settings.passphrase) steps.push({ key: "passphrase", label: "Backup passphrase", value: "", mask: true, validate: (v) => !!v || "required" });
 
   openWizard(`Restore · ${b.tenant}`, steps, async ({ passphrase }) => {
-    state.busy = true;
-    const step = (s) => { state.message = `restoring ${b.tenant}: ${s}…`; render(); };
     try {
       // Server up → the core runs it: the same job as the desk's Backups page
       // (requests gated, tenant re-initialized, both backup formats). Server
       // down → restore from here, as before (native dumps only).
-      let r;
-      if (state.coreStatus === "online") {
-        step("asking the server");
-        r = await silenced(() => restoreInCore({ tenant: b.tenant, file: row.file, passphrase, onStep: step }));
-      } else {
-        r = await restoreOffline(b.tenant, row, passphrase, settings, step);
-      }
-      state.message = `✓ restored ${row.file}${r?.safety ? ` · previous state saved as ${r.safety}` : ""}`;
-      state.messageKind = "ok";
+      const r = await working(`Restoring ${b.tenant}`, async (step) => {
+        if (state.coreStatus === "online") {
+          step("Asking the server to restore it");
+          return await silenced(() => restoreInCore({ tenant: b.tenant, file: row.file, passphrase, onStep: step }));
+        }
+        return await restoreOffline(b.tenant, row, passphrase, settings, step);
+      });
+      notice(`${b.tenant} is back to ${row.file}.${r?.safety ? ` Its previous state was saved as ${r.safety}.` : ""}`, "ok", `Restore · ${b.tenant}`);
     } catch (e) {
       const offlineOnly = /Loopar's format/.test(e.message) && state.coreStatus !== "online";
-      state.message = offlineOnly
-        ? "restore failed: this backup is in Loopar's format — start the server (c) and restore it again"
-        : `restore failed: ${e.message}`;
-      state.messageKind = "error";
+      notice(offlineOnly
+        ? "This backup is in Loopar's format, which needs the server. Start the server (c) and restore it again."
+        : errText(e), "error", `Restore · ${b.tenant}`);
     } finally {
-      state.busy = false;
       await loadRows();
       await reloadBackups({ keepMessage: true });
     }
@@ -192,12 +190,12 @@ export async function restoreSelected() {
 async function restoreOffline(tenant, row, passphrase, settings, step) {
   const wasOn = readTenant(tenant)?.status === "active";
   try {
-    if (wasOn) { step("turning it off"); await actions.stop(tenant); }
+    if (wasOn) { step("Turning it off"); await actions.stop(tenant); }
     return await silenced(() => restoreBackup({
       tenant, file: row.file, passphrase: passphrase || undefined, settings, onStep: step,
     }));
   } finally {
-    if (wasOn) await actions.start(tenant).catch(() => {});
+    if (wasOn) { step("Turning it back on"); await actions.start(tenant).catch(() => {}); }
   }
 }
 
@@ -214,7 +212,7 @@ export function deleteSelected() {
         await silenced(() => deleteBackup({ tenant: b.tenant, file: row.file, where: row.local && row.remote ? "both" : row.local ? "local" : "remote" }));
         state.message = `deleted ${row.file}`; state.messageKind = "ok";
       } catch (e) {
-        state.message = e.message; state.messageKind = "error";
+        notice(errText(e), "error", `Delete · ${b.tenant}`);
       }
       await reloadBackups({ keepMessage: true });
     },

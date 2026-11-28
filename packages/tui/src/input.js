@@ -3,6 +3,8 @@
  * Mouse uses SGR reporting (ESC [ < b ; x ; y M/m), enabled by term.js.
  */
 import { quit } from "./term.js";
+import { workingModal, hideWorking, allowedWhileWorking } from "./working.js";
+import { closeNotice } from "./notice.js";
 import { state, findButton } from "./state.js";
 import { CORE_PROCESS_NAME } from "loopar/bin/pm2.js";
 import { render } from "./render.js";
@@ -88,6 +90,9 @@ const TEST_BUTTONS = {
 
 /** Which buttons may be pressed right now (modal modes narrow it down). */
 function buttonLive(btn) {
+  if (workingModal()) return false;
+  if (state.notice) return btn.action === "notice-ok";
+  if (state.working && !allowedWhileWorking(btn.action)) return false;
   if (state.mode === "confirm") return btn.action === "confirm-yes" || btn.action === "confirm-no";
   if (state.mode === "create" || state.mode === "destroy") return btn.action === "modal-submit" || btn.action === "modal-cancel";
   if (state.mode !== "list") return false;
@@ -98,6 +103,7 @@ function buttonLive(btn) {
 
 /** Run a button/tab after a completed click (press + release on it). */
 function activateButton(btn) {
+  if (btn.action === "notice-ok") { closeNotice(); return render(); }
   if (state.mode === "confirm") {
     const c = state.confirm;
     state.mode = "list"; state.confirm = null;
@@ -130,6 +136,7 @@ function handleMouse(seq) {
   const b = Number(bStr), x = Number(xStr), y = Number(yStr);
   const isClick = kind === "M" && b === 0;
   const isRelease = kind === "m" && (b & 3) === 0;
+  if (workingModal()) { state.pressed = null; return; } // the working modal owns the mouse
 
   // Buttons fire on RELEASE over the same button (like a GUI): the press only
   // arms + highlights it, so a click that slips off cancels instead of
@@ -151,7 +158,7 @@ function handleMouse(seq) {
     return render();
   }
 
-  if (state.mode !== "list") return; // confirm/text modals: buttons/keyboard only
+  if (state.notice || state.mode !== "list") return; // modals: buttons/keyboard only
 
   // Tests tab: wheel moves the cursor, clicks pick files.
   if (state.view === "tests") {
@@ -221,6 +228,18 @@ function moveTenant(delta) {
 }
 
 function handleKey(ch, seq) {
+  // Working modal: nothing but quitting, and Esc once it stops answering.
+  if (workingModal()) {
+    if (ch === "\x03" || seq === "\x03") return quit();
+    if (seq === "\x1b") hideWorking();
+    return;
+  }
+  // Notice: Enter / Esc / Space / O close it; nothing else gets past it.
+  if (state.notice) {
+    if (ch === "\x03") return quit();
+    if (seq === "\x1b" || ch === "\r" || ch === " " || ch?.toLowerCase() === "o") { closeNotice(); return render(); }
+    return;
+  }
   if (state.mode === "confirm") {
     const c = state.confirm;
     const k = (ch || "").toLowerCase();

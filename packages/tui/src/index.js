@@ -47,6 +47,7 @@ const { state, NO_PM2 } = await import("./state.js");
 const { render } = await import("./render.js");
 const { loadRows, actions } = await import("./actions.js");
 const { onData } = await import("./input.js");
+const { notice, errText } = await import("./notice.js");
 const { withPm2, startCoreProcess, coreProcessStatus } = await import("loopar/bin/pm2.js");
 
 if (bootTimer) {
@@ -100,8 +101,7 @@ async function main() {
       }
     } catch (err) {
       state.busy = false;
-      state.message = `core start failed: ${err.message || err}`;
-      state.messageKind = "error";
+      notice(`The server could not start: ${errText(err)}`, "error", "Server");
     }
   }
 
@@ -114,11 +114,10 @@ async function main() {
     render();
     try {
       const msg = await actions.start(only.name);
-      state.message = msg;
-      state.messageKind = /fail/i.test(msg) ? "error" : "ok";
+      if (/fail/i.test(msg)) notice(msg, "error");
+      else { state.message = msg; state.messageKind = "ok"; }
     } catch (err) {
-      state.message = err.message || String(err);
-      state.messageKind = "error";
+      notice(errText(err), "error");
     }
     await loadRows();
     state.busy = false;

@@ -113,8 +113,8 @@ test("safety snapshot before an update is taken once per window", async () => {
   const before = listLocalBackups(root, t.name).filter((b) => b.kind === "pre-update").length;
   const first = await safetySnapshot(t.name, "test", root);
   const second = await safetySnapshot(t.name, "test", root);
-  assert.ok(first);
-  assert.equal(second, first);
+  assert.ok(first.file, first.error);
+  assert.equal(second.file, first.file);
   const after = listLocalBackups(root, t.name).filter((b) => b.kind === "pre-update").length;
   assert.ok(after - before <= 1);
 });

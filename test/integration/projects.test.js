@@ -111,8 +111,11 @@ test("updating a tenant from before the rename: the old Project becomes Portfoli
 
     await q()("Project").insert({ name: "Old Showcase", title: "Old Showcase", slug: "old-showcase", app: "loopar", published: 1 });
     await q()("Document History").insert({ name: "h-portfolio", document: "Project", document_name: "Old Showcase", action: "update" });
+    // A page of a third app links the portfolio entity: an app the update
+    // doesn't touch, so its record is not pruned as structure loopar dropped.
+    await q()("Module").insert({ name: "portfolio-fixture", app_name: "portfolio-fixture-app", in_sidebar: 0 });
     await loopar.db.insertRow("Entity", {
-      name: "Uses Portfolio", module: "core",
+      name: "Uses Portfolio", module: "portfolio-fixture",
       doc_structure: JSON.stringify([{ element: "collection", data: { name: "list", options: "Project" } }]),
     });
 

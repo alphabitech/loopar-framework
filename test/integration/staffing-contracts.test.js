@@ -193,6 +193,8 @@ test("the update moves sites, agreements, the MSA, the templates and the company
     const { id } = await q()("Staffing Rate Agreement").where({ name: "RATE-9001" }).first("id");
     await q()("Staffing Rate Line").insert({ name: "RL-9001", parent_id: id, parent_document: "Staffing Rate Agreement", [CHILD_POSITION_COLUMN]: 0, position: "Porter", bill_rate: 25, pay_rate: 15, overtime_bill_rate: 37.5 });
     await loopar.db.insertRow("Signature Request", { name: "SR-OLD", document: "Staffing Rate Agreement", document_name: "RATE-9001", title: "old", status: "Signed" });
+    // The MSA the client signed on its own: its request exists, as on a real site.
+    await loopar.db.insertRow("Signature Request", { name: "SR-MSA", document: "Staffing Client", document_name: old, title: "msa", status: "Signed" });
     await q()("Workflow").insert({ name: "Staffing Rate Agreement", document: "Staffing Rate Agreement", state_field: "status", app: "staffing", active: 1 });
   });
 

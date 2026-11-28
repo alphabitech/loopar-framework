@@ -1,3 +1,4 @@
+import { workingSlow, spinFrame, workingSecs, allowedWhileWorking } from "./working.js";
 import { A, LOG, pad, link, stripAnsi, displayWidth, clipLine } from "./term.js";
 import { state, NO_PM2 } from "./state.js";
 import { graphCells, HERE, ROOT } from "./backup-tree.js";
@@ -78,7 +79,12 @@ function pushHeader(lines, width, height) {
     cs == null       ? `${A.gray}server …${A.reset}` :
                        pill(" ✖ server down · press c ", "red");
 
-  lines.push(` ${pill(` ◆ LOOPAR `, "cyan")} ${A.bold}Tenant Manager${A.reset}  ${coreInfo}   ${serverChip}`);
+  // A hidden working modal: the work is still running — say so.
+  const w = state.working;
+  const workChip = w?.hidden
+    ? `   ${A.yellow}${spinFrame(w)} ${w.title}${w.steps.length ? ` · ${w.steps.at(-1)}` : ""} ${A.dim}${workingSecs(w)}s${A.reset}`
+    : "";
+  lines.push(` ${pill(` ◆ LOOPAR `, "cyan")} ${A.bold}Tenant Manager${A.reset}  ${coreInfo}   ${serverChip}${workChip}`);
   const logsLabel = `LOGS${state.logs && !state.logs.embedded ? ` · ${state.logs.name || "all"}` : ""}`;
   const run = state.tests?.handle?.run;
   const testsLabel = !run ? "TESTS"
@@ -152,7 +158,10 @@ const globalActions = () => {
  */
 function pushGlobalActions(lines, { width, y1, y2, fromCol, titleRow }) {
   const GAP = 2;
-  const paint = (a, txt) => state.pressed === a.action ? `${A.inv}${A.bold}${pill(txt, a.color)}` : pill(txt, a.color);
+  // Something is working: the server actions wait for it (Quit never does).
+  const off = (a) => !!state.working && !allowedWhileWorking(a.action);
+  const paint = (a, txt) => off(a) ? `${ESC}[48;5;236;90m${txt}${A.reset}`
+    : state.pressed === a.action ? `${A.inv}${A.bold}${pill(txt, a.color)}` : pill(txt, a.color);
   const actionsNow = globalActions();
   const build = (key, sidePad) => actionsNow.map((a) => {
     const label = `${" ".repeat(sidePad)}${a[key]}${" ".repeat(sidePad)}`;
@@ -164,7 +173,7 @@ function pushGlobalActions(lines, { width, y1, y2, fromCol, titleRow }) {
     let x = start;
     items.forEach((a, i) => {
       const last = i === items.length - 1;
-      state.buttonRegions.push({ x1: i === 0 ? x : x - 1, x2: last ? x + a.w - 1 : x + a.w, y1: ya, y2: yb, y: ya, action: a.action });
+      state.buttonRegions.push({ x1: i === 0 ? x : x - 1, x2: last ? x + a.w - 1 : x + a.w, y1: ya, y2: yb, y: ya, action: a.action, disabled: off(a) });
       x += a.w + GAP;
     });
   };
@@ -227,12 +236,14 @@ function buttonRows(buttons, { x0 = 1, y0 = 1, tall, maxW = Infinity, dry = fals
   const items = buttons.map((b, i) => {
     const label = `${side}${b.label}${side}`;
     const w = displayWidth(stripAnsi(label));
+    // Something is working: server and tenant actions wait for it.
+    const off = !!b.disabled || (!!state.working && !allowedWhileWorking(b.action));
     if (!dry) {
       const first = i === 0, last = i === buttons.length - 1;
-      state.buttonRegions.push({ x1: first || gap < 2 ? x : x - 1, x2: last ? x + w - 1 : x + w, y1, y2, y: y1, action: b.action, disabled: !!b.disabled });
+      state.buttonRegions.push({ x1: first || gap < 2 ? x : x - 1, x2: last ? x + w - 1 : x + w, y1, y2, y: y1, action: b.action, disabled: off });
     }
     x += w + gap;
-    const paint = (t) => b.disabled ? `${ESC}[48;5;236;90m${t}${A.reset}`
+    const paint = (t) => off ? `${ESC}[48;5;236;90m${t}${A.reset}`
       : state.pressed === b.action ? `${A.inv}${A.bold}${pill(t, b.color)}` : pill(t, b.color);
     return { mid: paint(label), blank: paint(" ".repeat(w)) };
   });
@@ -584,6 +595,12 @@ function testDetailLines(run, total) {
     push(`${total} test files under test/`, A.dim);
     return out;
   }
+  // What runs now lives here, not in the head: the head keeps its width for the buttons.
+  if (run.status === "running" && run.current) {
+    push(`◐ ${run.current.file}`, A.yellow);
+    if (run.current.name) push(`  › ${run.current.name}`, A.dim);
+    push("");
+  }
   for (const f of run.failures) {
     push(`✗ ${[...(f.path || []), f.name].join(" › ")}`, `${A.bold}${A.red}`);
     push(`  ${f.file}${f.line ? `:${f.line}` : ""}${f.durationMs != null ? `  (${Math.round(f.durationMs)}ms)` : ""}`, A.dim);
@@ -626,15 +643,12 @@ function renderTests(lines, width, height) {
   const counts = run
     ? ` ${A.green}${c.pass} passed${A.reset} ${c.fail ? A.red : A.dim}${c.fail} failed${A.reset}${c.skip ? ` ${A.dim}${c.skip} skipped${A.reset}` : ""} ${A.dim}${secs}${A.reset}`
     : ` ${A.dim}${t.files.length} files${A.reset}`;
-  const current = run?.status === "running" && run.current
-    ? `  ${A.dim}› ${cut(`${run.current.file} › ${run.current.name}`, Math.max(10, width - 60))}${A.reset}`
-    : "";
   const followChip = run?.status === "running"
     ? (t.follow !== false ? `  ${A.green}● following${A.reset}` : `  ${A.yellow}❚❚ paused${A.dim} · scroll to the bottom to follow${A.reset}`)
     : "";
   // Tests head: the run's status on the left, the run actions on the right.
   const tall = barRows(height) > 1;
-  const status = ` ${chip}${counts}${followChip}${current}`;
+  const status = ` ${chip}${counts}${followChip}`;
   lines.push(...headRows({
     left: infoRows(status, tall), leftW: displayWidth(stripAnsi(status)), x0: 1, y0: lines.length + 1, width: width - 1, tall,
     buttons: [
@@ -766,6 +780,34 @@ function inputField(value, w) {
 }
 
 function modalSpec() {
+  const w = state.working;
+  if (w && !w.hidden) {
+    const slow = workingSlow(w);
+    const shown = w.steps.slice(-6);
+    const steps = shown.map((text, i) => i < shown.length - 1
+      ? { mark: "✓", color: A.green, text, dim: true }
+      : { mark: spinFrame(w), color: A.yellow, text });
+    if (!steps.length) steps.push({ mark: spinFrame(w), color: A.yellow, text: "working…" });
+    return {
+      title: w.title, border: slow ? A.red : A.cyan,
+      steps,
+      buttons: [],
+      hint: slow
+        ? `No answer · Esc hides this (it keeps running) · Ctrl+C quits`
+        : `${workingSecs(w)}s · Ctrl+C quits`,
+    };
+  }
+  const n = state.notice;
+  if (n) {
+    const color = { error: "red", warn: "yellow", ok: "green", info: "cyan" }[n.kind] || "cyan";
+    const icon = { error: "✗", warn: "⚠", ok: "✓", info: "ℹ" }[n.kind] || "ℹ";
+    return {
+      title: `${icon} ${n.title}`, border: A[color],
+      body: n.text,
+      buttons: [{ label: ` ${U}O${UO}K `, color, action: "notice-ok" }],
+      hint: "Enter / Esc close",
+    };
+  }
   if (state.mode === "confirm" && state.confirm) {
     return {
       title: state.confirm.title || "Confirm", border: A.yellow,
@@ -833,6 +875,9 @@ function drawModal(lines, width, height) {
   const content = [""];
   if (spec.body) for (const l of wrapText(spec.body, inner)) content.push(`${A.bold}${l}${A.reset}`);
   if (spec.bodyAnsi) content.push(spec.bodyAnsi);
+  for (const st of spec.steps || []) {
+    content.push(`${st.color}${st.mark}${A.reset} ${st.dim ? A.dim : ""}${cut(st.text, inner - 2)}${A.reset}`);
+  }
   if (spec.input !== undefined) {
     content.push("");
     // Plain labels wrap inside the box; ANSI-styled ones are short by design.
@@ -858,9 +903,13 @@ function drawModal(lines, width, height) {
   const lead = Math.max(0, Math.floor((inner - total) / 2));
   const paint = (b, txt) => state.pressed === b.action ? `${A.inv}${A.bold}${pill(txt, b.color)}` : pill(txt, b.color);
   const rowOf = (mid) => " ".repeat(lead) + btns.map((b) => paint(b, mid ? b.label : " ".repeat(b.w))).join(" ".repeat(GAP));
-  content.push(rowOf(false), rowOf(true), rowOf(false));
-  content.push("");
-  content.push(`${A.dim}${padCells("", Math.max(0, Math.floor((inner - displayWidth(spec.hint)) / 2)))}${spec.hint}${A.reset}`);
+  if (btns.length) {
+    content.push(rowOf(false), rowOf(true), rowOf(false));
+    content.push("");
+  }
+  for (const h of wrapText(spec.hint, inner)) {
+    content.push(`${A.dim}${padCells("", Math.max(0, Math.floor((inner - displayWidth(h)) / 2)))}${h}${A.reset}`);
+  }
 
   const boxH = content.length + 2;
   const x0 = Math.max(0, Math.floor((width - boxW) / 2)); // 0-based column

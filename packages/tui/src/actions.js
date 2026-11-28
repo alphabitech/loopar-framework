@@ -15,6 +15,8 @@ import { state, NO_PM2 } from "./state.js";
 import { render } from "./render.js";
 import { openLogs } from "./logs.js";
 import { forgetBackups } from "./backups.js";
+import { working, allowedWhileWorking } from "./working.js";
+import { notice, errText } from "./notice.js";
 
 let caddyState = null;
 
@@ -130,29 +132,52 @@ async function execute(action, name, ...args) {
   state.busy = true; render();
   try {
     const msg = await actions[action](name, ...args);
-    state.message = msg;
-    state.messageKind = /fail|not found/i.test(msg) ? "error" : "ok";
+    // Quick actions report success in the status line; failures in a notice.
+    if (/fail|not found/i.test(msg)) notice(msg, "error");
+    else { state.message = msg; state.messageKind = "ok"; }
   } catch (err) {
-    state.message = err.message || String(err);
-    state.messageKind = "error";
+    notice(errText(err), "error");
   }
   await loadRows();
   state.busy = false;
   render();
 }
 
-async function restartServer() {
-  state.busy = true; render();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const CORE_READY_MS = 45_000;
+
+/**
+ * After a restart pm2 says "online" long before the core serves: wait until
+ * its port answers anything (any HTTP status counts), or give up.
+ */
+async function waitForCore() {
+  const url = `http://127.0.0.1:${corePort()}/`;
+  const until = Date.now() + CORE_READY_MS;
+  while (Date.now() < until) {
+    try {
+      await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(1500) });
+      return;
+    } catch { await sleep(500); }
+  }
+  throw new Error(`the server restarted but :${corePort()} does not answer yet — see Logs`);
+}
+
+/** Restart the core process and wait until it serves. */
+async function restartCore(step) {
+  step("Restarting the core process");
+  await silenced(() => withPm2(() => restartCoreProcess()));
+  step(`Waiting for :${corePort()} to answer`);
+  await waitForCore();
+}
+
+async function restartServer(title = "Restarting the server") {
   try {
-    await silenced(() => withPm2(() => restartCoreProcess()));
-    state.message = "server restarted";
-    state.messageKind = "ok";
+    await working(title, restartCore);
+    notice(`The server is up and answers on :${corePort()}.`, "ok", "Server");
   } catch (err) {
-    state.message = err.message || String(err);
-    state.messageKind = "error";
+    notice(errText(err), "error", "Server");
   }
   await loadRows();
-  state.busy = false;
   return render();
 }
 
@@ -160,6 +185,11 @@ export async function run(action) {
   const sel = state.rows[state.selected];
 
   if (action === "quit") return quit();
+  // One blocking operation at a time (its modal may be hidden: see working.js).
+  if (state.working && !allowedWhileWorking(action)) {
+    notice(`${state.working.title} is still running. Wait for it to finish.`, "info");
+    return render();
+  }
   if (action === "refresh") {
     state.busy = true; render();
     await loadRows();
@@ -187,7 +217,7 @@ export async function run(action) {
       tenantOps.assertDisposable(sel.name);
       tenantOps.assertStopped(sel.name, action);
     }
-    catch (err) { state.message = err.message; state.messageKind = "error"; return render(); }
+    catch (err) { notice(errText(err), "warn", `${action === "reset" ? "Reset" : "Destroy"} · ${sel.name}`); return render(); }
     state.mode = "destroy"; state.danger = action; state.input = ""; state.message = "";
     return render();
   }
@@ -201,7 +231,7 @@ export async function run(action) {
     if (!sel) return;
     const on = !sel.controlPlane;
     try { tenantOps.assertControlPlaneChange(sel.name, on); }
-    catch (err) { state.message = err.message; state.messageKind = "error"; return render(); }
+    catch (err) { notice(errText(err), "warn", `Control plane · ${sel.name}`); return render(); }
     state.mode = "confirm";
     state.confirm = {
       title: `Tenant · ${sel.name}`,
@@ -215,7 +245,7 @@ export async function run(action) {
 
   // GLOBAL: bring the server (core process) up — the header's "press c" when
   // it is down. Not tied to a selected tenant; the core serves them all.
-  if (action === "core") return restartServer();
+  if (action === "core") return restartServer("Starting the server");
 
   // GLOBAL: Restart = restart the server. There is one core process for every
   // tenant, so a per-tenant restart no longer exists (tenantOps.reload only
@@ -236,7 +266,7 @@ export async function run(action) {
 
   if (action === "open") {
     if (!sel.url) {
-      state.message = "no URL for this tenant"; state.messageKind = "error";
+      notice(`${sel.name} has no URL.`, "error");
       return render();
     }
     // Clicking a dead tenant's URL would only show a connection error in the
@@ -250,12 +280,10 @@ export async function run(action) {
           state.busy = true; render();
           try {
             const msg = await actions.start(sel.name);
-            state.message = msg;
-            state.messageKind = /fail/i.test(msg) ? "error" : "ok";
-            if (!/fail/i.test(msg)) openUrl(sel.url);
+            if (/fail/i.test(msg)) notice(msg, "error");
+            else { state.message = msg; state.messageKind = "ok"; openUrl(sel.url); }
           } catch (err) {
-            state.message = err.message || String(err);
-            state.messageKind = "error";
+            notice(errText(err), "error");
           }
           await loadRows();
           state.busy = false;
@@ -265,8 +293,8 @@ export async function run(action) {
       return render();
     }
     const ok = openUrl(sel.url);
-    state.message = ok ? `opening ${sel.url}` : "could not launch a browser";
-    state.messageKind = ok ? "ok" : "error";
+    if (ok) { state.message = `opening ${sel.url}`; state.messageKind = "ok"; }
+    else notice(`Could not launch a browser. Open ${sel.url} yourself.`, "error");
     return render();
   }
 
@@ -276,8 +304,7 @@ export async function run(action) {
     const cur = coreEnv();
     const next = cur === "production" ? "development" : "production";
     if (next === "production" && !distIsReady()) {
-      state.message = "No build found — run `yarn build` (or Deploy) before production";
-      state.messageKind = "error";
+      notice("No build found. Run `yarn build` (or Deploy) before switching to production.", "warn", "Production");
       return render();
     }
     state.mode = "confirm";
@@ -285,18 +312,17 @@ export async function run(action) {
       title: "Server",
       question: `Switch the server from ${cur} to ${next} and restart it? Every tenant disconnects for a moment.`,
       onYes: async () => {
-        state.busy = true; render();
         try {
-          setCoreMode(next);
-          await silenced(() => withPm2(() => restartCoreProcess()));
-          state.message = `server → ${next} (restarted)`;
-          state.messageKind = "ok";
+          await working(`Switching the server to ${next}`, async (step) => {
+            step(`Writing config/core.json (${next})`);
+            setCoreMode(next);
+            await restartCore(step);
+          });
+          notice(`The server runs in ${next} and answers on :${corePort()}.`, "ok", "Server");
         } catch (err) {
-          state.message = err.message || String(err);
-          state.messageKind = "error";
+          notice(errText(err), "error", "Server");
         }
         await loadRows();
-        state.busy = false;
         render();
       },
     };
@@ -359,26 +385,25 @@ export function advanceWizard() {
 }
 
 async function createTenant(data, startAfter) {
-  state.busy = true; render();
   try {
-    const created = await tenantOps.createTenant(
-      { name: data.name, port: data.port, domain: data.domain || undefined },
-      { activate: startAfter }
-    );
+    const created = await working(`Creating ${data.name}`, async (step) => {
+      step(`Creating sites/${data.name} and its database`);
+      const done = await silenced(() => tenantOps.createTenant(
+        { name: data.name, port: data.port, domain: data.domain || undefined },
+        { activate: startAfter }
+      ));
+      if (startAfter) step(`Turning ${data.name} on`);
+      return done;
+    });
     const base = startAfter
-      ? `${data.name} created and turned on`
-      : `${data.name} created (off — press Start to turn on)`;
+      ? `${data.name} was created and turned on.`
+      : `${data.name} was created. It is off: press Start to turn it on.`;
     // Remote tenants: show the tokened install link once (also in config.json).
-    state.message = created?.installUrl
-      ? `${base} — install: ${created.installUrl}`
-      : base;
-    state.messageKind = "ok";
+    notice(created?.installUrl ? `${base} Install it at ${created.installUrl}` : base, "ok", `New tenant · ${data.name}`);
   } catch (err) {
-    state.message = err.message || String(err);
-    state.messageKind = "error";
+    notice(errText(err), "error", `New tenant · ${data.name}`);
   }
   await loadRows();
-  state.busy = false;
   const i = state.rows.findIndex((r) => r.name === data.name);
   if (i >= 0) state.selected = i;
   render();
@@ -390,18 +415,21 @@ export async function submitModal() {
   const action = state.danger === "reset" ? "reset" : "destroy";
   state.mode = "list"; state.danger = null;
   if (name !== String(target || "").toLowerCase()) {
-    state.message = `${action === "reset" ? "Reset" : "Destroy"} cancelled (name did not match)`; state.messageKind = "info";
+    notice(`The name did not match "${target}": nothing was ${action === "reset" ? "reset" : "destroyed"}.`, "warn", `${action === "reset" ? "Reset" : "Destroy"} cancelled`);
     return render();
   }
-  state.busy = true; render();
   try {
-    state.message = await actions[action](target);
-    state.messageKind = "ok";
+    const done = await working(`${action === "reset" ? "Resetting" : "Destroying"} ${target}`, (step) => {
+      step(action === "reset"
+        ? `Dropping ${target}'s database`
+        : `Dropping ${target}'s database and removing sites/${target}`);
+      return actions[action](target);
+    });
+    notice(done, "ok", `${action === "reset" ? "Reset" : "Destroy"} · ${target}`);
     if (action === "destroy") forgetBackups(target);
   } catch (err) {
-    state.message = err.message; state.messageKind = "error";
+    notice(errText(err), "error", `${action === "reset" ? "Reset" : "Destroy"} · ${target}`);
   }
   await loadRows();
-  state.busy = false;
   render();
 }
